@@ -49,21 +49,45 @@ class VideoService {
       const url = `${API_BASE_URL}/videos/upload`;
       const token = localStorage.getItem('token');
 
+      let lastProgress = 0;
+      let progressInterval: NodeJS.Timeout | null = null;
+
       // Track upload progress
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) {
           const percentComplete = (e.loaded / e.total) * 100;
-          onProgress(Math.min(100, Math.max(0, percentComplete)));
+          const progress = Math.min(100, Math.max(0, percentComplete));
+          lastProgress = progress;
+          // Scale to 0-90% for upload phase
+          onProgress(progress * 0.9);
         }
       };
 
+      // Fallback for Chrome - force progress updates if no events for a while
+      if (onProgress) {
+        progressInterval = setInterval(() => {
+          if (xhr.readyState < 4 && lastProgress < 90) {
+            // If we haven't received progress in a while, increment slightly
+            // This helps Chrome show progress even if events are delayed
+            const estimatedProgress = Math.min(90, lastProgress + 0.5);
+            onProgress(estimatedProgress * 0.9);
+          }
+        }, 500);
+      }
+
       // Handle completion
       xhr.onload = () => {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
+        
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
+            // Don't set to 100% here - let the component handle the transition
+            // Upload phase is 0-90%, processing will be 90-100%
             if (onProgress) {
-              onProgress(100);
+              onProgress(90); // Set to 90% when upload completes, processing will take it to 100%
             }
             resolve(data);
           } catch (error) {
@@ -81,11 +105,17 @@ class VideoService {
 
       // Handle errors
       xhr.onerror = () => {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
         reject(new Error('Network error during upload'));
       };
 
       // Handle abort
       xhr.onabort = () => {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
         reject(new Error('Upload was cancelled'));
       };
 
@@ -154,6 +184,27 @@ class VideoService {
 
   async getVideoStatus(id: string): Promise<{ success: boolean; data: VideoStatus }> {
     return this.request<{ success: boolean; data: VideoStatus }>(`/videos/${id}/status`);
+  }
+
+  async getAdminVideos(params: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    search?: string;
+    status?: string;
+  } = {}): Promise<VideosResponse> {
+    const queryParams = new URLSearchParams();
+    
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.category) queryParams.append('category', params.category);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.status) queryParams.append('status', params.status);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/videos/admin/all${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request<VideosResponse>(endpoint);
   }
 
   getVideoUrl(video: Video, quality: string = '360p'): string {
@@ -322,4 +373,5 @@ class VideoService {
   }
 }
 
-export default new VideoService();
+const videoService = new VideoService();
+export default videoService;

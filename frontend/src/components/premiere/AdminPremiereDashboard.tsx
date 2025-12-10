@@ -17,40 +17,13 @@ const AdminPremiereDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const setupSocketListeners = useCallback(() => {
-    socketService.onPremiereStarted((data) => {
-      console.log('Premiere started via socket:', data);
-      setActivePremiere(data.premiere);
-      fetchData(); // Refresh the list
-    });
-
-    socketService.onPremiereEnded((data) => {
-      console.log('Premiere ended via socket:', data);
-      setActivePremiere(null);
-      fetchData(); // Refresh the list
-    });
-
-    socketService.onError((error) => {
-      console.error('Socket error in admin dashboard:', error);
-      setError(error.message || 'Socket connection error');
-    });
-  }, []);
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching data for admin premiere dashboard...');
-      console.log('User:', user);
-      console.log('Token:', token);
-      console.log('LocalStorage token:', localStorage.getItem('token'));
       
-      // Test video service directly
-      console.log('Testing video service...');
       const videosRes = await videoService.getVideos({ limit: 50 });
-      console.log('Videos response:', videosRes);
       
-      // Filter videos to only include those that are ready and have HLS files
       const readyVideos = videosRes.data.videos.filter(video => 
         video.status === 'ready' && 
         video.processedFiles && 
@@ -60,30 +33,38 @@ const AdminPremiereDashboard: React.FC = () => {
         video.processedFiles.hls.variants.length > 0
       );
       
-      console.log(`Filtered ${readyVideos.length} ready videos out of ${videosRes.data.videos.length} total`);
       setVideos(readyVideos);
       
-      // Test premiere service
-      console.log('Testing premiere service...');
       const [premieresRes, activeRes] = await Promise.all([
         premiereService.getAllPremieres(),
         premiereService.getActivePremiere()
       ]);
 
-      console.log('Premieres response:', premieresRes);
-      console.log('Active premiere response:', activeRes);
-
       setPremieres(premieresRes.data.premieres);
       setActivePremiere(activeRes.data.premiere);
-      
-      console.log('Videos set:', videosRes.data.videos);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [user, token]);
+  }, []);
+
+  const setupSocketListeners = useCallback(() => {
+    socketService.onPremiereStarted((data) => {
+      setActivePremiere(data.premiere);
+      fetchData();
+    });
+
+    socketService.onPremiereEnded((data) => {
+      setActivePremiere(null);
+      fetchData();
+    });
+
+    socketService.onError((error) => {
+      setError(error.message || 'Socket connection error');
+    });
+  }, [fetchData]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -94,17 +75,12 @@ const AdminPremiereDashboard: React.FC = () => {
 
   const handleCreatePremiere = async (premiereData: CreatePremiereData) => {
     try {
-      console.log('Creating premiere with data:', premiereData);
-      console.log('Current token:', localStorage.getItem('token'));
-      console.log('User role:', user?.role);
-      
       if (!user || user.role !== 'admin') {
         alert('You must be logged in as an admin to create premieres');
         return;
       }
       
-      const response = await premiereService.createPremiere(premiereData);
-      console.log('Premiere created successfully:', response);
+      await premiereService.createPremiere(premiereData);
       setShowCreateModal(false);
       fetchData();
       alert('Premiere created successfully!');
@@ -116,7 +92,6 @@ const AdminPremiereDashboard: React.FC = () => {
 
   const handleStartPremiere = async (premiereId: string) => {
     try {
-      console.log('Starting premiere:', premiereId);
       socketService.startPremiere(premiereId);
       alert('Premiere started!');
     } catch (error) {
@@ -127,7 +102,6 @@ const AdminPremiereDashboard: React.FC = () => {
 
   const handleEndPremiere = async (premiereId: string) => {
     try {
-      console.log('Ending premiere:', premiereId);
       socketService.endPremiere(premiereId);
       alert('Premiere ended!');
     } catch (error) {
@@ -139,7 +113,6 @@ const AdminPremiereDashboard: React.FC = () => {
   const handleDeletePremiere = async (premiereId: string) => {
     if (window.confirm('Are you sure you want to delete this premiere? This action cannot be undone.')) {
       try {
-        console.log('Deleting premiere:', premiereId);
         await premiereService.deletePremiere(premiereId);
         alert('Premiere deleted successfully!');
         fetchData();
@@ -150,7 +123,6 @@ const AdminPremiereDashboard: React.FC = () => {
     }
   };
 
-  // Helper function to get poster URL for premiere video
   const getPremierePosterUrl = (premiere: Premiere): string => {
     if (!premiere.video?.processedFiles?.poster) {
       return '';
@@ -160,42 +132,43 @@ const AdminPremiereDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-primary)' }}>
+        <div className="text-xl" style={{ color: 'var(--color-text)' }}>Loading...</div>
       </div>
     );
   }
 
   if (!user || user.role !== 'admin') {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Access denied. Admin privileges required.</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-primary)' }}>
+        <div className="text-xl" style={{ color: 'var(--color-text)' }}>Access denied. Admin privileges required.</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}>
       <div className="container mx-auto px-6 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold">Premiere Dashboard</h1>
+          <h1 className="text-4xl font-bold" style={{ color: 'var(--color-text)' }}>Premiere Dashboard</h1>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="bg-netflix-red hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="px-6 py-3 rounded-lg font-medium transition-colors hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
           >
             Create Premiere
           </button>
         </div>
 
         {/* Debug Info */}
-        <div className="mb-4 p-4 bg-gray-800 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">Debug Info:</h3>
-          <p>User: {user ? `${user.username} (${user.role})` : 'Not logged in'}</p>
-          <p>Token: {token ? 'Present' : 'Missing'}</p>
-          <p>Socket Connected: {socketService.isSocketConnected() ? 'Yes' : 'No'}</p>
-          <p>LocalStorage Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}</p>
-          <p>Videos count: {videos.length}</p>
-          <p>Premieres count: {premieres.length}</p>
+        <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+          <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Debug Info:</h3>
+          <p style={{ color: 'var(--color-text-secondary)' }}>User: {user ? `${user.username} (${user.role})` : 'Not logged in'}</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Token: {token ? 'Present' : 'Missing'}</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Socket Connected: {socketService.isSocketConnected() ? 'Yes' : 'No'}</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>LocalStorage Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Videos count: {videos.length}</p>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Premieres count: {premieres.length}</p>
           {error && <p className="text-red-400">Error: {error}</p>}
           <button 
             onClick={fetchData}
@@ -207,13 +180,13 @@ const AdminPremiereDashboard: React.FC = () => {
 
         {/* Active Premiere */}
         {activePremiere && (
-          <div className="mb-8 p-6 bg-gradient-to-r from-red-900/30 to-red-700/30 border border-red-500 rounded-lg">
+          <div className="mb-8 p-6 rounded-lg" style={{ background: 'linear-gradient(to right, rgba(185, 28, 28, 0.3), rgba(220, 38, 38, 0.3))', border: '1px solid rgb(239, 68, 68)' }}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-red-400 mb-2">LIVE PREMIERE</h2>
-                <h3 className="text-xl font-semibold">{activePremiere.title}</h3>
-                <p className="text-gray-300">{activePremiere.description}</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{activePremiere.title}</h3>
+                <p style={{ color: 'var(--color-text-secondary)' }}>{activePremiere.description}</p>
+                <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Started: {new Date(activePremiere.startTime).toLocaleString()}
                 </p>
               </div>
@@ -226,7 +199,8 @@ const AdminPremiereDashboard: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleDeletePremiere(activePremiere._id)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 rounded-lg font-medium transition-colors"
+                  style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
                 >
                   Delete
                 </button>
@@ -237,9 +211,9 @@ const AdminPremiereDashboard: React.FC = () => {
 
         {/* Premiere List */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold">All Premieres</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>All Premieres</h2>
           {premieres.length === 0 ? (
-            <div className="text-center text-gray-400 py-12">
+            <div className="text-center py-12" style={{ color: 'var(--color-text-secondary)' }}>
               <div className="text-6xl mb-4">🎬</div>
               <p className="text-xl">No premieres created yet</p>
               <p className="text-sm">Create your first premiere to get started</p>
@@ -249,9 +223,10 @@ const AdminPremiereDashboard: React.FC = () => {
               {premieres.filter(premiere => premiere.video && premiere.video.processedFiles).map((premiere) => (
                 <div
                   key={premiere._id}
-                  className="bg-netflix-gray rounded-lg overflow-hidden hover:scale-105 transition-transform duration-200"
+                  className="rounded-lg overflow-hidden hover:scale-105 transition-transform duration-200"
+                  style={{ backgroundColor: 'var(--color-secondary)' }}
                 >
-                  <div className="aspect-video bg-gray-700 flex items-center justify-center">
+                  <div className="aspect-video flex items-center justify-center" style={{ backgroundColor: 'var(--color-hover)' }}>
                     {premiere.video?.processedFiles?.poster ? (
                       <img
                         src={getPremierePosterUrl(premiere)}
@@ -259,13 +234,13 @@ const AdminPremiereDashboard: React.FC = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="text-gray-400 text-4xl">🎬</div>
+                      <div className="text-4xl" style={{ color: 'var(--color-text-secondary)' }}>🎬</div>
                     )}
                   </div>
                   <div className="p-4">
-                    <h3 className="text-lg font-semibold mb-2 line-clamp-2">{premiere.title}</h3>
-                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">{premiere.description}</p>
-                    <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
+                    <h3 className="text-lg font-semibold mb-2 line-clamp-2" style={{ color: 'var(--color-text)' }}>{premiere.title}</h3>
+                    <p className="text-sm mb-3 line-clamp-2" style={{ color: 'var(--color-text-secondary)' }}>{premiere.description}</p>
+                    <div className="flex justify-between items-center text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
                       <span>
                         {new Date(premiere.startTime).toLocaleDateString()}
                       </span>
@@ -306,7 +281,8 @@ const AdminPremiereDashboard: React.FC = () => {
                       )}
                       <button
                         onClick={() => handleDeletePremiere(premiere._id)}
-                        className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+                        className="flex-1 px-3 py-1 rounded text-xs font-medium transition-colors"
+                        style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
                       >
                         Delete
                       </button>
@@ -349,13 +325,10 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
     startTime: ''
   });
 
-  console.log('CreatePremiereModal - videos received:', videos);
-
   const handleVideoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const videoId = e.target.value;
     setSelectedVideoId(videoId);
     
-    // Auto-fill title and description if video is selected
     if (videoId) {
       const selectedVideo = videos.find(v => v._id === videoId);
       if (selectedVideo) {
@@ -370,7 +343,6 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted with data:', { selectedVideoId, formData });
     
     if (!selectedVideoId) {
       alert('Please select a video');
@@ -395,18 +367,18 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
       startTime: formData.startTime
     };
 
-    console.log('Submitting premiere data:', premiereData);
     onSubmit(premiereData);
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-netflix-gray rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-white">Create Premiere</h3>
+          <h3 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Create Premiere</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+            className="text-2xl transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             ×
           </button>
@@ -415,13 +387,18 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Video Selection - Dropdown */}
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Select Video for Premiere
             </label>
             <select
               value={selectedVideoId}
               onChange={handleVideoChange}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red border border-gray-600"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               required
             >
               <option value="">Choose a video...</option>
@@ -431,11 +408,11 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
                 </option>
               ))}
             </select>
-            <div className="mt-1 text-sm text-gray-400">
+            <div className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {videos.length} ready videos available (showing only fully processed videos)
             </div>
             {videos.length === 0 && (
-              <div className="mt-2 p-3 bg-yellow-900/30 border border-yellow-500 rounded-lg">
+              <div className="mt-2 p-3 rounded-lg" style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgb(202, 138, 4)' }}>
                 <p className="text-yellow-400 text-sm">
                   ⚠️ No videos are currently ready for premiere. Please upload and process videos first.
                 </p>
@@ -445,14 +422,19 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
           {/* Title */}
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Premiere Title
             </label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red border border-gray-600"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               placeholder="Enter premiere title"
               required
             />
@@ -460,13 +442,18 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
           {/* Description */}
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Premiere Description
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red h-24 resize-none border border-gray-600"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 h-24 resize-none"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               placeholder="Enter premiere description"
               required
             />
@@ -474,14 +461,19 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
           {/* Start Time */}
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Start Time
             </label>
             <input
               type="datetime-local"
               value={formData.startTime}
               onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red border border-gray-600"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               required
             />
           </div>
@@ -491,13 +483,15 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+              className="px-6 py-2 rounded-lg font-medium transition-colors"
+              style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-netflix-red hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+              className="px-6 py-2 rounded-lg font-medium transition-colors hover:opacity-90"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
             >
               Create Premiere
             </button>

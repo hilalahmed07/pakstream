@@ -8,8 +8,8 @@ API_URL="http://localhost:5000/api"
 ADMIN_KEY="admin123"  # Default admin key from .env
 
 # Admin credentials to create
-USERNAME="admin"
-EMAIL="admin@pakstream.com"
+USERNAME="admin12"
+EMAIL="sajjadaamir12@gmail.com"
 PASSWORD="Admin@123"
 
 echo "Creating admin user..."

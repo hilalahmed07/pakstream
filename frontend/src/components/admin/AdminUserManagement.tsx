@@ -19,10 +19,6 @@ const AdminUserManagement: React.FC = () => {
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [currentPage, search, roleFilter, statusFilter]);
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -41,6 +37,11 @@ const AdminUserManagement: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, search, roleFilter, statusFilter]);
 
   const handleCreateUser = async (userData: CreateUserData) => {
     try {
@@ -108,8 +109,8 @@ const AdminUserManagement: React.FC = () => {
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-4">User Management</h2>
-        <p className="text-gray-400">Manage users, roles, and permissions</p>
+        <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>User Management</h2>
+        <p style={{ color: 'var(--color-text-secondary)' }}>Manage users, roles, and permissions</p>
       </div>
 
       {error && (
@@ -119,7 +120,7 @@ const AdminUserManagement: React.FC = () => {
       )}
 
       {/* Filters and Actions */}
-      <div className="bg-netflix-gray rounded-lg p-6 mb-6">
+      <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <input
             type="text"
@@ -129,7 +130,12 @@ const AdminUserManagement: React.FC = () => {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+            className="px-4 py-2 rounded-lg focus:outline-none focus:ring-2"
+            style={{ 
+              backgroundColor: 'var(--color-hover)', 
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)'
+            }}
           />
           
           <select
@@ -138,7 +144,12 @@ const AdminUserManagement: React.FC = () => {
               setRoleFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+            className="px-4 py-2 rounded-lg focus:outline-none focus:ring-2"
+            style={{ 
+              backgroundColor: 'var(--color-hover)', 
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)'
+            }}
           >
             <option value="">All Roles</option>
             <option value="user">User</option>
@@ -151,7 +162,12 @@ const AdminUserManagement: React.FC = () => {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+            className="px-4 py-2 rounded-lg focus:outline-none focus:ring-2"
+            style={{ 
+              backgroundColor: 'var(--color-hover)', 
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)'
+            }}
           >
             <option value="">All Status</option>
             <option value="true">Active</option>
@@ -160,7 +176,8 @@ const AdminUserManagement: React.FC = () => {
           
           <button
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary"
+            className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
           >
             + Create User
           </button>
@@ -168,70 +185,70 @@ const AdminUserManagement: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-netflix-gray rounded-lg overflow-hidden">
+      <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
         {loading ? (
-          <div className="p-8 text-center text-gray-400">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="p-8 text-center" style={{ color: 'var(--color-text-secondary)' }}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: 'var(--color-accent)' }}></div>
             Loading users...
           </div>
         ) : users.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
+          <div className="p-8 text-center" style={{ color: 'var(--color-text-secondary)' }}>
             No users found
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-800">
+              <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Organization</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date of Enrollment</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Contact</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Organization</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Date of Enrollment</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Contact</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Created</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                 {users.map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-800">
+                  <tr key={user._id} className="transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-netflix-red rounded-full flex items-center justify-center mr-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}>
                           {user.username.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-white font-medium">{user.username}</div>
+                          <div className="font-medium" style={{ color: 'var(--color-text)' }}>{user.username}</div>
                           {user.profile?.firstName && (
-                            <div className="text-gray-400 text-sm">
+                            <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                               {user.profile.firstName} {user.profile.lastName}
                             </div>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{user.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">
-                      {user.organization || <span className="text-gray-500">-</span>}
+                    <td className="px-6 py-4 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>{user.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+                      {user.organization || <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300 text-sm">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                       {user.dateOfEnrollment 
                         ? new Date(user.dateOfEnrollment).toLocaleDateString() 
-                        : <span className="text-gray-500">-</span>}
+                        : <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">
-                      {user.contactNumber || <span className="text-gray-500">-</span>}
+                    <td className="px-6 py-4 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+                      {user.contactNumber || <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>}
                     </td>
-                    <td className="px-6 py-4 text-gray-300 max-w-xs">
+                    <td className="px-6 py-4 max-w-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       {user.address ? (
                         <div className="truncate" title={user.address}>
                           {user.address}
                         </div>
                       ) : (
-                        <span className="text-gray-500">-</span>
+                        <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -252,7 +269,7 @@ const AdminUserManagement: React.FC = () => {
                         {user.isActive ? 'Active' : 'Blocked'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-400 text-sm">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -301,17 +318,19 @@ const AdminUserManagement: React.FC = () => {
           <button
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            className="px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
           >
             Previous
           </button>
-          <span className="text-gray-400">
+          <span style={{ color: 'var(--color-text-secondary)' }}>
             Page {currentPage} of {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+            className="px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
           >
             Next
           </button>
@@ -355,4 +374,3 @@ const AdminUserManagement: React.FC = () => {
 };
 
 export default AdminUserManagement;
-

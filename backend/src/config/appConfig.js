@@ -30,7 +30,8 @@ function getCorsOrigins() {
   if (process.env.NODE_ENV === 'production') {
     // Production: Default to restrictive, but allow override via CORS_ORIGIN env var
     // For Docker deployments, set CORS_ORIGIN=* or specific origins
-    return ['https://yourdomain.com'];
+    //return ['https://yourdomain.com'];
+    return ['*']
   }
 
   // Development/Docker: Allow all origins by default for easier network access
@@ -45,7 +46,8 @@ const appConfig = {
   // CORS Configuration
   cors: {
     origin: getCorsOrigins(),
-    credentials: true
+    //credentials: true
+    credentials: false
   },
 
   // Socket.IO CORS Configuration

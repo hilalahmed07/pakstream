@@ -26,12 +26,12 @@ const Navbar: React.FC = () => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 bg-primary bg-opacity-95 backdrop-blur-sm z-40 border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 bg-primary bg-opacity-95 backdrop-blur-sm z-40 border-b border-border shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center space-x-8">
-              <Link to="/" className="text-2xl font-bold text-accent">
+              <Link to="/" className="text-2xl font-bold text-text-primary">
                 🎬 PakStream
               </Link>
 
@@ -69,7 +69,11 @@ const Navbar: React.FC = () => {
                   {user.role === 'admin' && (
                     <Link
                       to="/admin"
-                      className="btn-primary text-sm"
+                      className="px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 hover:opacity-90"
+                      style={{
+                        backgroundColor: 'var(--color-accent)',
+                        color: 'var(--color-primary)'
+                      }}
                     >
                       Admin Dashboard
                     </Link>
@@ -81,12 +85,18 @@ const Navbar: React.FC = () => {
                       onClick={() => setShowUserProfile(!showUserProfile)}
                       className="flex items-center space-x-2 text-text-primary hover:text-text-secondary transition-colors"
                     >
-                      <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center text-text-primary">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold" style={{
+                        backgroundColor: 'var(--color-button-bg)',
+                        color: 'var(--color-button-text)'
+                      }}>
                         {user.username.charAt(0).toUpperCase()}
                       </div>
                       <span className="hidden md:block">{user.username}</span>
                       {user.role === 'admin' && (
-                        <span className="hidden md:block text-xs bg-accent px-2 py-1 rounded text-text-primary">
+                        <span className="hidden md:block text-xs px-2 py-1 rounded font-semibold" style={{
+                          backgroundColor: 'var(--color-button-bg)',
+                          color: 'var(--color-button-text)'
+                        }}>
                           Admin
                         </span>
                       )}
@@ -105,7 +115,11 @@ const Navbar: React.FC = () => {
                 <div className="flex items-center space-x-4">
                   <button
                     onClick={() => setShowLoginModal(true)}
-                    className="btn-primary"
+                    className="px-6 py-2 rounded-lg font-bold transition-all duration-300 hover:opacity-90"
+                    style={{
+                      backgroundColor: 'var(--color-accent)',
+                      color: 'var(--color-primary)'
+                    }}
                   >
                     Sign In
                   </button>

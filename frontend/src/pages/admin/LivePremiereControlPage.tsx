@@ -12,7 +12,6 @@ const LivePremiereControlPage: React.FC = () => {
   const [premiere, setPremiere] = useState<Premiere | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +53,6 @@ const LivePremiereControlPage: React.FC = () => {
     const handlePremiereStarted = (data: any) => {
       console.log('Premiere started:', data);
       setIsPlaying(true);
-      setCurrentTime(data.currentTime || 0);
     };
 
     const handleVideoPlay = () => {

@@ -39,7 +39,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
 
     try {
       await onSubmit(formData);
-      // Reset form
       setFormData({
         username: '',
         email: '',
@@ -66,12 +65,13 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-netflix-gray rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Create New User</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Create New User</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+            className="text-2xl transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             ×
           </button>
@@ -86,27 +86,37 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Username *
               </label>
               <input
                 type="text"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Email *
               </label>
               <input
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               />
             </div>
@@ -114,27 +124,37 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Password *
               </label>
               <input
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
                 minLength={6}
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Role *
               </label>
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'admin' })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               >
                 <option value="user">User</option>
@@ -145,7 +165,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 First Name
               </label>
               <input
@@ -155,12 +175,17 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                   ...formData,
                   profile: { ...formData.profile, firstName: e.target.value }
                 })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Last Name
               </label>
               <input
@@ -170,13 +195,18 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                   ...formData,
                   profile: { ...formData.profile, lastName: e.target.value }
                 })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Bio
             </label>
             <textarea
@@ -186,60 +216,85 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 profile: { ...formData.profile, bio: e.target.value }
               })}
               rows={3}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Organization
               </label>
               <input
                 type="text"
                 value={formData.organization || ''}
                 onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 placeholder="Organization name"
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Date of Enrollment
               </label>
               <input
                 type="date"
                 value={formData.dateOfEnrollment || new Date().toISOString().split('T')[0]}
                 onChange={(e) => setFormData({ ...formData, dateOfEnrollment: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Contact Number
               </label>
               <input
                 type="tel"
                 value={formData.contactNumber || ''}
                 onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 placeholder="Phone number"
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
                 Address/Location
               </label>
               <textarea
                 value={formData.address || ''}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 rows={2}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 placeholder="Full address or location"
               />
             </div>
@@ -249,14 +304,16 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              className="px-6 py-2 rounded-lg transition-colors"
+              style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary disabled:opacity-50"
+              className="px-6 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
             >
               {loading ? 'Creating...' : 'Create User'}
             </button>
@@ -268,4 +325,3 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
 };
 
 export default CreateUserModal;
-

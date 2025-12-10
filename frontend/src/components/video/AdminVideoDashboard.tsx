@@ -11,6 +11,8 @@ const AdminVideoDashboard: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<Video | null>(null);
@@ -24,14 +26,10 @@ const AdminVideoDashboard: React.FC = () => {
   const [videoToVerify, setVideoToVerify] = useState<Video | null>(null);
   const [verificationSearch, setVerificationSearch] = useState('');
 
-  useEffect(() => {
-    fetchVideos();
-  }, [filter]);
-
   const fetchVideos = async () => {
     try {
       setLoading(true);
-      const response = await videoService.getVideos({
+      const response = await videoService.getAdminVideos({
         ...filter,
         limit: 50
       });
@@ -41,6 +39,71 @@ const AdminVideoDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchVideos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
+  const handleUploadStart = () => {
+    setUploading(true);
+    setUploadProgress(0);
+    setShowUploadModal(false);
+  };
+
+  const handleUploadProgress = (progress: number) => {
+    setUploadProgress(progress);
+  };
+
+  const handleUploadComplete = (videoId: string) => {
+    let pollCount = 0;
+    const maxPolls = 120;
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        pollCount++;
+        const updatedVideos = await videoService.getAdminVideos({
+          ...filter,
+          limit: 50
+        });
+        const uploadedVideo = updatedVideos.data.videos.find(
+          v => v._id === videoId
+        );
+        
+        if (uploadedVideo) {
+          setVideos(updatedVideos.data.videos);
+          
+          if (uploadedVideo.status === 'ready' || uploadedVideo.status === 'error' || uploadedVideo.status === 'failed') {
+            clearInterval(pollInterval);
+            setUploadProgress(100);
+            setTimeout(() => {
+              setUploading(false);
+              setUploadProgress(0);
+            }, 1000);
+            return;
+          }
+          
+          if (uploadedVideo.processingProgress !== undefined) {
+            const processingProgressScaled = 90 + (uploadedVideo.processingProgress * 0.1);
+            setUploadProgress(processingProgressScaled);
+          } else {
+            setUploadProgress(90);
+          }
+        }
+        
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          setUploading(false);
+          setUploadProgress(0);
+          fetchVideos();
+        }
+      } catch (error) {
+        console.error('Error polling video status:', error);
+      }
+    }, 5000);
+    
+    fetchVideos();
   };
 
   const handleUploadSuccess = () => {
@@ -66,18 +129,12 @@ const AdminVideoDashboard: React.FC = () => {
     try {
       setDeleting(true);
       await videoService.deleteVideo(videoToDelete._id);
-      
-      // Remove video from local state
       setVideos(prev => prev.filter(v => v._id !== videoToDelete._id));
-      
       setShowDeleteModal(false);
       setVideoToDelete(null);
-      
-      // Show success message (you could add a toast notification here)
       console.log('Video deleted successfully by administrator');
     } catch (error) {
       console.error('Failed to delete video:', error);
-      // Show error message (you could add a toast notification here)
     } finally {
       setDeleting(false);
     }
@@ -129,18 +186,23 @@ const AdminVideoDashboard: React.FC = () => {
 
   return (
     <ProtectedRoute requireAdmin>
-      <div className="min-h-screen bg-netflix-black pt-16">
+      <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Admin Video Management</h1>
-              <p className="text-gray-400">Administrators can manage and verify all videos</p>
+              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
+                Admin Video Management
+              </h1>
+              <p style={{ color: 'var(--color-text-secondary)' }}>
+                Administrators can manage and verify all videos
+              </p>
             </div>
             {activeTab === 'videos' && (
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="btn-primary"
+                className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
               >
                 Upload Video
               </button>
@@ -148,25 +210,25 @@ const AdminVideoDashboard: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="mb-6 border-b border-gray-700">
+          <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex space-x-1">
               <button
                 onClick={() => setActiveTab('videos')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'videos'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'videos' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'videos' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 📹 Videos
               </button>
               <button
                 onClick={() => setActiveTab('verification')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'verification'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'verification' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'verification' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 ✓ Verification
               </button>
@@ -175,9 +237,26 @@ const AdminVideoDashboard: React.FC = () => {
 
           {/* Videos Tab Content */}
           {activeTab === 'videos' && (
-            <>
+            <div className="space-y-6">
+              
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ color: 'var(--color-text)' }}>Uploading video...</span>
+                    <span style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
+                    <div
+                      className="h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Admin Notice */}
-              <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4 mb-6">
+              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgb(202, 138, 4)' }}>
                 <div className="flex items-center">
                   <div className="text-yellow-400 text-xl mr-3">⚠️</div>
                   <div>
@@ -190,229 +269,251 @@ const AdminVideoDashboard: React.FC = () => {
               </div>
 
               {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-            <div className="bg-netflix-gray p-4 rounded-lg">
-              <div className="text-2xl font-bold text-white">{stats.total}</div>
-              <div className="text-sm text-gray-400">Total Videos</div>
-            </div>
-            <div className="bg-netflix-gray p-4 rounded-lg">
-              <div className="text-2xl font-bold text-green-400">{stats.ready}</div>
-              <div className="text-sm text-gray-400">Ready</div>
-            </div>
-            <div className="bg-netflix-gray p-4 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-400">{stats.processing}</div>
-              <div className="text-sm text-gray-400">Processing</div>
-            </div>
-            <div className="bg-netflix-gray p-4 rounded-lg">
-              <div className="text-2xl font-bold text-red-400">{stats.error}</div>
-              <div className="text-sm text-gray-400">Errors</div>
-            </div>
-            <div className="bg-netflix-gray p-4 rounded-lg">
-              <div className="text-2xl font-bold text-blue-400">{stats.totalViews}</div>
-              <div className="text-sm text-gray-400">Total Views</div>
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className="bg-netflix-gray p-4 rounded-lg mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Status
-                </label>
-                <select
-                  value={filter.status}
-                  onChange={(e) => handleFilterChange('status', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
-                >
-                  <option value="">All Status</option>
-                  <option value="ready">Ready</option>
-                  <option value="processing">Processing</option>
-                  <option value="uploading">Uploading</option>
-                  <option value="error">Error</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Category
-                </label>
-                <select
-                  value={filter.category}
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
-                >
-                  <option value="">All Categories</option>
-                  <option value="movie">Movie</option>
-                  <option value="tv-show">TV Show</option>
-                  <option value="documentary">Documentary</option>
-                  <option value="short-film">Short Film</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Search
-                </label>
-                <input
-                  type="text"
-                  value={filter.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  placeholder="Search videos..."
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Video Grid */}
-          <VideoGrid
-            videos={videos}
-            loading={loading}
-            onVideoClick={handleVideoClick}
-            onDeleteClick={handleDeleteClick}
-            showDeleteButton={true}
-          />
-
-          {/* Video Detail Modal */}
-          {selectedVideo && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-netflix-gray rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold text-white">{selectedVideo.title}</h2>
-                  <button
-                    onClick={handleCloseVideo}
-                    className="text-gray-400 hover:text-white text-2xl"
-                  >
-                    ×
-                  </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{stats.total}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Videos</div>
                 </div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold text-green-400">{stats.ready}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready</div>
+                </div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold text-yellow-400">{stats.processing}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Processing</div>
+                </div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold text-red-400">{stats.error}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Errors</div>
+                </div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold text-blue-400">{stats.totalViews}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Views</div>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Filters */}
+              <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Video Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div><span className="text-gray-400">Status:</span> <span className="text-white">{selectedVideo.status}</span></div>
-                      <div><span className="text-gray-400">Category:</span> <span className="text-white">{selectedVideo.category}</span></div>
-                      <div><span className="text-gray-400">Duration:</span> <span className="text-white">{selectedVideo.duration}s</span></div>
-                      <div><span className="text-gray-400">Resolution:</span> <span className="text-white">{selectedVideo.resolution}</span></div>
-                      <div><span className="text-gray-400">Views:</span> <span className="text-white">{selectedVideo.views}</span></div>
-                      <div><span className="text-gray-400">Uploaded by:</span> <span className="text-white">{selectedVideo.uploadedBy.username}</span></div>
-                    </div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Status
+                    </label>
+                    <select
+                      value={filter.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{ 
+                        backgroundColor: 'var(--color-hover)', 
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)'
+                      }}
+                    >
+                      <option value="">All Status</option>
+                      <option value="ready">Ready</option>
+                      <option value="processing">Processing</option>
+                      <option value="uploading">Uploading</option>
+                      <option value="error">Error</option>
+                    </select>
                   </div>
-
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Description</h3>
-                    <p className="text-gray-300 text-sm">{selectedVideo.description}</p>
-                    
-                    {selectedVideo.tags.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-semibold text-white mb-2">Tags</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedVideo.tags.map((tag, index) => (
-                            <span key={index} className="px-2 py-1 bg-gray-700 text-white text-xs rounded">
-                              {tag}
-                            </span>
-                          ))}
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Category
+                    </label>
+                    <select
+                      value={filter.category}
+                      onChange={(e) => handleFilterChange('category', e.target.value)}
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{ 
+                        backgroundColor: 'var(--color-hover)', 
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)'
+                      }}
+                    >
+                      <option value="">All Categories</option>
+                      <option value="movie">Movie</option>
+                      <option value="tv-show">TV Show</option>
+                      <option value="documentary">Documentary</option>
+                      <option value="short-film">Short Film</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Search
+                    </label>
+                    <input
+                      type="text"
+                      value={filter.search}
+                      onChange={(e) => handleFilterChange('search', e.target.value)}
+                      placeholder="Search videos..."
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{ 
+                        backgroundColor: 'var(--color-hover)', 
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Grid */}
+              <VideoGrid
+                videos={videos}
+                loading={loading}
+                onVideoClick={handleVideoClick}
+                onDeleteClick={handleDeleteClick}
+                showDeleteButton={true}
+              />
+
+              {/* Video Detail Modal */}
+              {selectedVideo && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                  <div className="rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{selectedVideo.title}</h2>
+                      <button
+                        onClick={handleCloseVideo}
+                        className="text-2xl transition-colors"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Video Details</h3>
+                        <div className="space-y-2 text-sm">
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Status:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.status}</span></div>
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Category:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.category}</span></div>
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Duration:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.duration}s</span></div>
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Resolution:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.resolution}</span></div>
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Views:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.views}</span></div>
+                          <div><span style={{ color: 'var(--color-text-secondary)' }}>Uploaded by:</span> <span style={{ color: 'var(--color-text)' }}>{selectedVideo.uploadedBy.username}</span></div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Admin Actions */}
-                <div className="mt-6 pt-6 border-t border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-4">Administrator Actions</h3>
-                  <div className="flex space-x-4">
-                    <button
-                      onClick={() => {
-                        handleDeleteClick(selectedVideo);
-                        handleCloseVideo();
-                      }}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      🗑️ Delete Video (Admin Only)
-                    </button>
+                      <div>
+                        <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Description</h3>
+                        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{selectedVideo.description}</p>
+                        
+                        {selectedVideo.tags.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Tags</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedVideo.tags.map((tag, index) => (
+                                <span key={index} className="px-2 py-1 text-xs rounded" style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}>
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Admin Actions */}
+                    <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Administrator Actions</h3>
+                      <div className="flex space-x-4">
+                        <button
+                          onClick={() => {
+                            handleDeleteClick(selectedVideo);
+                            handleCloseVideo();
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          🗑️ Delete Video (Admin Only)
+                        </button>
+                      </div>
+                      <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+                        Only administrators can delete videos. Regular users cannot delete any videos.
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-gray-400 text-sm mt-2">
-                    Only administrators can delete videos. Regular users cannot delete any videos.
-                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* Delete Confirmation Modal */}
+              {showDeleteModal && videoToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                  <div className="rounded-lg p-6 w-full max-w-md" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                    <div className="flex items-center mb-4">
+                      <div className="text-red-500 text-4xl mr-4">⚠️</div>
+                      <div>
+                        <h2 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Admin Delete Video</h2>
+                        <p style={{ color: 'var(--color-text-secondary)' }}>Administrator action - cannot be undone</p>
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <p className="mb-2" style={{ color: 'var(--color-text)' }}>
+                        Are you sure you want to delete this video as an administrator?
+                      </p>
+                      <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--color-hover)' }}>
+                        <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>{videoToDelete.title}</h3>
+                        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{videoToDelete.description}</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                          Uploaded by: {videoToDelete.uploadedBy.username}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={handleDeleteCancel}
+                        disabled={deleting}
+                        className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDeleteConfirm}
+                        disabled={deleting}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deleting ? 'Deleting...' : 'Delete as Admin'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Modal */}
+              <VideoUploadModal
+                isOpen={showUploadModal}
+                onClose={() => setShowUploadModal(false)}
+                onUploadSuccess={handleUploadSuccess}
+                onUploadStart={handleUploadStart}
+                onUploadProgress={handleUploadProgress}
+                onUploadComplete={handleUploadComplete}
+                uploading={uploading}
+                uploadProgress={uploadProgress}
+              />
             </div>
-          )}
-
-          {/* Delete Confirmation Modal */}
-          {showDeleteModal && videoToDelete && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-netflix-gray rounded-lg p-6 w-full max-w-md">
-                <div className="flex items-center mb-4">
-                  <div className="text-red-500 text-4xl mr-4">⚠️</div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">Admin Delete Video</h2>
-                    <p className="text-gray-400">Administrator action - cannot be undone</p>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-white mb-2">
-                    Are you sure you want to delete this video as an administrator?
-                  </p>
-                  <div className="bg-gray-700 p-3 rounded-lg">
-                    <h3 className="text-white font-semibold">{videoToDelete.title}</h3>
-                    <p className="text-gray-300 text-sm">{videoToDelete.description}</p>
-                    <p className="text-gray-400 text-xs mt-1">
-                      Uploaded by: {videoToDelete.uploadedBy.username}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex space-x-4">
-                  <button
-                    onClick={handleDeleteCancel}
-                    disabled={deleting}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteConfirm}
-                    disabled={deleting}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {deleting ? 'Deleting...' : 'Delete as Admin'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Upload Modal */}
-          <VideoUploadModal
-            isOpen={showUploadModal}
-            onClose={() => setShowUploadModal(false)}
-            onUploadSuccess={handleUploadSuccess}
-          />
-            </>
           )}
 
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
             <div>
-              <div className="bg-blue-900 border border-blue-600 rounded-lg p-4 mb-6">
+              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgb(59, 130, 246)' }}>
                 <div className="flex items-center">
                   <div className="text-blue-400 text-xl mr-3">🔒</div>
                   <div>
                     <h3 className="text-blue-400 font-semibold">Video Integrity Verification</h3>
                     <p className="text-blue-200 text-sm">
-                      Verify that downloaded video files match the original by comparing SHA-256 hashes. This helps detect tampering or corruption.
+                      Verify that downloaded video files match the original by comparing SHA-256 hashes.
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Verification Search */}
-              <div className="bg-netflix-gray p-4 rounded-lg mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+              <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Search Videos for Verification
                 </label>
                 <input
@@ -420,59 +521,63 @@ const AdminVideoDashboard: React.FC = () => {
                   value={verificationSearch}
                   onChange={(e) => setVerificationSearch(e.target.value)}
                   placeholder="Search by title, description, or video ID..."
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                  className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2"
+                  style={{ 
+                    backgroundColor: 'var(--color-hover)', 
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)'
+                  }}
                 />
               </div>
 
               {/* Videos List for Verification */}
-              <div className="bg-netflix-gray rounded-lg overflow-hidden">
+              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-800">
+                    <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Video</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hash</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Video</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-netflix-gray divide-y divide-gray-700">
+                    <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                       {loading ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             Loading videos...
                           </td>
                         </tr>
                       ) : filteredVideosForVerification.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             No videos found
                           </td>
                         </tr>
                       ) : (
                         filteredVideosForVerification.map((video) => (
-                          <tr key={video._id} className="hover:bg-gray-800">
+                          <tr key={video._id} className="transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-white">{video.title}</div>
-                              <div className="text-sm text-gray-400">{video.description.substring(0, 60)}...</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{video.title}</div>
+                              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{video.description.substring(0, 60)}...</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 video.status === 'ready' ? 'bg-green-900 text-green-200' :
                                 video.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                                video.status === 'error' ? 'bg-red-900 text-red-200' :
-                                'bg-gray-700 text-gray-300'
+                                'bg-red-900 text-red-200'
                               }`}>
                                 {video.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               {video.sha256Hash ? (
-                                <div className="text-xs font-mono text-gray-400 max-w-xs truncate" title={video.sha256Hash}>
+                                <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={video.sha256Hash}>
                                   {video.sha256Hash.substring(0, 16)}...
                                 </div>
                               ) : (
-                                <span className="text-xs text-gray-500">Not available</span>
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -484,7 +589,7 @@ const AdminVideoDashboard: React.FC = () => {
                                   Verify
                                 </button>
                               ) : (
-                                <span className="text-gray-500 text-xs">
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                   {video.status !== 'ready' ? 'Not ready' : 'No hash'}
                                 </span>
                               )}
@@ -499,21 +604,21 @@ const AdminVideoDashboard: React.FC = () => {
 
               {/* Verification Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-netflix-gray p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{filteredVideosForVerification.length}</div>
-                  <div className="text-sm text-gray-400">Total Videos</div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredVideosForVerification.length}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Videos</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-green-400">
                     {filteredVideosForVerification.filter(v => v.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">With Hash</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-blue-400">
                     {filteredVideosForVerification.filter(v => v.status === 'ready' && v.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">Ready to Verify</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
                 </div>
               </div>
             </div>

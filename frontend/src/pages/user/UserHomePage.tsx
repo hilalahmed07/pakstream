@@ -40,6 +40,7 @@ const UserHomePage: React.FC = () => {
     // Check every 5 seconds to catch status updates faster when countdown finishes
     const interval = setInterval(checkActivePremiere, 5000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeApp = async () => {

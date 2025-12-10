@@ -157,4 +157,5 @@ class PremiereService {
   }
 }
 
-export default new PremiereService();
+const premiereService = new PremiereService();
+export default premiereService;

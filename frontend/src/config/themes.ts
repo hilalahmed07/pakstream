@@ -51,8 +51,8 @@ export const themes: Record<Theme, ThemeColors> = {
     hover: '#026830',         // Medium green hover
     card: '#026830',          // Medium green cards
     cardHover: '#028A3F',     // Lighter green on hover
-    buttonBg: '#026830',      // Medium green for buttons
-    buttonText: '#FFFFFF',    // White text on green buttons
+    buttonBg: '#FFFFFF',      // White background for buttons
+    buttonText: '#01411C',    // Dark green text on white buttons
   },
 };
 

@@ -243,12 +243,12 @@ const deleteDocument = async (req, res) => {
 
     // Delete files
     const documentDir = path.join(__dirname, '../../uploads/documents/processed', id);
-    if (fs.existsSync(documentDir)) {
-      fs.rmSync(documentDir, { recursive: true, force: true });
+    if (fsSync.existsSync(documentDir)) {
+      fsSync.rmSync(documentDir, { recursive: true, force: true });
     }
 
-    if (document.originalFile?.path && fs.existsSync(document.originalFile.path)) {
-      fs.unlinkSync(document.originalFile.path);
+    if (document.originalFile?.path && fsSync.existsSync(document.originalFile.path)) {
+      fsSync.unlinkSync(document.originalFile.path);
     }
 
     await Document.findByIdAndDelete(id);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
-import videoService from '../../services/videoService';
+import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../../config/api';
 
 interface ProcessingVideo {
@@ -18,7 +17,6 @@ interface VideoProcessingStatusProps {
 
 const VideoProcessingStatus: React.FC<VideoProcessingStatusProps> = ({ onVideoReady }) => {
   const [processingVideos, setProcessingVideos] = useState<Map<string, ProcessingVideo>>(new Map());
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
@@ -128,28 +126,10 @@ const VideoProcessingStatus: React.FC<VideoProcessingStatusProps> = ({ onVideoRe
       console.log('Disconnected from processing status socket');
     });
 
-    setSocket(newSocket);
-
     return () => {
       newSocket.close();
     };
   }, [onVideoReady]);
-
-  // Add video to tracking
-  const addVideo = (videoId: string, title: string) => {
-    setProcessingVideos(prev => {
-      const updated = new Map(prev);
-      updated.set(videoId, {
-        videoId,
-        title,
-        progress: 0,
-        message: 'Uploaded, waiting to process...',
-        status: 'uploading',
-        timestamp: new Date().toISOString()
-      });
-      return updated;
-    });
-  };
 
   // Remove video from tracking
   const removeVideo = (videoId: string) => {

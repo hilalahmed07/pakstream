@@ -142,6 +142,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       socketService.removeListener('new-message', handleNewMessage);
       socketService.removeListener('error', handleError);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const scrollToBottom = () => {

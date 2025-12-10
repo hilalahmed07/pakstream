@@ -35,32 +35,64 @@ const AdminPresentationDashboard: React.FC = () => {
     try {
       setUploading(true);
       setUploadProgress(0);
+      setShowUploadModal(false);
       
-      const response = await presentationService.uploadPresentation(formData);
+      const response = await presentationService.uploadPresentation(
+        formData,
+        (progress) => {
+          setUploadProgress((progress * 0.9));
+        }
+      );
       
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
+      const presentationId = response.presentation.id;
+      let pollCount = 0;
+      const maxPolls = 60;
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          pollCount++;
+          const updatedPresentations = await presentationService.getAdminPresentations();
+          const uploadedPresentation = updatedPresentations.presentations.find(
+            p => p._id === presentationId
+          );
+          
+          if (uploadedPresentation) {
+            setPresentations(updatedPresentations.presentations);
+            
+            if (uploadedPresentation.status === 'ready' || uploadedPresentation.status === 'error') {
+              clearInterval(pollInterval);
+              setUploadProgress(100);
+              setUploading(false);
+              setUploadProgress(0);
+              return;
+            }
+            
+            if (uploadedPresentation.processingProgress !== undefined) {
+              const processingProgressScaled = 90 + (uploadedPresentation.processingProgress * 0.1);
+              setUploadProgress(processingProgressScaled);
+            } else {
+              setUploadProgress(90);
+            }
           }
-          return prev + 10;
-        });
-      }, 200);
-
-      // Wait for processing to complete
-      setTimeout(() => {
-        clearInterval(progressInterval);
-        setUploadProgress(100);
-        setShowUploadModal(false);
-        fetchPresentations();
-        setUploading(false);
-      }, 3000);
+          
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            setUploadProgress(0);
+            fetchPresentations();
+          }
+        } catch (error) {
+          console.error('Error polling presentation status:', error);
+        }
+      }, 5000);
+      
+      fetchPresentations();
 
     } catch (error) {
       console.error('Upload failed:', error);
       setUploading(false);
+      setUploadProgress(0);
+      alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -111,26 +143,34 @@ const AdminPresentationDashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Loading presentations...</p>
+        <div 
+          className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
+          style={{ borderColor: 'var(--color-accent)' }}
+        ></div>
+        <p style={{ color: 'var(--color-text)' }}>Loading presentations...</p>
       </div>
     );
   }
 
   return (
     <ProtectedRoute requireAdmin>
-      <div className="min-h-screen bg-netflix-black pt-16">
+      <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Admin Presentation Management</h1>
-              <p className="text-gray-400">Administrators can manage and verify all presentations</p>
+              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
+                Admin Presentation Management
+              </h1>
+              <p style={{ color: 'var(--color-text-secondary)' }}>
+                Administrators can manage and verify all presentations
+              </p>
             </div>
             {activeTab === 'presentations' && (
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="btn-primary"
+                className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
                 disabled={uploading}
               >
                 {uploading ? 'Uploading...' : 'Upload Presentation'}
@@ -139,25 +179,25 @@ const AdminPresentationDashboard: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="mb-6 border-b border-gray-700">
+          <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex space-x-1">
               <button
                 onClick={() => setActiveTab('presentations')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'presentations'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'presentations' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'presentations' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 📊 Presentations
               </button>
               <button
                 onClick={() => setActiveTab('verification')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'verification'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'verification' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'verification' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 ✓ Verification
               </button>
@@ -168,145 +208,147 @@ const AdminPresentationDashboard: React.FC = () => {
           {activeTab === 'presentations' && (
             <div className="space-y-6">
 
-      {/* Upload Progress */}
-      {uploading && (
-        <div className="bg-gray-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-white">Uploading presentation...</span>
-            <span className="text-white">{uploadProgress}%</span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-netflix-red h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Presentations Grid */}
-      {presentations.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📊</div>
-          <h3 className="text-xl font-semibold text-white mb-2">No Presentations</h3>
-          <p className="text-gray-400 mb-4">Upload your first presentation to get started.</p>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="btn-primary"
-          >
-            Upload Presentation
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {presentations.map((presentation) => (
-            <div key={presentation._id} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-              {/* Thumbnail */}
-              <div className="aspect-video bg-gray-700 relative">
-                {presentation.thumbnail ? (
-                  <img
-                    src={presentationService.getThumbnailUrl(presentation._id)}
-                    alt={presentation.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiM2QjcyODAiLz4KPC9zdmc+';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-6xl text-gray-500">📊</div>
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ color: 'var(--color-text)' }}>Uploading presentation...</span>
+                    <span style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
                   </div>
-                )}
-                
-                {/* Status Badge */}
-                <div className="absolute top-2 left-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    presentation.status === 'ready' 
-                      ? 'bg-green-600 text-white' 
-                      : presentation.status === 'processing'
-                      ? 'bg-yellow-600 text-white'
-                      : 'bg-red-600 text-white'
-                  }`}>
-                    {presentation.status === 'ready' ? 'Ready' : 
-                     presentation.status === 'processing' ? 'Processing' : 'Error'}
-                  </span>
-                </div>
-
-                {/* Category Badge */}
-                <div className="absolute top-2 right-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getCategoryColor(presentation.category)}`}>
-                    {presentation.category}
-                  </span>
-                </div>
-
-                {/* Slide Count */}
-                <div className="absolute bottom-2 right-2">
-                  <span className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
-                    {presentation.totalSlides} slides
-                  </span>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-4">
-                <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2">
-                  {presentation.title}
-                </h3>
-                
-                <p className="text-gray-400 text-sm mb-3 line-clamp-2">
-                  {presentation.description}
-                </p>
-
-                {/* Stats */}
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                  <div className="flex items-center space-x-4">
-                    <span className="flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-                      </svg>
-                      {presentation.views}
-                    </span>
-                    
-                    <span className="flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                      {presentation.likes}
-                    </span>
-                  </div>
-                  
-                  <span className="text-xs">
-                    {new Date(presentation.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleDelete(presentation._id)}
-                      className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    by {presentation.uploadedBy.username}
+                  <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
+                    <div
+                      className="h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              )}
+
+              {/* Presentations Grid */}
+              {presentations.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📊</div>
+                  <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--color-text)' }}>No Presentations</h3>
+                  <p className="mb-4" style={{ color: 'var(--color-text-secondary)' }}>Upload your first presentation to get started.</p>
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                  >
+                    Upload Presentation
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {presentations.map((presentation) => (
+                    <div key={presentation._id} className="rounded-lg overflow-hidden shadow-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                      {/* Thumbnail */}
+                      <div className="aspect-video relative" style={{ backgroundColor: 'var(--color-hover)' }}>
+                        {presentation.thumbnail ? (
+                          <img
+                            src={presentationService.getThumbnailUrl(presentation._id)}
+                            alt={presentation.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiM2QjcyODAiLz4KPC9zdmc+';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-6xl" style={{ color: 'var(--color-text-secondary)' }}>📊</div>
+                          </div>
+                        )}
+                        
+                        {/* Status Badge */}
+                        <div className="absolute top-2 left-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            presentation.status === 'ready' 
+                              ? 'bg-green-600 text-white' 
+                              : presentation.status === 'processing'
+                              ? 'bg-yellow-600 text-white'
+                              : 'bg-red-600 text-white'
+                          }`}>
+                            {presentation.status === 'ready' ? 'Ready' : 
+                             presentation.status === 'processing' ? 'Processing' : 'Error'}
+                          </span>
+                        </div>
+
+                        {/* Category Badge */}
+                        <div className="absolute top-2 right-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getCategoryColor(presentation.category)}`}>
+                            {presentation.category}
+                          </span>
+                        </div>
+
+                        {/* Slide Count */}
+                        <div className="absolute bottom-2 right-2">
+                          <span className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                            {presentation.totalSlides} slides
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4">
+                        <h3 className="font-semibold text-lg mb-2 line-clamp-2" style={{ color: 'var(--color-text)' }}>
+                          {presentation.title}
+                        </h3>
+                        
+                        <p className="text-sm mb-3 line-clamp-2" style={{ color: 'var(--color-text-secondary)' }}>
+                          {presentation.description}
+                        </p>
+
+                        {/* Stats */}
+                        <div className="flex items-center justify-between text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+                          <div className="flex items-center space-x-4">
+                            <span className="flex items-center">
+                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                              </svg>
+                              {presentation.views}
+                            </span>
+                            
+                            <span className="flex items-center">
+                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                              </svg>
+                              {presentation.likes}
+                            </span>
+                          </div>
+                          
+                          <span className="text-xs">
+                            {new Date(presentation.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleDelete(presentation._id)}
+                              className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          
+                          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                            by {presentation.uploadedBy.username}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Upload Modal */}
               {showUploadModal && (
                 <PresentationUploadModal
-                  onClose={() => setShowUploadModal(false)}
+                  onClose={() => !uploading && setShowUploadModal(false)}
                   onUpload={handleUpload}
+                  uploading={uploading}
                 />
               )}
             </div>
@@ -315,21 +357,21 @@ const AdminPresentationDashboard: React.FC = () => {
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
             <div>
-              <div className="bg-blue-900 border border-blue-600 rounded-lg p-4 mb-6">
+              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgb(59, 130, 246)' }}>
                 <div className="flex items-center">
                   <div className="text-blue-400 text-xl mr-3">🔒</div>
                   <div>
                     <h3 className="text-blue-400 font-semibold">Presentation Integrity Verification</h3>
                     <p className="text-blue-200 text-sm">
-                      Verify that downloaded presentation files match the original by comparing SHA-256 hashes. This helps detect tampering or corruption.
+                      Verify that downloaded presentation files match the original by comparing SHA-256 hashes.
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Verification Search */}
-              <div className="bg-netflix-gray p-4 rounded-lg mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+              <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Search Presentations for Verification
                 </label>
                 <input
@@ -337,59 +379,63 @@ const AdminPresentationDashboard: React.FC = () => {
                   value={verificationSearch}
                   onChange={(e) => setVerificationSearch(e.target.value)}
                   placeholder="Search by title, description, or presentation ID..."
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                  className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2"
+                  style={{ 
+                    backgroundColor: 'var(--color-hover)', 
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)'
+                  }}
                 />
               </div>
 
               {/* Presentations List for Verification */}
-              <div className="bg-netflix-gray rounded-lg overflow-hidden">
+              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-800">
+                    <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Presentation</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hash</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Presentation</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-netflix-gray divide-y divide-gray-700">
+                    <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                       {loading ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             Loading presentations...
                           </td>
                         </tr>
                       ) : filteredPresentationsForVerification.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             No presentations found
                           </td>
                         </tr>
                       ) : (
                         filteredPresentationsForVerification.map((presentation) => (
-                          <tr key={presentation._id} className="hover:bg-gray-800">
+                          <tr key={presentation._id} className="transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-white">{presentation.title}</div>
-                              <div className="text-sm text-gray-400">{presentation.description.substring(0, 60)}...</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{presentation.title}</div>
+                              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{presentation.description.substring(0, 60)}...</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 presentation.status === 'ready' ? 'bg-green-900 text-green-200' :
                                 presentation.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                                presentation.status === 'error' ? 'bg-red-900 text-red-200' :
-                                'bg-gray-700 text-gray-300'
+                                'bg-red-900 text-red-200'
                               }`}>
                                 {presentation.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               {presentation.sha256Hash ? (
-                                <div className="text-xs font-mono text-gray-400 max-w-xs truncate" title={presentation.sha256Hash}>
+                                <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={presentation.sha256Hash}>
                                   {presentation.sha256Hash.substring(0, 16)}...
                                 </div>
                               ) : (
-                                <span className="text-xs text-gray-500">Not available</span>
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -401,7 +447,7 @@ const AdminPresentationDashboard: React.FC = () => {
                                   Verify
                                 </button>
                               ) : (
-                                <span className="text-gray-500 text-xs">
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                   {presentation.status !== 'ready' ? 'Not ready' : 'No hash'}
                                 </span>
                               )}
@@ -416,21 +462,21 @@ const AdminPresentationDashboard: React.FC = () => {
 
               {/* Verification Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-netflix-gray p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{filteredPresentationsForVerification.length}</div>
-                  <div className="text-sm text-gray-400">Total Presentations</div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredPresentationsForVerification.length}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Presentations</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-green-400">
                     {filteredPresentationsForVerification.filter(p => p.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">With Hash</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-blue-400">
                     {filteredPresentationsForVerification.filter(p => p.status === 'ready' && p.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">Ready to Verify</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
                 </div>
               </div>
             </div>
@@ -454,9 +500,10 @@ const AdminPresentationDashboard: React.FC = () => {
 interface PresentationUploadModalProps {
   onClose: () => void;
   onUpload: (formData: FormData) => void;
+  uploading?: boolean;
 }
 
-const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload }) => {
+const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload, uploading = false }) => {
   const [formData, setFormData] = useState<CreatePresentationData>({
     title: '',
     description: '',
@@ -502,14 +549,16 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-white">Upload Presentation</h2>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Upload Presentation</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white text-2xl"
+              className="text-2xl transition-colors"
+              style={{ color: 'var(--color-text-secondary)' }}
+              disabled={uploading}
             >
               ×
             </button>
@@ -518,58 +567,82 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* File Upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Presentation File
               </label>
               <input
                 type="file"
                 accept=".ppt,.pptx,.odp"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
+                disabled={uploading}
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                 Supported formats: .ppt, .pptx, .odp (Max 100MB)
               </p>
             </div>
 
             {/* Title */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title
               </label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
+                disabled={uploading}
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
+                disabled={uploading}
               />
             </div>
 
             {/* Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Category
               </label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
+                disabled={uploading}
               >
                 <option value="business">Business</option>
                 <option value="education">Education</option>
@@ -582,7 +655,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
 
             {/* Tags */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Tags
               </label>
               <div className="flex space-x-2 mb-2">
@@ -592,12 +665,20 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   placeholder="Add a tag"
-                  className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                  className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+                  style={{ 
+                    backgroundColor: 'var(--color-hover)', 
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)'
+                  }}
+                  disabled={uploading}
                 />
                 <button
                   type="button"
                   onClick={addTag}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                  className="px-4 py-2 rounded-lg transition-colors"
+                  style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                  disabled={uploading}
                 >
                   Add
                 </button>
@@ -606,13 +687,14 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 {formData.tags.map((tag, index) => (
                   <span
                     key={index}
-                    className="px-2 py-1 bg-netflix-red text-white text-sm rounded flex items-center space-x-1"
+                    className="px-2 py-1 text-sm rounded flex items-center space-x-1"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
                   >
                     <span>{tag}</span>
                     <button
                       type="button"
                       onClick={() => removeTag(tag)}
-                      className="text-white hover:text-gray-300"
+                      className="hover:opacity-70"
                     >
                       ×
                     </button>
@@ -626,13 +708,17 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors"
+                style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                disabled={uploading}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-2 bg-netflix-red text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                disabled={uploading}
               >
                 Upload
               </button>

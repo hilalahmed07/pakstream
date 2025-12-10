@@ -91,6 +91,16 @@ const getVideos = async (req, res) => {
     const skip = (page - 1) * limit;
 
     let query = { isPublic: true };
+    
+    // Only show ready videos to public users (not processing/uploading)
+    // Admins can see all via /admin/all endpoint
+    if (!req.user || req.user.role !== 'admin') {
+      query.status = 'ready';
+    } else if (status) {
+      // Admin can filter by status
+      query.status = status;
+    }
+    
     if (category) query.category = category;
     if (search) {
       query.$or = [
@@ -98,7 +108,6 @@ const getVideos = async (req, res) => {
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-    if (status) query.status = status;
 
     const videos = await Video.find(query)
       .populate('uploadedBy', 'username email')
@@ -302,8 +311,16 @@ const deleteVideo = async (req, res) => {
     // Delete files
     try {
       if (video.originalFile?.path) {
-        await fs.unlink(video.originalFile.path);
-        console.log(`Deleted original file: ${video.originalFile.path}`);
+        try {
+          await fs.unlink(video.originalFile.path);
+          console.log(`Deleted original file: ${video.originalFile.path}`);
+        } catch (unlinkError) {
+          if (unlinkError.code === 'ENOENT') {
+            console.log(`Original file not found (already deleted): ${video.originalFile.path}`);
+          } else {
+            throw unlinkError;
+          }
+        }
       }
       
       const processedDir = path.join(__dirname, '../../uploads/videos/processed', video._id.toString());
@@ -311,7 +328,11 @@ const deleteVideo = async (req, res) => {
         await fs.rmdir(processedDir, { recursive: true });
         console.log(`Deleted processed directory: ${processedDir}`);
       } catch (dirError) {
-        console.log(`Processed directory not found or already deleted: ${processedDir}`);
+        if (dirError.code === 'ENOENT') {
+          console.log(`Processed directory not found (already deleted): ${processedDir}`);
+        } else {
+          console.log(`Could not delete processed directory: ${dirError.message}`);
+        }
       }
     } catch (fileError) {
       console.error('Error deleting files:', fileError);

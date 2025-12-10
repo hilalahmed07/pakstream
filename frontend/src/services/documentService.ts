@@ -53,10 +53,12 @@ class DocumentService {
     return this.request<DocumentResponse>(`/documents/${id}`);
   }
 
-  async uploadDocument(file: File, uploadData: DocumentUploadData): Promise<{ message: string; document: any }> {
-    const url = `${API_BASE_URL}/documents/upload`;
-    const token = localStorage.getItem('token');
-
+  async uploadDocument(
+    file: File, 
+    uploadData: DocumentUploadData,
+    onProgress?: (progress: number) => void
+  ): Promise<{ message: string; document: any }> {
+    return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append('document', file);
     formData.append('title', uploadData.title);
@@ -64,27 +66,63 @@ class DocumentService {
     formData.append('category', uploadData.category);
     formData.append('tags', uploadData.tags);
 
-    const config: RequestInit = {
-      method: 'POST',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: formData,
-    };
+      const xhr = new XMLHttpRequest();
+      const url = `${API_BASE_URL}/documents/upload`;
+      const token = localStorage.getItem('token');
 
+      // Track upload progress
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          onProgress(Math.min(100, Math.max(0, percentComplete)));
+        }
+      };
+
+      // Handle completion
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
     try {
-      const response = await fetch(url, config);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Upload failed');
-      }
-
-      return data;
+            const data = JSON.parse(xhr.responseText);
+            // Don't set to 100% here - let the component handle the transition
+            // Upload phase is 0-90%, processing will be 90-100%
+            if (onProgress) {
+              onProgress(90); // Set to 90% when upload completes, processing will take it to 100%
+            }
+            resolve(data);
+          } catch (error) {
+            reject(new Error('Failed to parse response'));
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
     } catch (error) {
-      console.error('DocumentService upload failed:', error);
-      throw error;
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      };
+
+      // Handle errors
+      xhr.onerror = () => {
+        reject(new Error('Network error during upload'));
+      };
+
+      // Handle abort
+      xhr.onabort = () => {
+        reject(new Error('Upload was cancelled'));
+      };
+
+      // Open and send request
+      xhr.open('POST', url);
+      
+      // Set authorization header if token exists
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
+
+      // Send request
+      xhr.send(formData);
+    });
   }
 
   async getAdminDocuments(): Promise<{ documents: Document[] }> {

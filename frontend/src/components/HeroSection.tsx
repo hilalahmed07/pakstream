@@ -8,11 +8,8 @@ const HeroSection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [showControls, setShowControls] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // View tracking refs
   const playStartTrackedRef = useRef(false);
   const watch30TrackedRef = useRef(false);
@@ -41,6 +38,7 @@ const HeroSection: React.FC = () => {
       playStartTrackedRef.current = false;
       watch30TrackedRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestVideo]);
 
   const fetchLatestVideo = async () => {
@@ -209,32 +207,6 @@ const HeroSection: React.FC = () => {
     }
   };
 
-  const toggleMute = () => {
-    if (!videoRef.current) return;
-    const newMutedState = !videoRef.current.muted;
-    videoRef.current.muted = newMutedState;
-    setIsMuted(newMutedState);
-    console.log('Mute toggled:', newMutedState);
-  };
-
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-  };
-
-  const handleMouseLeave = () => {
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 1000);
-  };
 
   if (isLoading) {
     return (
@@ -277,15 +249,13 @@ const HeroSection: React.FC = () => {
   return (
     <section 
       className="relative h-screen bg-black overflow-hidden"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
     >
       {/* Video Background */}
       <div className="absolute inset-0">
         <video
           ref={videoRef}
           className="w-full h-full object-cover"
-          muted={isMuted}
+          muted
           loop
           playsInline
           poster={videoService.getPosterUrl(latestVideo)}
@@ -293,7 +263,7 @@ const HeroSection: React.FC = () => {
         <div className="absolute inset-0 bg-black bg-opacity-30"></div>
       </div>
 
-      {/* Content Overlay */}
+      {/* Content Overlay 
       <div className="relative z-10 flex items-center justify-center h-full">
         <div className="text-center max-w-4xl mx-auto px-4">
           <h1 className="text-4xl md:text-6xl font-bold mb-6 text-text-primary drop-shadow-lg">
@@ -312,10 +282,10 @@ const HeroSection: React.FC = () => {
             <span>{latestVideo.views} views</span>
           </div>
         </div>
-      </div>
+      </div>*/}
 
       {/* Video Controls */}
-      {showControls && (
+      {/*showControls && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-6">
           <div className="flex items-center justify-center space-x-4">
             <button
@@ -353,7 +323,7 @@ const HeroSection: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )*/}
 
       {/* Play/Pause Overlay */}
       {!isPlaying && (

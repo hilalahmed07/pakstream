@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks';
+import ThemeSwitcher from '../ThemeSwitcher';
 
 const AdminSidebar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -26,13 +27,25 @@ const AdminSidebar: React.FC = () => {
   ];
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-64 bg-netflix-gray border-r border-gray-800 flex flex-col z-30">
-      {/* Logo/Header */}
-      <div className="p-6 border-b border-gray-800">
-        <div className="text-2xl font-bold text-netflix-red mb-2">
-          🎬 PakStream
+    <div 
+      className="fixed left-0 top-0 h-screen w-64 border-r flex flex-col z-30"
+      style={{
+        backgroundColor: 'var(--color-secondary)',
+        borderColor: 'var(--color-border)'
+      }}
+    >
+      {/* Logo/Header with Theme Switcher */}
+      <div 
+        className="p-4 border-b"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <Link to="/" className="text-xl font-bold" style={{ color: 'var(--color-accent)' }}>
+            🎬 PakStream
+          </Link>
+          <ThemeSwitcher />
         </div>
-        <div className="text-xs text-gray-400">Admin Dashboard</div>
+        <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Admin Dashboard</div>
       </div>
 
       {/* Navigation Menu */}
@@ -42,11 +55,23 @@ const AdminSidebar: React.FC = () => {
             <li key={item.path}>
               <Link
                 to={item.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive(item.path)
-                    ? 'bg-netflix-red text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: isActive(item.path) ? 'var(--color-accent)' : 'transparent',
+                  color: isActive(item.path) ? 'var(--color-primary)' : 'var(--color-text-secondary)'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive(item.path)) {
+                    e.currentTarget.style.backgroundColor = 'var(--color-hover)';
+                    e.currentTarget.style.color = 'var(--color-text)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive(item.path)) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                  }
+                }}
               >
                 <span className="text-xl">{item.icon}</span>
                 <span className="font-medium">{item.label}</span>
@@ -57,19 +82,42 @@ const AdminSidebar: React.FC = () => {
       </nav>
 
       {/* User Info & Logout */}
-      <div className="p-4 border-t border-gray-800">
+      <div 
+        className="p-4 border-t"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 bg-netflix-red rounded-full flex items-center justify-center text-white font-bold">
+          <div 
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold"
+            style={{
+              backgroundColor: 'var(--color-accent)',
+              color: 'var(--color-primary)'
+            }}
+          >
             {user?.username.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-white font-medium truncate">{user?.username}</div>
-            <div className="text-xs text-gray-400">Administrator</div>
+            <div className="font-medium truncate" style={{ color: 'var(--color-text)' }}>
+              {user?.username}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Administrator
+            </div>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="block w-full text-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+          className="block w-full text-center px-4 py-2 rounded-lg transition-colors"
+          style={{
+            backgroundColor: 'var(--color-hover)',
+            color: 'var(--color-text)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '0.8';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '1';
+          }}
         >
           Logout
         </button>
@@ -79,4 +127,3 @@ const AdminSidebar: React.FC = () => {
 };
 
 export default AdminSidebar;
-

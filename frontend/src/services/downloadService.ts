@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/api';
-import { DownloadsResponse, DownloadStatsResponse, VideoDownload } from '../types/download';
+import { DownloadsResponse, DownloadStatsResponse } from '../types/download';
 
 class DownloadService {
   private getToken(): string | null {
@@ -177,5 +177,6 @@ class DownloadService {
   }
 }
 
-export default new DownloadService();
+const downloadService = new DownloadService();
+export default downloadService;
 

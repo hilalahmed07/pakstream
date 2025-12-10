@@ -373,6 +373,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
       playStartTrackedRef.current = false;
       watch30TrackedRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video?._id]); // Only re-initialize when video ID changes
 
   // Handle quality change

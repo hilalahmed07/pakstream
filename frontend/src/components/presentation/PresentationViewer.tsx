@@ -72,11 +72,13 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, o
   // Load slides
   useEffect(() => {
     loadSlides();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Preload adjacent slides
   useEffect(() => {
     preloadAdjacentSlides();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSlide, slides]);
 
   const loadSlides = async () => {

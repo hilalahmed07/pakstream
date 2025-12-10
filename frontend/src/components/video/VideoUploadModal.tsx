@@ -1,5 +1,4 @@
-import React, { useState, useRef } from 'react';
-import VideoProcessingProgress from '../VideoProcessingProgress';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks';
 import videoService from '../../services/videoService';
 import { VideoUploadData } from '../../types/video';
@@ -8,12 +7,22 @@ interface VideoUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: () => void;
+  onUploadStart?: () => void;
+  onUploadProgress?: (progress: number) => void;
+  onUploadComplete?: (videoId: string) => void;
+  uploading?: boolean;
+  uploadProgress?: number;
 }
 
 const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ 
   isOpen, 
   onClose, 
-  onUploadSuccess 
+  onUploadSuccess,
+  onUploadStart,
+  onUploadProgress,
+  onUploadComplete,
+  uploading: parentUploading = false,
+  uploadProgress: parentUploadProgress = 0
 }) => {
   const { user } = useAuth();
   const [uploadData, setUploadData] = useState<VideoUploadData>({
@@ -23,10 +32,6 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
     tags: ''
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingVideoId, setProcessingVideoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,27 +96,27 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
     }
 
     try {
-      setUploading(true);
       setError(null);
-      setUploadProgress(0);
+      
+      // Notify parent that upload is starting
+      onUploadStart?.();
+      
+      // Close modal immediately when upload starts
+      onClose();
 
-      // Upload with real progress tracking
+      // Upload with real progress tracking (0-90% for upload phase)
       const response = await videoService.uploadVideo(
         selectedFile, 
         uploadData,
         (progress) => {
-          // Update progress as upload progresses
-          setUploadProgress(progress);
+          // Progress is already scaled to 0-90% in videoService
+          onUploadProgress?.(progress);
         }
       );
       
-      if (response.success && response.data.video._id) {
-        setProcessingVideoId(response.data.video._id);
-        setIsProcessing(true);
-      }
-      
-      // Ensure progress shows 100% on completion
-      setUploadProgress(100);
+      // Notify parent that upload is complete, pass videoId for polling
+      const videoId = response.data.video._id;
+      onUploadComplete?.(videoId);
       
       // Reset form
       setUploadData({
@@ -125,23 +130,14 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
         fileInputRef.current.value = '';
       }
       
-      // Small delay to show 100% completion before closing
-      setTimeout(() => {
-        setUploading(false);
-        setUploadProgress(0);
-        onUploadSuccess();
-        onClose();
-      }, 500);
-      
     } catch (error: any) {
-      setUploading(false);
-      setUploadProgress(0);
+      onUploadProgress?.(0);
       setError(error.message || 'Upload failed. Please try again.');
     }
   };
 
   const handleClose = () => {
-    if (!uploading) {
+    if (!parentUploading) {
       setUploadData({
         title: '',
         description: '',
@@ -150,13 +146,21 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       });
       setSelectedFile(null);
       setError(null);
-      setUploadProgress(0);
+      onUploadProgress?.(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
       onClose();
     }
   };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      // The polling logic is now handled by the parent component.
+      // This useEffect is no longer needed for polling.
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -172,7 +176,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
           <h2 className="text-2xl font-bold text-white">Upload Video</h2>
           <button
             onClick={handleClose}
-            disabled={uploading}
+            disabled={parentUploading}
             className="text-gray-400 hover:text-white text-2xl disabled:opacity-50"
           >
             ×
@@ -197,7 +201,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 type="file"
                 accept="video/*"
                 onChange={handleFileSelect}
-                disabled={uploading}
+                disabled={parentUploading}
                 className="hidden"
               />
               {selectedFile ? (
@@ -214,7 +218,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                         fileInputRef.current.value = '';
                       }
                     }}
-                    disabled={uploading}
+                    disabled={parentUploading}
                     className="mt-2 text-netflix-red hover:underline disabled:opacity-50"
                   >
                     Remove
@@ -225,7 +229,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
+                    disabled={parentUploading}
                     className="btn-primary disabled:opacity-50"
                   >
                     Select Video File
@@ -239,16 +243,16 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
           </div>
 
           {/* Upload Progress - Always visible when uploading */}
-          {uploading && (
+          {parentUploading && (
             <div className="mb-4">
               <div className="flex justify-between text-sm text-gray-300 mb-2">
                 <span className="font-medium">Uploading video...</span>
-                <span className="font-semibold">{Math.round(uploadProgress)}%</span>
+                <span className="font-semibold">{Math.round(parentUploadProgress)}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
                 <div
                   className="bg-netflix-red h-3 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }}
+                  style={{ width: `${Math.max(0, Math.min(100, parentUploadProgress))}%` }}
                 ></div>
               </div>
               <p className="text-xs text-gray-400 mt-2">
@@ -269,7 +273,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               value={uploadData.title}
               onChange={handleInputChange}
               required
-              disabled={uploading}
+              disabled={parentUploading}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
               placeholder="Enter video title"
             />
@@ -286,7 +290,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               value={uploadData.description}
               onChange={handleInputChange}
               required
-              disabled={uploading}
+              disabled={parentUploading}
               rows={4}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
               placeholder="Enter video description"
@@ -303,7 +307,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               name="category"
               value={uploadData.category}
               onChange={handleInputChange}
-              disabled={uploading}
+              disabled={parentUploading}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
             >
               {categories.map(category => (
@@ -325,7 +329,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               name="tags"
               value={uploadData.tags}
               onChange={handleInputChange}
-              disabled={uploading}
+              disabled={parentUploading}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
               placeholder="Enter tags separated by commas"
             />
@@ -339,17 +343,17 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              disabled={uploading}
+              disabled={parentUploading}
               className="flex-1 btn-secondary disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={uploading || !selectedFile}
+              disabled={parentUploading || !selectedFile}
               className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {uploading ? 'Uploading...' : 'Upload Video'}
+              {parentUploading ? 'Uploading...' : 'Upload Video'}
             </button>
           </div>
         </form>

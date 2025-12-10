@@ -46,22 +46,23 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-netflix-gray rounded-lg p-8 w-full max-w-md">
+      <div className="rounded-lg p-8 w-full max-w-md" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Reset Password</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Reset Password</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
+            className="text-2xl transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             ×
           </button>
         </div>
 
         <div className="mb-4">
-          <p className="text-gray-300">
-            Reset password for <span className="font-semibold text-white">{user.username}</span>
+          <p style={{ color: 'var(--color-text-secondary)' }}>
+            Reset password for <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{user.username}</span>
           </p>
-          <p className="text-gray-400 text-sm mt-1">{user.email}</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>{user.email}</p>
         </div>
 
         {error && (
@@ -72,14 +73,19 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               New Password *
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               required
               minLength={6}
               placeholder="Minimum 6 characters"
@@ -87,14 +93,19 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
           </div>
 
           <div>
-            <label className="block text-white text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
               Confirm Password *
             </label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-netflix-red"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{ 
+                backgroundColor: 'var(--color-hover)', 
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
               required
               minLength={6}
               placeholder="Re-enter password"
@@ -105,14 +116,16 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              className="px-6 py-2 rounded-lg transition-colors"
+              style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary disabled:opacity-50"
+              className="px-6 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
             >
               {loading ? 'Resetting...' : 'Reset Password'}
             </button>
@@ -124,4 +137,3 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
 };
 
 export default ResetPasswordModal;
-

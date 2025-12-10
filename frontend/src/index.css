@@ -43,8 +43,8 @@
   --color-hover: #026830;
   --color-card: #026830;
   --color-card-hover: #028A3F;
-  --color-button-bg: #026830;
-  --color-button-text: #FFFFFF;
+  --color-button-bg: #FFFFFF;
+  --color-button-text: #01411C;
 }
 
 @layer base {

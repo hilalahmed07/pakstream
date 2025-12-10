@@ -37,7 +37,12 @@ const ThemeSwitcher: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-button-bg hover:bg-hover border border-border transition-colors text-button-text shadow-sm"
+        className="flex items-center space-x-2 px-3 py-2 rounded-lg border transition-all duration-300 hover:opacity-90 shadow-sm"
+        style={{
+          backgroundColor: 'var(--color-secondary)',
+          borderColor: 'var(--color-border)',
+          color: 'var(--color-text)'
+        }}
         aria-label="Change theme"
         aria-expanded={isOpen}
       >
@@ -61,17 +66,22 @@ const ThemeSwitcher: React.FC = () => {
               onClick={() => handleThemeChange(themeOption.value)}
               className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-hover transition-colors ${
                 theme === themeOption.value
-                  ? 'bg-accent bg-opacity-20 text-accent font-semibold'
-                  : 'text-text-primary'
+                  ? 'bg-hover font-semibold'
+                  : ''
               }`}
+              style={theme === themeOption.value ? {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                borderLeft: '3px solid var(--color-accent)'
+              } : {}}
             >
               <span className="text-xl">{themeOption.preview}</span>
-              <span className="flex-1">{themeOption.label}</span>
+              <span className="flex-1 text-text-primary">{themeOption.label}</span>
               {theme === themeOption.value && (
                 <svg
-                  className="w-5 h-5 text-accent"
+                  className="w-5 h-5"
                   fill="currentColor"
                   viewBox="0 0 20 20"
+                  style={{ color: 'var(--color-accent)' }}
                 >
                   <path
                     fillRule="evenodd"

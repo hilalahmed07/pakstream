@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Navbar from './components/Navbar';
@@ -20,6 +20,16 @@ import './index.css';
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  
+  // Check if current route is an admin route
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  // Show sidebar only for admin users on admin routes
+  const showAdminSidebar = user?.role === 'admin' && isAdminRoute;
+  
+  // Show navbar for non-admin users OR for admin users on non-admin routes (like home page)
+  const showNavbar = user?.role !== 'admin' || !isAdminRoute;
 
   React.useEffect(() => {
     // Initialize socket connection once for the entire app
@@ -28,13 +38,13 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-primary flex flex-col">
-      {/* Show regular navbar for non-admin users */}
-      {user?.role !== 'admin' && <Navbar />}
+      {/* Show regular navbar for non-admin users or admin users on non-admin routes */}
+      {showNavbar && <Navbar />}
       
-      {/* Admin Layout with Sidebar */}
-      {user?.role === 'admin' && <AdminSidebar />}
+      {/* Admin Layout with Sidebar - only on admin routes */}
+      {showAdminSidebar && <AdminSidebar />}
       
-      <main className={user?.role === 'admin' ? '' : 'flex-1'}>
+      <main className={showNavbar ? 'flex-1' : ''}>
         <Routes>
           {/* Public/User Routes */}
           <Route path="/" element={<UserHomePage />} />

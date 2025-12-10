@@ -35,32 +35,65 @@ const AdminDocumentDashboard: React.FC = () => {
     try {
       setUploading(true);
       setUploadProgress(0);
+      setShowUploadModal(false);
       
-      await documentService.uploadDocument(file, uploadData);
+      const response = await documentService.uploadDocument(
+        file,
+        uploadData,
+        (progress) => {
+          setUploadProgress((progress * 0.9));
+        }
+      );
       
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
+      const documentId = response.document.id;
+      let pollCount = 0;
+      const maxPolls = 60;
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          pollCount++;
+          const updatedDocuments = await documentService.getAdminDocuments();
+          const uploadedDocument = updatedDocuments.documents.find(
+            d => d._id === documentId
+          );
+          
+          if (uploadedDocument) {
+            setDocuments(updatedDocuments.documents);
+            
+            if (uploadedDocument.status === 'ready' || uploadedDocument.status === 'error') {
+              clearInterval(pollInterval);
+              setUploadProgress(100);
+              setUploading(false);
+              setUploadProgress(0);
+              return;
+            }
+            
+            if (uploadedDocument.processingProgress !== undefined) {
+              const processingProgressScaled = 90 + (uploadedDocument.processingProgress * 0.1);
+              setUploadProgress(processingProgressScaled);
+            } else {
+              setUploadProgress(90);
+            }
           }
-          return prev + 10;
-        });
-      }, 200);
-
-      // Wait for processing to complete
-      setTimeout(() => {
-        clearInterval(progressInterval);
-        setUploadProgress(100);
-        setShowUploadModal(false);
-        fetchDocuments();
-        setUploading(false);
-      }, 2000);
+          
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            setUploadProgress(0);
+            fetchDocuments();
+          }
+        } catch (error) {
+          console.error('Error polling document status:', error);
+        }
+      }, 5000);
+      
+      fetchDocuments();
 
     } catch (error) {
       console.error('Upload failed:', error);
       setUploading(false);
+      setUploadProgress(0);
+      alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -75,17 +108,6 @@ const AdminDocumentDashboard: React.FC = () => {
     } catch (error) {
       console.error('Delete failed:', error);
     }
-  };
-
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      academic: 'bg-blue-600',
-      business: 'bg-green-600',
-      legal: 'bg-purple-600',
-      technical: 'bg-gray-600',
-      other: 'bg-gray-500'
-    };
-    return colors[category as keyof typeof colors] || colors.other;
   };
 
   const handleVerifyClick = (document: Document) => {
@@ -118,26 +140,34 @@ const AdminDocumentDashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Loading documents...</p>
+        <div 
+          className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
+          style={{ borderColor: 'var(--color-accent)' }}
+        ></div>
+        <p style={{ color: 'var(--color-text)' }}>Loading documents...</p>
       </div>
     );
   }
 
   return (
     <ProtectedRoute requireAdmin>
-      <div className="min-h-screen bg-netflix-black pt-16">
+      <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Admin Document Management</h1>
-              <p className="text-gray-400">Administrators can manage and verify all documents</p>
+              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
+                Admin Document Management
+              </h1>
+              <p style={{ color: 'var(--color-text-secondary)' }}>
+                Administrators can manage and verify all documents
+              </p>
             </div>
             {activeTab === 'documents' && (
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="px-4 py-2 bg-netflix-red hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                className="px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -148,25 +178,25 @@ const AdminDocumentDashboard: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="mb-6 border-b border-gray-700">
+          <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex space-x-1">
               <button
                 onClick={() => setActiveTab('documents')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'documents'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'documents' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'documents' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 📄 Documents
               </button>
               <button
                 onClick={() => setActiveTab('verification')}
-                className={`px-6 py-3 font-medium text-sm transition-colors ${
-                  activeTab === 'verification'
-                    ? 'text-white border-b-2 border-netflix-red bg-transparent'
-                    : 'text-gray-400 hover:text-gray-300'
-                }`}
+                className="px-6 py-3 font-medium text-sm transition-colors"
+                style={{
+                  color: activeTab === 'verification' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'verification' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                }}
               >
                 ✓ Verification
               </button>
@@ -177,69 +207,69 @@ const AdminDocumentDashboard: React.FC = () => {
           {activeTab === 'documents' && (
             <div className="space-y-6">
               {/* Documents Table */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-900">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Title</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Category</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Size</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Views</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Uploaded By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-700">
-            {documents.map((document) => (
-              <tr key={document._id} className="hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-white">{document.title}</div>
-                  <div className="text-sm text-gray-400 truncate max-w-xs">{document.description}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 text-xs font-medium rounded ${getCategoryColor(document.category)} text-white`}>
-                    {document.category}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 text-xs font-medium rounded ${
-                    document.status === 'ready' 
-                      ? 'bg-green-600 text-white' 
-                      : document.status === 'processing'
-                      ? 'bg-yellow-600 text-white'
-                      : 'bg-red-600 text-white'
-                  }`}>
-                    {document.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                  {document.originalFile?.size ? formatFileSize(document.originalFile.size) : 'N/A'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                  {document.views}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                  {typeof document.uploadedBy === 'object' ? document.uploadedBy.username : 'Unknown'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleDelete(document._id)}
-                    className="text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <table className="w-full">
+                  <thead style={{ backgroundColor: 'var(--color-hover)' }}>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Category</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Size</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Views</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Uploaded By</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                    {documents.map((document) => (
+                      <tr key={document._id} className="transition-colors" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{document.title}</div>
+                          <div className="text-sm truncate max-w-xs" style={{ color: 'var(--color-text-secondary)' }}>{document.description}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white">
+                            {document.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${
+                            document.status === 'ready' 
+                              ? 'bg-green-600 text-white' 
+                              : document.status === 'processing'
+                              ? 'bg-yellow-600 text-white'
+                              : 'bg-red-600 text-white'
+                          }`}>
+                            {document.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          {document.originalFile?.size ? formatFileSize(document.originalFile.size) : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          {document.views}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          {typeof document.uploadedBy === 'object' ? document.uploadedBy.username : 'Unknown'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleDelete(document._id)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Upload Modal */}
               {showUploadModal && (
                 <DocumentUploadModal
-                  onClose={() => setShowUploadModal(false)}
+                  onClose={() => !uploading && setShowUploadModal(false)}
                   onUpload={handleUpload}
                   uploading={uploading}
                   uploadProgress={uploadProgress}
@@ -251,21 +281,21 @@ const AdminDocumentDashboard: React.FC = () => {
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
             <div>
-              <div className="bg-blue-900 border border-blue-600 rounded-lg p-4 mb-6">
+              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgb(59, 130, 246)' }}>
                 <div className="flex items-center">
                   <div className="text-blue-400 text-xl mr-3">🔒</div>
                   <div>
                     <h3 className="text-blue-400 font-semibold">Document Integrity Verification</h3>
                     <p className="text-blue-200 text-sm">
-                      Verify that downloaded document files match the original by comparing SHA-256 hashes. This helps detect tampering or corruption.
+                      Verify that downloaded document files match the original by comparing SHA-256 hashes.
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Verification Search */}
-              <div className="bg-netflix-gray p-4 rounded-lg mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+              <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Search Documents for Verification
                 </label>
                 <input
@@ -273,59 +303,63 @@ const AdminDocumentDashboard: React.FC = () => {
                   value={verificationSearch}
                   onChange={(e) => setVerificationSearch(e.target.value)}
                   placeholder="Search by title, description, or document ID..."
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red"
+                  className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2"
+                  style={{ 
+                    backgroundColor: 'var(--color-hover)', 
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)'
+                  }}
                 />
               </div>
 
               {/* Documents List for Verification */}
-              <div className="bg-netflix-gray rounded-lg overflow-hidden">
+              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-800">
+                    <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Document</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Hash</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Document</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-netflix-gray divide-y divide-gray-700">
+                    <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                       {loading ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             Loading documents...
                           </td>
                         </tr>
                       ) : filteredDocumentsForVerification.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
                             No documents found
                           </td>
                         </tr>
                       ) : (
                         filteredDocumentsForVerification.map((document) => (
-                          <tr key={document._id} className="hover:bg-gray-800">
+                          <tr key={document._id} className="transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-white">{document.title}</div>
-                              <div className="text-sm text-gray-400">{document.description.substring(0, 60)}...</div>
+                              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{document.title}</div>
+                              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{document.description.substring(0, 60)}...</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 document.status === 'ready' ? 'bg-green-900 text-green-200' :
                                 document.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                                document.status === 'error' ? 'bg-red-900 text-red-200' :
-                                'bg-gray-700 text-gray-300'
+                                'bg-red-900 text-red-200'
                               }`}>
                                 {document.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               {document.sha256Hash ? (
-                                <div className="text-xs font-mono text-gray-400 max-w-xs truncate" title={document.sha256Hash}>
+                                <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={document.sha256Hash}>
                                   {document.sha256Hash.substring(0, 16)}...
                                 </div>
                               ) : (
-                                <span className="text-xs text-gray-500">Not available</span>
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -337,7 +371,7 @@ const AdminDocumentDashboard: React.FC = () => {
                                   Verify
                                 </button>
                               ) : (
-                                <span className="text-gray-500 text-xs">
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                   {document.status !== 'ready' ? 'Not ready' : 'No hash'}
                                 </span>
                               )}
@@ -352,21 +386,21 @@ const AdminDocumentDashboard: React.FC = () => {
 
               {/* Verification Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-netflix-gray p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-white">{filteredDocumentsForVerification.length}</div>
-                  <div className="text-sm text-gray-400">Total Documents</div>
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                  <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredDocumentsForVerification.length}</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Documents</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-green-400">
                     {filteredDocumentsForVerification.filter(d => d.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">With Hash</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
                 </div>
-                <div className="bg-netflix-gray p-4 rounded-lg">
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                   <div className="text-2xl font-bold text-blue-400">
                     {filteredDocumentsForVerification.filter(d => d.status === 'ready' && d.sha256Hash).length}
                   </div>
-                  <div className="text-sm text-gray-400">Ready to Verify</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
                 </div>
               </div>
             </div>
@@ -407,18 +441,14 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
         setError('Invalid file type. Please select a PDF file.');
         return;
       }
-
-      // Validate file size (50MB limit)
       if (file.size > 50 * 1024 * 1024) {
         setError('File too large. Maximum size is 50MB.');
         return;
       }
-
       setSelectedFile(file);
       setError(null);
     }
@@ -426,30 +456,28 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!selectedFile) {
       setError('Please select a PDF file');
       return;
     }
-
     if (!formData.title.trim() || !formData.description.trim()) {
       setError('Title and description are required');
       return;
     }
-
     onUpload(selectedFile, formData);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-white">Upload Document</h2>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Upload Document</h2>
             <button
               onClick={onClose}
               disabled={uploading}
-              className="text-gray-400 hover:text-white text-2xl disabled:opacity-50"
+              className="text-2xl disabled:opacity-50 transition-colors"
+              style={{ color: 'var(--color-text-secondary)' }}
             >
               ×
             </button>
@@ -458,22 +486,21 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
           {uploading && (
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-300">Uploading...</span>
-                <span className="text-sm text-gray-300">{uploadProgress}%</span>
+                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Uploading...</span>
+                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{Math.round(uploadProgress)}%</span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
                 <div
-                  className="bg-netflix-red h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
+                  className="h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
                 />
               </div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* File Upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 PDF Document
               </label>
               <input
@@ -481,10 +508,15 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 accept=".pdf,application/pdf"
                 onChange={handleFileSelect}
                 disabled={uploading}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg disabled:opacity-50"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                 Supported format: PDF (Max 50MB)
               </p>
               {selectedFile && (
@@ -494,9 +526,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               )}
             </div>
 
-            {/* Title */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title
               </label>
               <input
@@ -504,14 +535,18 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 disabled={uploading}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               />
             </div>
 
-            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Description
               </label>
               <textarea
@@ -519,21 +554,30 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
                 disabled={uploading}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
                 required
               />
             </div>
 
-            {/* Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Category
               </label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                 disabled={uploading}
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               >
                 <option value="academic">Academic</option>
                 <option value="business">Business</option>
@@ -543,9 +587,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               </select>
             </div>
 
-            {/* Tags */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Tags (comma-separated)
               </label>
               <input
@@ -554,7 +597,12 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
                 disabled={uploading}
                 placeholder="e.g., research, report, analysis"
-                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                style={{ 
+                  backgroundColor: 'var(--color-hover)', 
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               />
             </div>
 
@@ -564,20 +612,21 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               </div>
             )}
 
-            {/* Submit Button */}
             <div className="flex space-x-4 pt-4">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={uploading}
-                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={uploading || !selectedFile}
-                className="flex-1 px-4 py-2 bg-netflix-red text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
               >
                 {uploading ? 'Uploading...' : 'Upload'}
               </button>
@@ -590,4 +639,3 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
 };
 
 export default AdminDocumentDashboard;
-

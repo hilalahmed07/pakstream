@@ -256,12 +256,12 @@ const deletePresentation = async (req, res) => {
 
     // Delete files
     const presentationDir = path.join(__dirname, '../../uploads/presentations/processed', id);
-    if (fs.existsSync(presentationDir)) {
-      fs.rmSync(presentationDir, { recursive: true, force: true });
+    if (fsSync.existsSync(presentationDir)) {
+      fsSync.rmSync(presentationDir, { recursive: true, force: true });
     }
 
-    if (presentation.originalFile?.path && fs.existsSync(presentation.originalFile.path)) {
-      fs.unlinkSync(presentation.originalFile.path);
+    if (presentation.originalFile?.path && fsSync.existsSync(presentation.originalFile.path)) {
+      fsSync.unlinkSync(presentation.originalFile.path);
     }
 
     await Presentation.findByIdAndDelete(id);
