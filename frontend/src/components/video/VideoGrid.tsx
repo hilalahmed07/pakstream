@@ -164,7 +164,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
                     e.stopPropagation();
                     onDeleteClick(video);
                   }}
-                  className="bg-accent hover:opacity-90 text-text-primary p-2 rounded-full transition-colors"
+                  className="bg-accent hover:opacity-90 text-accent-text p-2 rounded-full transition-colors"
                   title="Delete video"
                 >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

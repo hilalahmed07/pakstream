@@ -72,7 +72,7 @@ const Navbar: React.FC = () => {
                       className="px-4 py-2 rounded-lg font-bold text-sm transition-all duration-300 hover:opacity-90"
                       style={{
                         backgroundColor: 'var(--color-accent)',
-                        color: 'var(--color-primary)'
+                        color: 'var(--color-accent-text)'
                       }}
                     >
                       Admin Dashboard
@@ -118,7 +118,7 @@ const Navbar: React.FC = () => {
                     className="px-6 py-2 rounded-lg font-bold transition-all duration-300 hover:opacity-90"
                     style={{
                       backgroundColor: 'var(--color-accent)',
-                      color: 'var(--color-primary)'
+                      color: 'var(--color-accent-text)'
                     }}
                   >
                     Sign In

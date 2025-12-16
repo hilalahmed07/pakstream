@@ -170,7 +170,7 @@ const AdminPresentationDashboard: React.FC = () => {
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                 disabled={uploading}
               >
                 {uploading ? 'Uploading...' : 'Upload Presentation'}
@@ -233,7 +233,7 @@ const AdminPresentationDashboard: React.FC = () => {
                   <button
                     onClick={() => setShowUploadModal(true)}
                     className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
-                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                   >
                     Upload Presentation
                   </button>
@@ -688,7 +688,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                   <span
                     key={index}
                     className="px-2 py-1 text-sm rounded flex items-center space-x-1"
-                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                   >
                     <span>{tag}</span>
                     <button
@@ -717,7 +717,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               <button
                 type="submit"
                 className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                 disabled={uploading}
               >
                 Upload

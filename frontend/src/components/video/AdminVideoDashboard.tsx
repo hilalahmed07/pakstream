@@ -202,7 +202,7 @@ const AdminVideoDashboard: React.FC = () => {
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
               >
                 Upload Video
               </button>

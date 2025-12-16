@@ -47,6 +47,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     root.style.setProperty('--color-card-hover', colors.cardHover);
     root.style.setProperty('--color-button-bg', colors.buttonBg);
     root.style.setProperty('--color-button-text', colors.buttonText);
+    root.style.setProperty('--color-accent-text', colors.accentText);
   }, [theme]);
 
   const colors = getThemeColors(theme);

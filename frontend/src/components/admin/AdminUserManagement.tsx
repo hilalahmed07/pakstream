@@ -177,7 +177,7 @@ const AdminUserManagement: React.FC = () => {
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
           >
             + Create User
           </button>
@@ -217,7 +217,7 @@ const AdminUserManagement: React.FC = () => {
                   <tr key={user._id} className="transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
                           {user.username.charAt(0).toUpperCase()}
                         </div>
                         <div>

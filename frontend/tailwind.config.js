@@ -18,6 +18,7 @@ module.exports = {
         'card-hover': 'var(--color-card-hover)',
         'button-bg': 'var(--color-button-bg)',
         'button-text': 'var(--color-button-text)',
+        'accent-text': 'var(--color-accent-text)',
         // Keep netflix colors for backward compatibility during migration
         netflix: {
           red: '#E50914',

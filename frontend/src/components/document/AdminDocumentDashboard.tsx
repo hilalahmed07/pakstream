@@ -167,7 +167,7 @@ const AdminDocumentDashboard: React.FC = () => {
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -626,7 +626,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 type="submit"
                 disabled={uploading || !selectedFile}
                 className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
               >
                 {uploading ? 'Uploading...' : 'Upload'}
               </button>

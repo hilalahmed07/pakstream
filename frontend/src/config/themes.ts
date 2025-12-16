@@ -12,6 +12,7 @@ export interface ThemeColors {
   cardHover: string;
   buttonBg: string;
   buttonText: string;
+  accentText: string; // Text color for elements with accent background
 }
 
 export const themes: Record<Theme, ThemeColors> = {
@@ -27,6 +28,7 @@ export const themes: Record<Theme, ThemeColors> = {
     cardHover: '#262626',
     buttonBg: '#333333',     // Secondary for buttons
     buttonText: '#FFFFFF',   // White text on dark buttons
+    accentText: '#FFFFFF',  // White text on red accent background
   },
   light: {
     primary: '#FFFFFF',
@@ -40,6 +42,7 @@ export const themes: Record<Theme, ThemeColors> = {
     cardHover: '#F4F4F5',      // gray-100
     buttonBg: '#F1F5F9',       // slate-100 for ThemeSwitcher and buttons
     buttonText: '#0F172A',     // Almost black for high contrast
+    accentText: '#FFFFFF',    // White text on indigo accent background
   },
   pakistan: {
     primary: '#01411C',       // Pakistan dark green
@@ -53,6 +56,7 @@ export const themes: Record<Theme, ThemeColors> = {
     cardHover: '#028A3F',     // Lighter green on hover
     buttonBg: '#FFFFFF',      // White background for buttons
     buttonText: '#01411C',    // Dark green text on white buttons
+    accentText: '#01411C',   // Dark green text on white accent background
   },
 };
 

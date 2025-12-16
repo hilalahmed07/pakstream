@@ -58,7 +58,7 @@ const AdminSidebar: React.FC = () => {
                 className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors"
                 style={{
                   backgroundColor: isActive(item.path) ? 'var(--color-accent)' : 'transparent',
-                  color: isActive(item.path) ? 'var(--color-primary)' : 'var(--color-text-secondary)'
+                  color: isActive(item.path) ? 'var(--color-accent-text)' : 'var(--color-text-secondary)'
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive(item.path)) {
@@ -91,7 +91,7 @@ const AdminSidebar: React.FC = () => {
             className="w-10 h-10 rounded-full flex items-center justify-center font-bold"
             style={{
               backgroundColor: 'var(--color-accent)',
-              color: 'var(--color-primary)'
+              color: 'var(--color-accent-text)'
             }}
           >
             {user?.username.charAt(0).toUpperCase()}

@@ -154,7 +154,7 @@ const AdminPremiereDashboard: React.FC = () => {
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-6 py-3 rounded-lg font-medium transition-colors hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
           >
             Create Premiere
           </button>
@@ -491,7 +491,7 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
             <button
               type="submit"
               className="px-6 py-2 rounded-lg font-medium transition-colors hover:opacity-90"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
               Create Premiere
             </button>

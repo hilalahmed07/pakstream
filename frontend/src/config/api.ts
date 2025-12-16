@@ -9,14 +9,23 @@
  * - On localhost → http://localhost:5000
  * - On network IP (192.168.0.101) → http://192.168.0.101:5000
  * - Can be overridden by REACT_APP_API_URL environment variable
+ * 
+ * Note: REACT_APP_API_URL should include /api if you want the full API path
+ * Example: REACT_APP_API_URL=http://192.168.1.101:5000/api
  */
 const getApiBaseUrl = (): string => {
-  // Priority 1: Environment variable override
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
+  // Priority 1: Environment variable override (should be full URL without /api)
+  if (process.env.REACT_APP_API_BASE_URL) {
+    return process.env.REACT_APP_API_BASE_URL;
   }
 
-  // Priority 2: Dynamic detection based on current hostname
+  // Priority 2: Check if REACT_APP_API_URL is set (might include /api)
+  if (process.env.REACT_APP_API_URL) {
+    // Remove /api if present, we'll add it later
+    return process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '');
+  }
+
+  // Priority 3: Dynamic detection based on current hostname
   const hostname = window.location.hostname;
   const protocol = window.location.protocol; // http: or https:
   const backendPort = process.env.REACT_APP_API_PORT || '5000';

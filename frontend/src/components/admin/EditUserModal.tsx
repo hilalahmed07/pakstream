@@ -314,7 +314,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
               type="submit"
               disabled={loading}
               className="px-6 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
               {loading ? 'Updating...' : 'Update User'}
             </button>

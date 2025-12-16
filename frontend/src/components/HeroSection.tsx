@@ -236,7 +236,7 @@ const HeroSection: React.FC = () => {
             </p>
             <button
               onClick={fetchLatestVideo}
-              className="bg-accent hover:opacity-90 text-text-primary px-8 py-3 rounded-lg text-lg font-semibold transition-colors"
+              className="bg-accent hover:opacity-90 text-accent-text px-8 py-3 rounded-lg text-lg font-semibold transition-colors"
             >
               Refresh
             </button>
@@ -273,7 +273,7 @@ const HeroSection: React.FC = () => {
             {latestVideo.description}
           </p>
           <div className="flex items-center justify-center space-x-4 text-text-secondary">
-            <span className="bg-accent px-3 py-1 rounded text-sm font-semibold text-text-primary">
+            <span className="bg-accent px-3 py-1 rounded text-sm font-semibold text-accent-text">
               {latestVideo.category.toUpperCase()}
             </span>
             <span>•</span>
