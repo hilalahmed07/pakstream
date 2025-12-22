@@ -4,6 +4,7 @@ import { Premiere } from '../../types/premiere';
 import premiereService from '../../services/premiereService';
 import socketService from '../../services/socketService';
 import { useAuth } from '../../hooks';
+import { formatVideoDuration } from '../../utils/videoUtils';
 
 const LivePremiereControlPage: React.FC = () => {
   const { premiereId } = useParams<{ premiereId: string }>();
@@ -211,7 +212,7 @@ const LivePremiereControlPage: React.FC = () => {
               <div className="text-gray-400 text-sm">Duration</div>
               <div className="text-white font-semibold">
                 {premiere.video?.duration 
-                  ? `${Math.floor(premiere.video.duration / 60)}:${(premiere.video.duration % 60).toString().padStart(2, '0')}`
+                  ? formatVideoDuration(premiere.video.duration)
                   : 'N/A'}
               </div>
             </div>

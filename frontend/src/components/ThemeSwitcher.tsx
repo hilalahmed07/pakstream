@@ -11,6 +11,7 @@ const ThemeSwitcher: React.FC = () => {
     { value: 'dark', label: 'Dark', preview: '⚫' },
     { value: 'light', label: 'Light', preview: '⚪' },
     { value: 'pakistan', label: 'Pakistan', preview: '🇵🇰' },
+    { value: 'maritimeHorizon', label: 'Maritime horizon', preview: '🌊' },
   ];
 
   useEffect(() => {
@@ -47,7 +48,6 @@ const ThemeSwitcher: React.FC = () => {
         aria-expanded={isOpen}
       >
         <span className="text-xl">{currentTheme?.preview}</span>
-        <span className="hidden md:block text-sm font-medium">{currentTheme?.label}</span>
         <svg
           className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"

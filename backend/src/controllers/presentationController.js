@@ -133,15 +133,85 @@ const getPresentationById = async (req, res) => {
       return res.status(404).json({ message: 'Presentation not found' });
     }
 
-    // Increment view count
-    presentation.views += 1;
-    await presentation.save();
-
     res.json({ presentation });
 
   } catch (error) {
     console.error('Get presentation error:', error);
     res.status(500).json({ message: 'Failed to fetch presentation', error: error.message });
+  }
+};
+
+// Track presentation view
+const trackPresentationView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const presentation = await Presentation.findById(id);
+    if (!presentation) {
+      return res.status(404).json({ success: false, message: 'Presentation not found' });
+    }
+
+    // Increment view count atomically
+    await Presentation.findByIdAndUpdate(
+      id,
+      { $inc: { views: 1 } },
+      { new: false }
+    ).catch(err => {
+      console.error('Failed to update view count:', err);
+    });
+
+    res.json({
+      success: true,
+      message: 'View tracked',
+      data: {
+        presentationId: id,
+        views: presentation.views + 1
+      }
+    });
+  } catch (error) {
+    console.error('View tracking error:', error);
+    res.status(200).json({
+      success: true,
+      message: 'View tracking attempted'
+    });
+  }
+};
+
+// Toggle presentation like
+const togglePresentationLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const presentation = await Presentation.findById(id);
+    if (!presentation) {
+      return res.status(404).json({ success: false, message: 'Presentation not found' });
+    }
+
+    // For now, just increment/decrement likes (can be enhanced with user-specific likes later)
+    const increment = req.body.action === 'unlike' ? -1 : 1;
+    const newLikes = Math.max(0, presentation.likes + increment);
+
+    await Presentation.findByIdAndUpdate(
+      id,
+      { $set: { likes: newLikes } },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
+      data: {
+        presentationId: id,
+        likes: newLikes
+      }
+    });
+  } catch (error) {
+    console.error('Like toggle error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle like',
+      error: error.message
+    });
   }
 };
 
@@ -438,5 +508,7 @@ module.exports = {
   deletePresentation,
   updatePresentation,
   getPresentationHash,
-  verifyPresentationIntegrity
+  verifyPresentationIntegrity,
+  trackPresentationView,
+  togglePresentationLike
 };

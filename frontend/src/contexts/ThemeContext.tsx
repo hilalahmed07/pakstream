@@ -15,7 +15,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [theme, setThemeState] = useState<Theme>(() => {
     // Load theme from localStorage or default to dark
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme;
-    return savedTheme && ['dark', 'light', 'pakistan'].includes(savedTheme) 
+    return savedTheme && ['dark', 'light', 'pakistan', 'maritimeHorizon'].includes(savedTheme) 
       ? savedTheme 
       : 'dark';
   });

@@ -1,4 +1,4 @@
-# Admin User Setup Guide
+﻿# Admin User Setup Guide
 
 ## Overview
 
@@ -154,11 +154,11 @@ openssl rand -base64 32
   - `adminKey` - Admin registration key
 
 ### Security Features
-1. ✅ Requires admin key verification
-2. ✅ Email uniqueness check
-3. ✅ Username uniqueness check
-4. ✅ Password hashing with bcrypt
-5. ✅ Returns JWT token for immediate login
+1. Γ£à Requires admin key verification
+2. Γ£à Email uniqueness check
+3. Γ£à Username uniqueness check
+4. Γ£à Password hashing with bcrypt
+5. Γ£à Returns JWT token for immediate login
 
 ---
 

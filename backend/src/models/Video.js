@@ -78,6 +78,10 @@ const videoSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isForPremiere: {
+    type: Boolean,
+    default: false
+  },
   sha256Hash: {
     type: String,
     required: false,

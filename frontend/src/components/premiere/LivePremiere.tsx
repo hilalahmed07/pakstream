@@ -3,6 +3,8 @@ import { Premiere } from '../../types/premiere';
 import { Video, VideoVariant } from '../../types/video';
 import VideoPlayer, { VideoPlayerRef } from '../video/VideoPlayer';
 import socketService from '../../services/socketService';
+import { useAuth } from '../../hooks';
+import { formatVideoDuration } from '../../utils/videoUtils';
 
 interface LivePremiereProps {
   premiere: Premiere;
@@ -17,6 +19,7 @@ interface ChatMessage {
 }
 
 const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
+  const { user } = useAuth();
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [viewerCount, setViewerCount] = useState(premiere.totalViewers);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -167,7 +170,9 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim()) {
-      socketService.sendMessage(premiere._id, newMessage.trim());
+      // Pass username from user object if available
+      const username = user?.username || undefined;
+      socketService.sendMessage(premiere._id, newMessage.trim(), username);
       setNewMessage('');
     }
   };
@@ -385,7 +390,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
               </div>
               <div className="text-center">
                 <div className="text-white font-bold">
-                  {Math.floor(premiere.video?.duration / 60)}:{(premiere.video?.duration % 60).toString().padStart(2, '0')}
+                  {formatVideoDuration(premiere.video?.duration || 0)}
                 </div>
                 <div className="text-gray-400 text-xs">Duration</div>
               </div>

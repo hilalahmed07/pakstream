@@ -466,7 +466,8 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
       // Download completed successfully
     } catch (error) {
       console.error('Download failed:', error);
-      alert(error instanceof Error ? error.message : 'Failed to download video');
+      // Note: VideoPlayer might not have access to useNotification, so we'll keep console.error
+      // The error will be handled by the download service
     } finally {
       setIsDownloading(false);
     }

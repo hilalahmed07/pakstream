@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Document } from '../../types/document';
 import documentService from '../../services/documentService';
 
@@ -8,6 +8,57 @@ interface DocumentGridProps {
 }
 
 const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick }) => {
+  const [localDocuments, setLocalDocuments] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
+
+  const getLocalData = (id: string, defaultViews: number, defaultLikes: number) => {
+    const local = localDocuments.get(id);
+    return {
+      views: local?.views ?? defaultViews,
+      likes: local?.likes ?? defaultLikes,
+      isLiked: local?.isLiked ?? false
+    };
+  };
+
+  const handleClick = async (document: Document) => {
+    // Track view
+    await documentService.trackView(document._id);
+    
+    // Update local state
+    const local = getLocalData(document._id, document.views, document.likes);
+    setLocalDocuments(prev => {
+      const newMap = new Map(prev);
+      newMap.set(document._id, {
+        ...local,
+        views: local.views + 1
+      });
+      return newMap;
+    });
+
+    // Call the original click handler
+    onDocumentClick(document);
+  };
+
+  const handleLikeClick = async (e: React.MouseEvent, document: Document) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    const local = getLocalData(document._id, document.views, document.likes);
+    const action = local.isLiked ? 'unlike' : 'like';
+    
+    try {
+      const newLikes = await documentService.toggleLike(document._id, action);
+      setLocalDocuments(prev => {
+        const newMap = new Map(prev);
+        newMap.set(document._id, {
+          ...local,
+          likes: newLikes,
+          isLiked: !local.isLiked
+        });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+    }
+  };
   const getCategoryColor = (category: string) => {
     const colors = {
       academic: 'bg-blue-600',
@@ -39,10 +90,12 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {documents.map((document) => (
+      {documents.map((document) => {
+        const local = getLocalData(document._id, document.views, document.likes);
+        return (
         <div
           key={document._id}
-          onClick={() => onDocumentClick(document)}
+          onClick={() => handleClick(document)}
           className="group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:z-10"
         >
           <div className="relative bg-card rounded-lg overflow-hidden shadow-lg hover:bg-card-hover transition-colors">
@@ -123,15 +176,26 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                     </svg>
-                    {document.views}
+                    {local.views}
                   </span>
                   
-                  <span className="flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                  <button
+                    onClick={(e) => handleLikeClick(e, document)}
+                    className={`flex items-center transition-colors ${
+                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-500'
+                    }`}
+                    title={local.isLiked ? 'Unlike' : 'Like'}
+                  >
+                    <svg 
+                      className={`w-4 h-4 mr-1 ${local.isLiked ? 'fill-current' : ''}`} 
+                      fill={local.isLiked ? 'currentColor' : 'none'} 
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
-                    {document.likes}
-                  </span>
+                    {local.likes}
+                  </button>
                 </div>
                 
                 <span className="text-xs">
@@ -167,7 +231,8 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

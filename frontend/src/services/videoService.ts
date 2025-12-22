@@ -44,6 +44,9 @@ class VideoService {
       formData.append('description', uploadData.description);
       formData.append('category', uploadData.category);
       formData.append('tags', uploadData.tags);
+      if (uploadData.isForPremiere !== undefined) {
+        formData.append('isForPremiere', uploadData.isForPremiere.toString());
+      }
 
       const xhr = new XMLHttpRequest();
       const url = `${API_BASE_URL}/videos/upload`;

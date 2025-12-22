@@ -132,15 +132,85 @@ const getDocumentById = async (req, res) => {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    // Increment view count
-    document.views += 1;
-    await document.save();
-
     res.json({ document });
 
   } catch (error) {
     console.error('Get document error:', error);
     res.status(500).json({ message: 'Failed to fetch document', error: error.message });
+  }
+};
+
+// Track document view
+const trackDocumentView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // Increment view count atomically
+    await Document.findByIdAndUpdate(
+      id,
+      { $inc: { views: 1 } },
+      { new: false }
+    ).catch(err => {
+      console.error('Failed to update view count:', err);
+    });
+
+    res.json({
+      success: true,
+      message: 'View tracked',
+      data: {
+        documentId: id,
+        views: document.views + 1
+      }
+    });
+  } catch (error) {
+    console.error('View tracking error:', error);
+    res.status(200).json({
+      success: true,
+      message: 'View tracking attempted'
+    });
+  }
+};
+
+// Toggle document like
+const toggleDocumentLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // For now, just increment/decrement likes (can be enhanced with user-specific likes later)
+    const increment = req.body.action === 'unlike' ? -1 : 1;
+    const newLikes = Math.max(0, document.likes + increment);
+
+    await Document.findByIdAndUpdate(
+      id,
+      { $set: { likes: newLikes } },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
+      data: {
+        documentId: id,
+        likes: newLikes
+      }
+    });
+  } catch (error) {
+    console.error('Like toggle error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle like',
+      error: error.message
+    });
   }
 };
 
@@ -162,7 +232,7 @@ const getDocumentFile = async (req, res) => {
 
     const filePath = path.resolve(document.originalFile.path);
     
-    if (!fs.existsSync(filePath)) {
+    if (!fsSync.existsSync(filePath)) {
       return res.status(404).json({ message: 'File not found' });
     }
 
@@ -203,7 +273,7 @@ const getDocumentThumbnail = async (req, res) => {
 
     const thumbnailPath = path.join(__dirname, '../../uploads', document.thumbnail);
     
-    if (!fs.existsSync(thumbnailPath)) {
+    if (!fsSync.existsSync(thumbnailPath)) {
       return res.status(404).json({ message: 'Thumbnail file not found' });
     }
 
@@ -424,6 +494,8 @@ module.exports = {
   deleteDocument,
   updateDocument,
   getDocumentHash,
-  verifyDocumentIntegrity
+  verifyDocumentIntegrity,
+  trackDocumentView,
+  toggleDocumentLike
 };
 

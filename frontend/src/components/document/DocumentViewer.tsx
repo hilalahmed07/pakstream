@@ -8,6 +8,13 @@ interface DocumentViewerProps {
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose }) => {
+  React.useEffect(() => {
+    // Track view when document is opened
+    documentService.trackView(document._id).catch(err => {
+      console.warn('Failed to track view:', err);
+    });
+  }, [document._id]);
+
   const handleDownload = () => {
     const fileUrl = documentService.getDocumentDownloadUrl(document._id);
     const link = window.document.createElement('a');

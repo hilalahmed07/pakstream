@@ -1,4 +1,4 @@
-# PakStream - Video Streaming App
+﻿# PakStream - Video Streaming App
 
 A modern MERN stack video streaming application with Netflix-style dark theme UI and complete authentication system.
 
@@ -6,49 +6,49 @@ A modern MERN stack video streaming application with Netflix-style dark theme UI
 
 ```
 PakStream/
-├── backend/          # Express.js API server
-│   ├── src/
-│   │   ├── controllers/
-│   │   │   └── authController.js
-│   │   ├── models/
-│   │   │   └── User.js
-│   │   ├── routes/
-│   │   │   └── auth.js
-│   │   ├── middleware/
-│   │   │   └── auth.js
-│   │   ├── config/
-│   │   └── server.js
-│   ├── package.json
-│   └── .env
-├── frontend/         # React TypeScript application
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── auth/
-│   │   │   │   ├── LoginModal.tsx
-│   │   │   │   ├── RegisterModal.tsx
-│   │   │   │   ├── AdminRegisterModal.tsx
-│   │   │   │   └── UserProfile.tsx
-│   │   │   ├── Navbar.tsx
-│   │   │   ├── HeroSection.tsx
-│   │   │   ├── VideoGrid.tsx
-│   │   │   ├── ProtectedRoute.tsx
-│   │   │   └── AdminDashboard.tsx
-│   │   ├── hooks/
-│   │   │   └── useAuth.ts
-│   │   ├── services/
-│   │   │   └── authService.ts
-│   │   ├── types/
-│   │   │   └── auth.ts
-│   │   └── pages/
-│   ├── package.json
-│   ├── tailwind.config.js
-│   └── .env
-└── README.md
+Γö£ΓöÇΓöÇ backend/          # Express.js API server
+Γöé   Γö£ΓöÇΓöÇ src/
+Γöé   Γöé   Γö£ΓöÇΓöÇ controllers/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ authController.js
+Γöé   Γöé   Γö£ΓöÇΓöÇ models/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ User.js
+Γöé   Γöé   Γö£ΓöÇΓöÇ routes/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.js
+Γöé   Γöé   Γö£ΓöÇΓöÇ middleware/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.js
+Γöé   Γöé   Γö£ΓöÇΓöÇ config/
+Γöé   Γöé   ΓööΓöÇΓöÇ server.js
+Γöé   Γö£ΓöÇΓöÇ package.json
+Γöé   ΓööΓöÇΓöÇ .env
+Γö£ΓöÇΓöÇ frontend/         # React TypeScript application
+Γöé   Γö£ΓöÇΓöÇ src/
+Γöé   Γöé   Γö£ΓöÇΓöÇ components/
+Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ auth/
+Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ LoginModal.tsx
+Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ RegisterModal.tsx
+Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ AdminRegisterModal.tsx
+Γöé   Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ UserProfile.tsx
+Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ Navbar.tsx
+Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ HeroSection.tsx
+Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ VideoGrid.tsx
+Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ ProtectedRoute.tsx
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ AdminDashboard.tsx
+Γöé   Γöé   Γö£ΓöÇΓöÇ hooks/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ useAuth.ts
+Γöé   Γöé   Γö£ΓöÇΓöÇ services/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ authService.ts
+Γöé   Γöé   Γö£ΓöÇΓöÇ types/
+Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.ts
+Γöé   Γöé   ΓööΓöÇΓöÇ pages/
+Γöé   Γö£ΓöÇΓöÇ package.json
+Γöé   Γö£ΓöÇΓöÇ tailwind.config.js
+Γöé   ΓööΓöÇΓöÇ .env
+ΓööΓöÇΓöÇ README.md
 ```
 
 ## Features
 
-### 🔐 **Complete Authentication System**
+### ≡ƒöÉ **Complete Authentication System**
 - **User Registration**: Regular user signup with email/password
 - **Admin Registration**: Special admin registration with admin key
 - **Login/Logout**: Secure JWT-based authentication
@@ -56,14 +56,14 @@ PakStream/
 - **Role-based Access**: Different permissions for users and admins
 - **Protected Routes**: Components that require authentication or admin access
 
-### 🎨 **UI/UX Features**
+### ≡ƒÄ¿ **UI/UX Features**
 - **Dark Theme**: Netflix-inspired UI design
 - **Responsive Design**: Mobile-first responsive design
 - **Modal System**: Clean modal dialogs for auth forms
 - **Loading States**: Proper loading indicators
 - **Error Handling**: User-friendly error messages
 
-### 🏗️ **Technical Features**
+### ≡ƒÅù∩╕Å **Technical Features**
 - **Backend**: Express.js with MongoDB, JWT authentication, bcrypt password hashing
 - **Frontend**: React with TypeScript and Tailwind CSS
 - **State Management**: React Context for authentication state
@@ -151,17 +151,17 @@ REACT_APP_API_URL=http://localhost:5000/api
 
 ## Development Status
 
-✅ **Complete Authentication System**
-- ✅ User registration and login
-- ✅ Admin registration with special key
-- ✅ JWT token-based authentication
-- ✅ Password hashing with bcrypt
-- ✅ User profile management
-- ✅ Role-based access control
-- ✅ Protected routes
-- ✅ Modal-based UI for auth forms
-- ✅ Error handling and validation
-- ✅ TypeScript type safety
+Γ£à **Complete Authentication System**
+- Γ£à User registration and login
+- Γ£à Admin registration with special key
+- Γ£à JWT token-based authentication
+- Γ£à Password hashing with bcrypt
+- Γ£à User profile management
+- Γ£à Role-based access control
+- Γ£à Protected routes
+- Γ£à Modal-based UI for auth forms
+- Γ£à Error handling and validation
+- Γ£à TypeScript type safety
 
 ## Next Steps
 

@@ -10,7 +10,9 @@ const {
   deleteDocument,
   updateDocument,
   getDocumentHash,
-  verifyDocumentIntegrity
+  verifyDocumentIntegrity,
+  trackDocumentView,
+  toggleDocumentLike
 } = require('../controllers/documentController');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const upload = require('../middleware/documentUpload');
@@ -23,6 +25,8 @@ router.get('/:id/file', getDocumentFile);
 router.get('/:id/thumbnail', getDocumentThumbnail);
 router.get('/:id/hash', getDocumentHash); // Get document hash for manual verification
 router.post('/:id/verify', verificationUpload, verifyDocumentIntegrity); // Verify document integrity (public endpoint)
+router.post('/:id/view', trackDocumentView); // Track document view
+router.post('/:id/like', toggleDocumentLike); // Toggle document like
 
 // Admin routes
 router.post('/upload', authenticateToken, requireAdmin, upload.single('document'), uploadDocument);

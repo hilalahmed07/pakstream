@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import HeroSection from '../../components/HeroSection';
 import VideoGrid from '../../components/video/VideoGrid';
 import PresentationGrid from '../../components/presentation/PresentationGrid';
@@ -14,12 +14,14 @@ import videoService from '../../services/videoService';
 import presentationService from '../../services/presentationService';
 import documentService from '../../services/documentService';
 import premiereService from '../../services/premiereService';
+import { useAuth } from '../../hooks';
 import { Video } from '../../types/video';
 import { Presentation } from '../../types/presentation';
 import { Document } from '../../types/document';
 import { Premiere } from '../../types/premiere';
 
 const UserHomePage: React.FC = () => {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -32,8 +34,11 @@ const UserHomePage: React.FC = () => {
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
   const [activePremiere, setActivePremiere] = useState<Premiere | null>(null);
   const [showPremiere, setShowPremiere] = useState(false);
+  const [premiereDismissed, setPremiereDismissed] = useState(false);
   const [upcomingPremieres, setUpcomingPremieres] = useState<Premiere[]>([]);
   const [premieresLoading, setPremieresLoading] = useState(false);
+  const reappearIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activePremiereRef = useRef<Premiere | null>(null);
 
   useEffect(() => {
     initializeApp();
@@ -43,16 +48,29 @@ const UserHomePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-check premiere when user state changes (e.g., after login)
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      checkActivePremiere();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const initializeApp = async () => {
     try {
       setLoading(true);
-      await Promise.all([
+      const promises = [
         fetchVideos(),
         fetchPresentations(),
-        fetchDocuments(),
-        checkActivePremiere(),
-        fetchUpcomingPremieres()
-      ]);
+        fetchDocuments()
+      ];
+      
+      // Only check premieres if user is logged in (non-admin)
+      if (user && user.role !== 'admin') {
+        promises.push(checkActivePremiere(), fetchUpcomingPremieres());
+      }
+      
+      await Promise.all(promises);
     } catch (error) {
       console.error('Failed to initialize app:', error);
     } finally {
@@ -70,6 +88,12 @@ const UserHomePage: React.FC = () => {
   };
 
   const fetchUpcomingPremieres = async () => {
+    // Only fetch premieres for logged-in users (non-admin)
+    if (!user || user.role === 'admin') {
+      setUpcomingPremieres([]);
+      return;
+    }
+
     try {
       setPremieresLoading(true);
       const response = await premiereService.getUpcomingPremieres();
@@ -102,25 +126,73 @@ const UserHomePage: React.FC = () => {
 
   const checkActivePremiere = async () => {
     try {
+      // Only show premiere popup for logged-in users (non-admin)
+      // Don't show if user is not logged in or if user is admin
+      if (!user || user.role === 'admin') {
+        // Clear premiere state if user is not logged in or is admin
+        if (activePremiere !== null) {
+          setActivePremiere(null);
+          activePremiereRef.current = null;
+          setShowPremiere(false);
+          setPremiereDismissed(false);
+          if (reappearIntervalRef.current) {
+            clearInterval(reappearIntervalRef.current);
+            reappearIntervalRef.current = null;
+          }
+        }
+        return;
+      }
+
+      console.log('🔍 Checking for active premiere...', { userId: user._id, role: user.role });
       const response = await premiereService.getActivePremiere();
+      console.log('📺 Active premiere response:', response.data);
       
       if (response.data.premiere) {
         const premiere = response.data.premiere;
         const timeUntilStart = premiereService.getTimeUntilStart(premiere.startTime);
         const threeMinutesInMs = 3 * 60 * 1000; // 3 minutes in milliseconds
         
+        console.log('🎬 Found premiere:', {
+          id: premiere._id,
+          title: premiere.title,
+          status: premiere.status,
+          startTime: premiere.startTime,
+          timeUntilStart: timeUntilStart,
+          timeUntilStartMinutes: Math.floor(timeUntilStart / 60000),
+          within3Minutes: timeUntilStart <= threeMinutesInMs
+        });
+        
         // Always show live premieres
         if (premiereService.isPremiereLive(premiere)) {
           setActivePremiere(prev => {
+            // If this is a different premiere, reset dismissed state
+            if (prev && prev._id !== premiere._id) {
+              setPremiereDismissed(false);
+              // Clear any existing reappear interval for old premiere
+              if (reappearIntervalRef.current) {
+                clearInterval(reappearIntervalRef.current);
+                reappearIntervalRef.current = null;
+              }
+            }
+            
             if (prev && prev._id === premiere._id) {
               if (prev.status !== premiere.status) {
+                activePremiereRef.current = premiere;
                 return premiere;
               }
+              activePremiereRef.current = prev;
               return prev;
             }
+            activePremiereRef.current = premiere;
             return premiere;
           });
           setShowPremiere(true);
+          setPremiereDismissed(false);
+          // Clear any reappear interval for live premieres
+          if (reappearIntervalRef.current) {
+            clearInterval(reappearIntervalRef.current);
+            reappearIntervalRef.current = null;
+          }
           return;
         }
         
@@ -133,20 +205,41 @@ const UserHomePage: React.FC = () => {
             if (activePremiere !== null) {
               setActivePremiere(null);
               setShowPremiere(false);
+              setPremiereDismissed(false);
             }
             return;
           }
           
           // Show scheduled premiere if within 3 minutes OR countdown finished
           setActivePremiere(prev => {
+            // If this is a different premiere, reset dismissed state
+            if (prev && prev._id !== premiere._id) {
+              setPremiereDismissed(false);
+              // Clear any existing reappear interval for old premiere
+              if (reappearIntervalRef.current) {
+                clearInterval(reappearIntervalRef.current);
+                reappearIntervalRef.current = null;
+              }
+            }
+            
             if (prev && prev._id === premiere._id) {
               if (prev.status !== premiere.status) {
+                activePremiereRef.current = premiere;
                 return premiere;
               }
+              activePremiereRef.current = prev;
               return prev;
             }
+            activePremiereRef.current = premiere;
             return premiere;
           });
+          
+          // Check if this premiere was previously dismissed
+          const dismissedKey = `premiere_dismissed_${premiere._id}`;
+          const wasDismissed = localStorage.getItem(dismissedKey) === 'true';
+          setPremiereDismissed(wasDismissed);
+          
+          // Show premiere (will be positioned based on dismissal state)
           setShowPremiere(true);
           return;
         }
@@ -155,17 +248,28 @@ const UserHomePage: React.FC = () => {
         setActivePremiere(prev => {
           if (prev && prev._id === premiere._id) {
             if (prev.status !== premiere.status) {
+              activePremiereRef.current = premiere;
               return premiere;
             }
+            activePremiereRef.current = prev;
             return prev;
           }
+          activePremiereRef.current = premiere;
           return premiere;
         });
         setShowPremiere(true);
+        setPremiereDismissed(false);
       } else {
         if (activePremiere !== null) {
           setActivePremiere(null);
+          activePremiereRef.current = null;
           setShowPremiere(false);
+          setPremiereDismissed(false);
+          // Clear reappear interval when no active premiere
+          if (reappearIntervalRef.current) {
+            clearInterval(reappearIntervalRef.current);
+            reappearIntervalRef.current = null;
+          }
         }
       }
     } catch (error) {
@@ -204,9 +308,55 @@ const UserHomePage: React.FC = () => {
   };
 
   const handleClosePremiere = () => {
-    setShowPremiere(false);
-    setActivePremiere(null);
+    if (activePremiere) {
+      // Mark this premiere as dismissed in localStorage
+      const dismissedKey = `premiere_dismissed_${activePremiere._id}`;
+      localStorage.setItem(dismissedKey, 'true');
+      setPremiereDismissed(true);
+      setShowPremiere(false);
+      
+      // Clear any existing interval
+      if (reappearIntervalRef.current) {
+        clearInterval(reappearIntervalRef.current);
+      }
+      
+      // Set up interval to reappear every 30 seconds
+      reappearIntervalRef.current = setInterval(() => {
+        // Only reappear if premiere is still active and within 3 minutes
+        const currentPremiere = activePremiereRef.current;
+        if (currentPremiere) {
+          const timeUntilStart = premiereService.getTimeUntilStart(currentPremiere.startTime);
+          const threeMinutesInMs = 3 * 60 * 1000;
+          
+          // Only show if within 3 minutes or countdown finished
+          if (timeUntilStart <= threeMinutesInMs || timeUntilStart <= 0) {
+            setShowPremiere(true);
+          } else {
+            // If more than 3 minutes away, clear interval
+            if (reappearIntervalRef.current) {
+              clearInterval(reappearIntervalRef.current);
+              reappearIntervalRef.current = null;
+            }
+          }
+        } else {
+          // If no active premiere, clear interval
+          if (reappearIntervalRef.current) {
+            clearInterval(reappearIntervalRef.current);
+            reappearIntervalRef.current = null;
+          }
+        }
+      }, 30000); // 30 seconds
+    }
   };
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (reappearIntervalRef.current) {
+        clearInterval(reappearIntervalRef.current);
+      }
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -221,9 +371,9 @@ const UserHomePage: React.FC = () => {
 
   return (
     <>
-      {/* Live Premiere */}
-      {showPremiere && activePremiere && (
-        <div className="mb-8">
+      {/* Live Premiere - Only show for logged-in users (non-admin) */}
+      {showPremiere && activePremiere && user && user.role !== 'admin' && (
+        <>
           {premiereService.isPremiereLive(activePremiere) ? (
             <LivePremiere 
               premiere={activePremiere} 
@@ -234,9 +384,10 @@ const UserHomePage: React.FC = () => {
               premiere={activePremiere} 
               onClose={handleClosePremiere}
               onCountdownFinish={checkActivePremiere}
+              isDismissed={premiereDismissed}
             />
           ) : null}
-        </div>
+        </>
       )}
 
       {/* Hero Section */}
@@ -291,21 +442,23 @@ const UserHomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Premieres Section */}
-      <section id="premieres" className="py-10">
-        <div className="container mx-auto px-6">
-          <div className="mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 tracking-tight">
-              Premieres
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
+      {/* Premieres Section - Only show for logged-in users (non-admin) */}
+      {user && user.role !== 'admin' && (
+        <section id="premieres" className="py-10">
+          <div className="container mx-auto px-6">
+            <div className="mb-8">
+              <h2 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 tracking-tight">
+                Premieres
+              </h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
+            </div>
+            <PremiereGrid 
+              premieres={upcomingPremieres} 
+              loading={premieresLoading}
+            />
           </div>
-          <PremiereGrid 
-            premieres={upcomingPremieres} 
-            loading={premieresLoading}
-          />
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Video Player Modal */}
       {showVideoPlayer && selectedVideo && (

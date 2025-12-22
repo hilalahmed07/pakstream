@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Video } from '../../types/video';
 import videoService from '../../services/videoService';
 import downloadService from '../../services/downloadService';
+import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../hooks';
+import { formatVideoDuration } from '../../utils/videoUtils';
 
 interface VideoGridProps {
   videos: Video[];
@@ -20,6 +22,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   showDeleteButton = false 
 }) => {
   const { user } = useAuth();
+  const { showError } = useNotification();
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
 
   const handleDownload = async (e: React.MouseEvent, video: Video) => {
@@ -34,7 +37,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
       await downloadService.downloadVideo(video._id);
     } catch (error) {
       console.error('Download failed:', error);
-      alert(error instanceof Error ? error.message : 'Failed to download video');
+      showError(error instanceof Error ? error.message : 'Failed to download video');
     } finally {
       setDownloadingVideoId(null);
     }
@@ -118,7 +121,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             {/* Duration Badge */}
             <div className="absolute top-2 right-2">
               <span className="px-2 py-1 rounded text-xs font-semibold text-text-primary bg-black bg-opacity-75">
-                {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
+                {formatVideoDuration(video.duration)}
               </span>
             </div>
 

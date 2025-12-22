@@ -69,9 +69,13 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, o
     };
   }, [isPlaying, slides.length]);
 
-  // Load slides
+  // Load slides and track view
   useEffect(() => {
     loadSlides();
+    // Track view when presentation is opened
+    presentationService.trackView(presentation._id).catch(err => {
+      console.warn('Failed to track view:', err);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

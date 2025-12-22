@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Video } from '../types/video';
 import videoService from '../services/videoService';
 import Hls from 'hls.js';
+import { formatVideoDuration } from '../utils/videoUtils';
 
 const HeroSection: React.FC = () => {
   const [latestVideo, setLatestVideo] = useState<Video | null>(null);
@@ -277,7 +278,7 @@ const HeroSection: React.FC = () => {
               {latestVideo.category.toUpperCase()}
             </span>
             <span>•</span>
-            <span>{Math.floor(latestVideo.duration / 60)} min</span>
+            <span>{formatVideoDuration(latestVideo.duration)}</span>
             <span>•</span>
             <span>{latestVideo.views} views</span>
           </div>

@@ -249,6 +249,47 @@ class DocumentService {
       throw new Error('Either file or hash must be provided');
     }
   }
+
+  /**
+   * Track document view
+   * @param documentId - Document ID
+   */
+  async trackView(documentId: string): Promise<void> {
+    try {
+      await fetch(`${API_BASE_URL}/documents/${documentId}/view`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(err => {
+        console.warn('Failed to track document view:', err);
+      });
+    } catch (error) {
+      console.warn('Failed to track document view:', error);
+    }
+  }
+
+  /**
+   * Toggle document like
+   * @param documentId - Document ID
+   * @param action - 'like' or 'unlike'
+   * @returns Updated likes count
+   */
+  async toggleLike(documentId: string, action: 'like' | 'unlike'): Promise<number> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: { documentId: string; likes: number };
+      }>(`/documents/${documentId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      return response.data.likes;
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      throw error;
+    }
+  }
 }
 
 const documentService = new DocumentService();

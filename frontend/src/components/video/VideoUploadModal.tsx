@@ -29,7 +29,8 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
     title: '',
     description: '',
     category: 'other',
-    tags: ''
+    tags: '',
+    isForPremiere: false
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +124,8 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
         title: '',
         description: '',
         category: 'other',
-        tags: ''
+        tags: '',
+        isForPremiere: false
       });
       setSelectedFile(null);
       if (fileInputRef.current) {
@@ -142,7 +144,8 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
         title: '',
         description: '',
         category: 'other',
-        tags: ''
+        tags: '',
+        isForPremiere: false
       });
       setSelectedFile(null);
       setError(null);
@@ -316,6 +319,43 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Video Type - Premiere or Direct View */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              Video Type
+            </label>
+            <div className="space-y-3">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="isForPremiere"
+                  checked={!uploadData.isForPremiere}
+                  onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: false }))}
+                  disabled={parentUploading}
+                  className="w-4 h-4 text-netflix-red bg-gray-700 border-gray-600 focus:ring-netflix-red disabled:opacity-50"
+                />
+                <div>
+                  <span className="text-white font-medium">Direct View</span>
+                  <p className="text-xs text-gray-400">Users can view this video directly in the video library</p>
+                </div>
+              </label>
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="isForPremiere"
+                  checked={uploadData.isForPremiere === true}
+                  onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: true }))}
+                  disabled={parentUploading}
+                  className="w-4 h-4 text-netflix-red bg-gray-700 border-gray-600 focus:ring-netflix-red disabled:opacity-50"
+                />
+                <div>
+                  <span className="text-white font-medium">For Premiere</span>
+                  <p className="text-xs text-gray-400">This video is intended for a premiere event and will be hidden from regular listings</p>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Tags */}

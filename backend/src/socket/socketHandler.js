@@ -1,4 +1,6 @@
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 const Premiere = require('../models/Premiere');
 const { appConfig } = require('../config/appConfig');
 
@@ -13,8 +15,35 @@ class SocketHandler {
   }
 
   setupSocketHandlers() {
+    // Socket authentication middleware
+    this.io.use(async (socket, next) => {
+      try {
+        const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+        
+        if (token) {
+          try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const user = await User.findById(decoded.userId).select('username email role');
+            
+            if (user && user.isActive) {
+              socket.userId = user._id.toString();
+              socket.userName = user.username;
+              socket.userRole = user.role;
+              console.log('Socket authenticated:', socket.userName, socket.id);
+            }
+          } catch (error) {
+            console.log('Socket authentication failed:', error.message);
+            // Continue without authentication (anonymous user)
+          }
+        }
+        next();
+      } catch (error) {
+        next();
+      }
+    });
+
     this.io.on('connection', (socket) => {
-      console.log('User connected:', socket.id);
+      console.log('User connected:', socket.id, socket.userName || 'Anonymous');
 
       // Join premiere room
       socket.on('join-premiere', async (premiereId) => {
@@ -235,12 +264,24 @@ class SocketHandler {
       });
 
       // Chat functionality
-      socket.on('send-message', (premiereId, message) => {
+      socket.on('send-message', (premiereId, message, username) => {
         if (this.premiereRooms.has(premiereId)) {
           const roomData = this.premiereRooms.get(premiereId);
+          
+          // Use provided username, socket.userName, or fallback to Anonymous
+          const displayName = username || socket.userName || 'Anonymous';
+          
+          console.log('💬 Chat message:', { 
+            premiereId, 
+            username: displayName, 
+            socketUserName: socket.userName,
+            providedUsername: username,
+            message 
+          });
+          
           const chatMessage = {
             id: Date.now(),
-            user: socket.userName || 'Anonymous',
+            user: displayName,
             message,
             timestamp: new Date()
           };

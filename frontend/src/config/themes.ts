@@ -1,4 +1,4 @@
-export type Theme = 'dark' | 'light' | 'pakistan';
+export type Theme = 'dark' | 'light' | 'pakistan' | 'maritimeHorizon';
 
 export interface ThemeColors {
   primary: string;
@@ -57,6 +57,20 @@ export const themes: Record<Theme, ThemeColors> = {
     buttonBg: '#FFFFFF',      // White background for buttons
     buttonText: '#01411C',    // Dark green text on white buttons
     accentText: '#01411C',   // Dark green text on white accent background
+  },
+  maritimeHorizon: {
+    primary: '#0A1929',       // Deep navy
+    secondary: '#1E3A5F',     // Medium blue
+    accent: '#00B4D8',        // Cyan
+    text: '#FFFFFF',
+    textSecondary: '#B8D4E3',  // Light blue-gray
+    border: '#2E5A7F',        // Blue border
+    hover: '#153047',         // Darker navy hover
+    card: '#0F2338',          // Dark blue cards
+    cardHover: '#1A2F47',     // Lighter blue on hover
+    buttonBg: '#1E3A5F',     // Medium blue for buttons
+    buttonText: '#FFFFFF',    // White text on blue buttons
+    accentText: '#0A1929',   // Dark navy text on cyan accent background
   },
 };
 

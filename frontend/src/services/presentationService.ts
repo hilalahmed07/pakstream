@@ -245,6 +245,47 @@ class PresentationService {
       throw new Error('Either file or hash must be provided');
     }
   }
+
+  /**
+   * Track presentation view
+   * @param presentationId - Presentation ID
+   */
+  async trackView(presentationId: string): Promise<void> {
+    try {
+      await fetch(`${API_BASE_URL}/presentations/${presentationId}/view`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(err => {
+        console.warn('Failed to track presentation view:', err);
+      });
+    } catch (error) {
+      console.warn('Failed to track presentation view:', error);
+    }
+  }
+
+  /**
+   * Toggle presentation like
+   * @param presentationId - Presentation ID
+   * @param action - 'like' or 'unlike'
+   * @returns Updated likes count
+   */
+  async toggleLike(presentationId: string, action: 'like' | 'unlike'): Promise<number> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: { presentationId: string; likes: number };
+      }>(`/presentations/${presentationId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      return response.data.likes;
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      throw error;
+    }
+  }
 }
 
 const presentationService = new PresentationService();
