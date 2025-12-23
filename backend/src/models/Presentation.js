@@ -42,7 +42,7 @@ const presentationSchema = new mongoose.Schema({
     default: 0
   },
   duration: {
-    type: Number, // in seconds
+    type: Number,
     default: 0
   },
   views: {
