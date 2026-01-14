@@ -39,7 +39,9 @@ const AdminPremiereDashboard: React.FC = () => {
         video.processedFiles.hls && 
         video.processedFiles.hls.masterPlaylist &&
         video.processedFiles.hls.variants &&
-        video.processedFiles.hls.variants.length > 0
+        video.processedFiles.hls.variants.length > 0 &&
+        // Exclude videos marked for direct view only (isForPremiere === false)
+        video.isForPremiere !== false
       );
       
       setVideos(readyVideos);
