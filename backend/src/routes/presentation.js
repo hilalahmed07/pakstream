@@ -17,7 +17,6 @@ const {
 } = require('../controllers/presentationController');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const upload = require('../middleware/presentationUpload');
-const { verificationUpload } = require('../middleware/presentationUpload');
 
 // Public routes
 router.get('/', getPresentations);
@@ -26,7 +25,7 @@ router.get('/:id/slides', getPresentationSlides);
 router.get('/:id/image/:slideNumber', getPresentationImage);
 router.get('/:id/thumbnail', getPresentationThumbnail);
 router.get('/:id/hash', getPresentationHash); // Get presentation hash for manual verification
-router.post('/:id/verify', verificationUpload, verifyPresentationIntegrity); // Verify presentation integrity (public endpoint)
+router.post('/:id/verify', verifyPresentationIntegrity); // Verify presentation integrity (public endpoint)
 router.post('/:id/view', trackPresentationView); // Track presentation view
 router.post('/:id/like', togglePresentationLike); // Toggle presentation like
 

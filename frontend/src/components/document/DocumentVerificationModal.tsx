@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import documentService from '../../services/documentService';
 import { Document } from '../../types/document';
+import { calculateFileHash } from '../../utils/hashUtils';
 
 interface DocumentVerificationModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
 }) => {
   const [verificationMethod, setVerificationMethod] = useState<'file' | 'hash'>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [calculatedHash, setCalculatedHash] = useState<string | null>(null);
+  const [calculatingHash, setCalculatingHash] = useState(false);
   const [hashInput, setHashInput] = useState<string>('');
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
@@ -31,12 +34,25 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
   const [loadingHash, setLoadingHash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
       setError(null);
       setVerificationResult(null);
+      setCalculatedHash(null);
+      
+      // Calculate hash client-side
+      setCalculatingHash(true);
+      try {
+        const hash = await calculateFileHash(file);
+        setCalculatedHash(hash);
+      } catch (err: any) {
+        setError(err.message || 'Failed to calculate file hash');
+        setCalculatingHash(false);
+        return;
+      }
+      setCalculatingHash(false);
     }
   };
 
@@ -63,23 +79,30 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
     setVerificationResult(null);
 
     try {
-      let result;
+      let hashToVerify: string;
+      
       if (verificationMethod === 'file') {
         if (!selectedFile) {
           setError('Please select a document file');
           setVerifying(false);
           return;
         }
-        result = await documentService.verifyDocumentIntegrity(document._id, selectedFile);
+        if (!calculatedHash) {
+          setError('Hash calculation in progress. Please wait...');
+          setVerifying(false);
+          return;
+        }
+        hashToVerify = calculatedHash;
       } else {
         if (!hashInput.trim()) {
           setError('Please enter a hash value');
           setVerifying(false);
           return;
         }
-        result = await documentService.verifyDocumentIntegrity(document._id, undefined, hashInput);
+        hashToVerify = hashInput.trim();
       }
 
+      const result = await documentService.verifyDocumentIntegrity(document._id, hashToVerify);
       setVerificationResult(result.data);
     } catch (err: any) {
       setError(err.message || 'Failed to verify document integrity');
@@ -91,6 +114,8 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
   const handleClose = () => {
     setVerificationMethod('file');
     setSelectedFile(null);
+    setCalculatedHash(null);
+    setCalculatingHash(false);
     setHashInput('');
     setVerificationResult(null);
     setError(null);
@@ -212,9 +237,22 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
                 className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-netflix-red file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-netflix-red file:text-white hover:file:bg-red-700 file:cursor-pointer"
               />
               {selectedFile && (
-                <p className="mt-2 text-sm text-green-400">
-                  Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                </p>
+                <div className="mt-2">
+                  <p className="text-sm text-green-400 mb-2">
+                    Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
+                  {calculatingHash && (
+                    <p className="text-sm text-yellow-400">Calculating hash... Please wait...</p>
+                  )}
+                  {calculatedHash && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-400 mb-1">Calculated Hash:</p>
+                      <code className="block p-2 bg-gray-900 rounded text-xs font-mono text-green-400 break-all border border-gray-600">
+                        {calculatedHash}
+                      </code>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -311,10 +349,10 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
             </button>
             <button
               onClick={handleVerify}
-              disabled={verifying || (verificationMethod === 'file' && !selectedFile) || (verificationMethod === 'hash' && !hashInput.trim())}
+              disabled={verifying || calculatingHash || (verificationMethod === 'file' && (!selectedFile || !calculatedHash)) || (verificationMethod === 'hash' && !hashInput.trim())}
               className="px-5 py-2 bg-netflix-red text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {verifying ? 'Verifying...' : 'Verify'}
+              {verifying ? 'Verifying...' : calculatingHash ? 'Calculating Hash...' : 'Verify'}
             </button>
           </div>
         </div>

@@ -183,16 +183,14 @@ class DocumentService {
   }
 
   /**
-   * Verify document integrity by uploading a file or providing a hash
+   * Verify document integrity by providing a hash
    * @param documentId - Document ID
-   * @param file - Optional document file to verify
-   * @param hash - Optional hash string to verify
+   * @param hash - Hash string to verify
    * @returns Verification result
    */
   async verifyDocumentIntegrity(
     documentId: string,
-    file?: File,
-    hash?: string
+    hash: string
   ): Promise<{
     success: boolean;
     data: {
@@ -205,49 +203,29 @@ class DocumentService {
       verifiedAt: string;
     };
   }> {
-    if (file) {
-      // Upload file for verification
-      const formData = new FormData();
-      formData.append('document', file);
-
-      return this.request<{
-        success: boolean;
-        data: {
-          documentId: string;
-          title: string;
-          verified: boolean;
-          providedHash: string;
-          storedHash: string;
-          message: string;
-          verifiedAt: string;
-        };
-      }>(`/documents/${documentId}/verify`, {
-        method: 'POST',
-        body: formData,
-      });
-    } else if (hash) {
-      // Send hash string for verification
-      return this.request<{
-        success: boolean;
-        data: {
-          documentId: string;
-          title: string;
-          verified: boolean;
-          providedHash: string;
-          storedHash: string;
-          message: string;
-          verifiedAt: string;
-        };
-      }>(`/documents/${documentId}/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hash }),
-      });
-    } else {
-      throw new Error('Either file or hash must be provided');
+    if (!hash) {
+      throw new Error('Hash must be provided');
     }
+
+    // Send hash string for verification
+    return this.request<{
+      success: boolean;
+      data: {
+        documentId: string;
+        title: string;
+        verified: boolean;
+        providedHash: string;
+        storedHash: string;
+        message: string;
+        verifiedAt: string;
+      };
+    }>(`/documents/${documentId}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ hash }),
+    });
   }
 
   /**

@@ -437,37 +437,20 @@ const verifyPresentationIntegrity = async (req, res) => {
       });
     }
 
-    // Check if file was uploaded or hash string was provided
-    let providedHash = null;
-    
-    if (req.file) {
-      // File was uploaded, calculate its hash
-      try {
-        providedHash = await calculateFileHash(req.file.path);
-        // Clean up temporary file
-        await fs.unlink(req.file.path).catch(() => {
-          // Ignore cleanup errors
-        });
-      } catch (hashError) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to calculate hash of uploaded file',
-          error: hashError.message
-        });
-      }
-    } else if (req.body.hash) {
-      // Hash string was provided directly
-      providedHash = req.body.hash.toLowerCase().trim();
-    } else {
+    // Only accept hash string (no file uploads)
+    if (!req.body.hash) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide either a presentation file or a hash string',
+        message: 'Please provide a hash string for verification',
         data: {
           presentationId: presentation._id,
           title: presentation.title
         }
       });
     }
+
+    // Hash string was provided
+    const providedHash = req.body.hash.toLowerCase().trim();
 
     // Compare hashes
     const storedHash = presentation.sha256Hash.toLowerCase().trim();
