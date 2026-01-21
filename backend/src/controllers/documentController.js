@@ -424,20 +424,37 @@ const verifyDocumentIntegrity = async (req, res) => {
       });
     }
 
-    // Only accept hash string (no file uploads)
-    if (!req.body.hash) {
+    // Check if file was uploaded or hash string was provided
+    let providedHash = null;
+    
+    if (req.file) {
+      // File was uploaded, calculate its hash
+      try {
+        providedHash = await calculateFileHash(req.file.path);
+        // Clean up temporary file
+        await fs.unlink(req.file.path).catch(() => {
+          // Ignore cleanup errors
+        });
+      } catch (hashError) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to calculate hash of uploaded file',
+          error: hashError.message
+        });
+      }
+    } else if (req.body.hash) {
+      // Hash string was provided directly
+      providedHash = req.body.hash.toLowerCase().trim();
+    } else {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a hash string for verification',
+        message: 'Please provide either a document file or a hash string',
         data: {
           documentId: document._id,
           title: document.title
         }
       });
     }
-
-    // Hash string was provided
-    const providedHash = req.body.hash.toLowerCase().trim();
 
     // Compare hashes
     const storedHash = document.sha256Hash.toLowerCase().trim();

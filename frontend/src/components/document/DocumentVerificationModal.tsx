@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import documentService from '../../services/documentService';
 import { Document } from '../../types/document';
-import { calculateFileHash } from '../../utils/hashUtils';
+import { calculateFileHash, isCryptoSubtleAvailable } from '../../utils/hashUtils';
 
 interface DocumentVerificationModalProps {
   isOpen: boolean;
@@ -42,17 +42,24 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
       setVerificationResult(null);
       setCalculatedHash(null);
       
-      // Calculate hash client-side
-      setCalculatingHash(true);
-      try {
-        const hash = await calculateFileHash(file);
-        setCalculatedHash(hash);
-      } catch (err: any) {
-        setError(err.message || 'Failed to calculate file hash');
+      // Check if crypto.subtle is available
+      if (isCryptoSubtleAvailable()) {
+        // Calculate hash client-side
+        setCalculatingHash(true);
+        try {
+          const hash = await calculateFileHash(file);
+          setCalculatedHash(hash);
+        } catch (err: any) {
+          setError(err.message || 'Failed to calculate file hash');
+          setCalculatingHash(false);
+          return;
+        }
         setCalculatingHash(false);
-        return;
+      } else {
+        // crypto.subtle not available - will upload file to server for hash calculation
+        setCalculatedHash(null);
+        setError(null);
       }
-      setCalculatingHash(false);
     }
   };
 
@@ -79,31 +86,31 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
     setVerificationResult(null);
 
     try {
-      let hashToVerify: string;
-      
       if (verificationMethod === 'file') {
         if (!selectedFile) {
           setError('Please select a document file');
           setVerifying(false);
           return;
         }
-        if (!calculatedHash) {
-          setError('Hash calculation in progress. Please wait...');
-          setVerifying(false);
-          return;
+        
+        // If hash was calculated client-side, use it; otherwise upload file
+        if (calculatedHash) {
+          const result = await documentService.verifyDocumentIntegrity(document._id, calculatedHash);
+          setVerificationResult(result.data);
+        } else {
+          // Upload file for server-side hash calculation
+          const result = await documentService.verifyDocumentIntegrity(document._id, undefined, selectedFile);
+          setVerificationResult(result.data);
         }
-        hashToVerify = calculatedHash;
       } else {
         if (!hashInput.trim()) {
           setError('Please enter a hash value');
           setVerifying(false);
           return;
         }
-        hashToVerify = hashInput.trim();
+        const result = await documentService.verifyDocumentIntegrity(document._id, hashInput.trim());
+        setVerificationResult(result.data);
       }
-
-      const result = await documentService.verifyDocumentIntegrity(document._id, hashToVerify);
-      setVerificationResult(result.data);
     } catch (err: any) {
       setError(err.message || 'Failed to verify document integrity');
     } finally {
@@ -252,6 +259,11 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
                       </code>
                     </div>
                   )}
+                  {!isCryptoSubtleAvailable() && !calculatingHash && (
+                    <p className="text-sm text-yellow-400 mt-2">
+                      ⚠️ Hash will be calculated on the server (Web Crypto API not available over HTTP)
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -349,7 +361,7 @@ const DocumentVerificationModal: React.FC<DocumentVerificationModalProps> = ({
             </button>
             <button
               onClick={handleVerify}
-              disabled={verifying || calculatingHash || (verificationMethod === 'file' && (!selectedFile || !calculatedHash)) || (verificationMethod === 'hash' && !hashInput.trim())}
+              disabled={verifying || calculatingHash || (verificationMethod === 'file' && !selectedFile) || (verificationMethod === 'hash' && !hashInput.trim())}
               className="px-5 py-2 bg-netflix-red text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {verifying ? 'Verifying...' : calculatingHash ? 'Calculating Hash...' : 'Verify'}
