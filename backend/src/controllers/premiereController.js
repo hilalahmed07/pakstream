@@ -106,11 +106,11 @@ const getUpcomingPremieres = async (req, res) => {
   try {
     const now = new Date();
     
-    // Get scheduled premieres that haven't started yet, sorted by start time
+    // Get scheduled premieres and live premieres, sorted by start time
     const premieres = await Premiere.find({
-      status: 'scheduled',
+      status: { $in: ['scheduled', 'live'] },
       isActive: true,
-      startTime: { $gt: now } // Only future premieres
+      startTime: { $lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) } // Within 7 days
     })
       .populate({
         path: 'video',

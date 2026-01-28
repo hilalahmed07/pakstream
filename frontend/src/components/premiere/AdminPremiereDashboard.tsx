@@ -30,7 +30,6 @@ const AdminPremiereDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Use admin endpoint to get all videos including premiere-only videos
       const videosRes = await videoService.getAdminVideos({ limit: 50 });
       
       const readyVideos = videosRes.data.videos.filter(video => 
@@ -40,7 +39,6 @@ const AdminPremiereDashboard: React.FC = () => {
         video.processedFiles.hls.masterPlaylist &&
         video.processedFiles.hls.variants &&
         video.processedFiles.hls.variants.length > 0 &&
-        // Exclude videos marked for direct view only (isForPremiere === false)
         video.isForPremiere !== false
       );
       
@@ -62,25 +60,67 @@ const AdminPremiereDashboard: React.FC = () => {
   }, []);
 
   const setupSocketListeners = useCallback(() => {
-    socketService.onPremiereStarted((data) => {
+    const handlePremiereStarted = (data: any) => {
       setActivePremiere(data.premiere);
-      fetchData();
-    });
+      setPremieres(prev => prev.map(p => 
+        p._id === data.premiere._id ? { ...p, status: 'live', isActive: true } : p
+      ));
+    };
 
-    socketService.onPremiereEnded((data) => {
+    const handlePremiereEnded = (data: any) => {
       setActivePremiere(null);
-      fetchData();
-    });
+      setPremieres(prev => prev.map(p => 
+        p._id === data.premiere._id ? { ...p, status: 'ended', isActive: false } : p
+      ));
+    };
 
-    socketService.onError((error) => {
+    const handleStatusUpdated = (data: any) => {
+      console.log('📡 Premiere status updated:', data);
+      if (data.action === 'ended') {
+        console.log('🛑 Updating premiere to ended status:', data.premiereId);
+        setActivePremiere(null);
+        setPremieres(prev => prev.map(p => {
+          if (p._id === data.premiereId) {
+            console.log('✅ Updated premiere status to ended');
+            return { ...p, status: 'ended', isActive: false };
+          }
+          return p;
+        }));
+      } else if (data.action === 'started') {
+        console.log('▶️ Updating premiere to live status:', data.premiereId);
+        setActivePremiere(data.premiere);
+        setPremieres(prev => prev.map(p => {
+          if (p._id === data.premiereId) {
+            console.log('✅ Updated premiere status to live');
+            return { ...p, status: 'live', isActive: true };
+          }
+          return p;
+        }));
+      }
+    };
+
+    const handleError = (error: any) => {
       setError(error.message || 'Socket connection error');
-    });
-  }, [fetchData]);
+    };
+
+    socketService.onPremiereStarted(handlePremiereStarted);
+    socketService.onPremiereEnded(handlePremiereEnded);
+    socketService.on('premiere-status-updated', handleStatusUpdated);
+    socketService.onError(handleError);
+
+    return () => {
+      socketService.removeListener('premiere-started', handlePremiereStarted);
+      socketService.removeListener('premiere-ended', handlePremiereEnded);
+      socketService.removeListener('premiere-status-updated', handleStatusUpdated);
+      socketService.removeListener('error', handleError);
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.role === 'admin') {
       fetchData();
-      setupSocketListeners();
+      const cleanup = setupSocketListeners();
+      return cleanup;
     }
   }, [user, fetchData, setupSocketListeners]);
 
@@ -177,7 +217,6 @@ const AdminPremiereDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* Debug Info */}
         <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
           <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Debug Info:</h3>
           <p style={{ color: 'var(--color-text-secondary)' }}>User: {user ? `${user.username} (${user.role})` : 'Not logged in'}</p>
@@ -195,7 +234,6 @@ const AdminPremiereDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* Active Premiere */}
         {activePremiere && (
           <div className="mb-8 p-6 rounded-lg" style={{ background: 'linear-gradient(to right, rgba(185, 28, 28, 0.3), rgba(220, 38, 38, 0.3))', border: '1px solid rgb(239, 68, 68)' }}>
             <div className="flex items-center justify-between">
@@ -226,7 +264,6 @@ const AdminPremiereDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Premiere List */}
         <div className="space-y-6">
           <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>All Premieres</h2>
           {premieres.length === 0 ? (
@@ -311,7 +348,6 @@ const AdminPremiereDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Create Premiere Modal */}
         {showCreateModal && (
           <CreatePremiereModal
             videos={videos}
@@ -320,7 +356,6 @@ const AdminPremiereDashboard: React.FC = () => {
           />
         )}
 
-        {/* Confirmation Dialog */}
         <ConfirmationDialog
           isOpen={deleteConfirm.isOpen}
           title="Delete Premiere"

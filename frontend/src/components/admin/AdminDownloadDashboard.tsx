@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import downloadService from '../../services/downloadService';
 import { VideoDownload, DownloadStats } from '../../types/download';
 
@@ -14,11 +14,52 @@ const AdminDownloadDashboard: React.FC = () => {
   
   // Filters
   const [userIdFilter, setUserIdFilter] = useState('');
+  const [debouncedUserIdFilter, setDebouncedUserIdFilter] = useState('');
   const [videoIdFilter, setVideoIdFilter] = useState('');
+  const [debouncedVideoIdFilter, setDebouncedVideoIdFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('downloadedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  const userIdDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const videoIdDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce userId filter
+  useEffect(() => {
+    if (userIdDebounceRef.current) {
+      clearTimeout(userIdDebounceRef.current);
+    }
+    
+    userIdDebounceRef.current = setTimeout(() => {
+      setDebouncedUserIdFilter(userIdFilter);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => {
+      if (userIdDebounceRef.current) {
+        clearTimeout(userIdDebounceRef.current);
+      }
+    };
+  }, [userIdFilter]);
+
+  // Debounce videoId filter
+  useEffect(() => {
+    if (videoIdDebounceRef.current) {
+      clearTimeout(videoIdDebounceRef.current);
+    }
+    
+    videoIdDebounceRef.current = setTimeout(() => {
+      setDebouncedVideoIdFilter(videoIdFilter);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => {
+      if (videoIdDebounceRef.current) {
+        clearTimeout(videoIdDebounceRef.current);
+      }
+    };
+  }, [videoIdFilter]);
 
   const fetchStats = async () => {
     try {
@@ -35,8 +76,8 @@ const AdminDownloadDashboard: React.FC = () => {
       const response = await downloadService.getAllDownloads({
         page: currentPage,
         limit,
-        userId: userIdFilter || undefined,
-        videoId: videoIdFilter || undefined,
+        userId: debouncedUserIdFilter || undefined,
+        videoId: debouncedVideoIdFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         sortBy,
@@ -56,7 +97,7 @@ const AdminDownloadDashboard: React.FC = () => {
     fetchStats();
     fetchDownloads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, limit, userIdFilter, videoIdFilter, startDate, endDate, sortBy, sortOrder]);
+  }, [currentPage, limit, debouncedUserIdFilter, debouncedVideoIdFilter, startDate, endDate, sortBy, sortOrder]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -128,7 +169,6 @@ const AdminDownloadDashboard: React.FC = () => {
               value={userIdFilter}
               onChange={(e) => {
                 setUserIdFilter(e.target.value);
-                setCurrentPage(1);
               }}
               placeholder="Filter by user ID"
               className="w-full px-3 py-2 rounded text-sm focus:outline-none"
@@ -147,7 +187,6 @@ const AdminDownloadDashboard: React.FC = () => {
               value={videoIdFilter}
               onChange={(e) => {
                 setVideoIdFilter(e.target.value);
-                setCurrentPage(1);
               }}
               placeholder="Filter by video ID"
               className="w-full px-3 py-2 rounded text-sm focus:outline-none"

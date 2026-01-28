@@ -174,20 +174,21 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-netflix-gray rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Upload Video</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Upload Video</h2>
           <button
             onClick={handleClose}
             disabled={parentUploading}
-            className="text-gray-400 hover:text-white text-2xl disabled:opacity-50"
+            className="text-2xl disabled:opacity-50 hover:opacity-75"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             ×
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-600 text-white p-3 rounded mb-4">
+          <div className="p-3 rounded mb-4" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgb(239, 68, 68)', color: 'var(--color-text)' }}>
             {error}
           </div>
         )}
@@ -195,10 +196,10 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* File Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Video File *
             </label>
-            <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
+            <div className="border-2 border-dashed rounded-lg p-6 text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-hover)' }}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -208,9 +209,9 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 className="hidden"
               />
               {selectedFile ? (
-                <div className="text-white">
+                <div style={{ color: 'var(--color-text)' }}>
                   <p className="font-medium">{selectedFile.name}</p>
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                     {(selectedFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB
                   </p>
                   <button
@@ -222,7 +223,8 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                       }
                     }}
                     disabled={parentUploading}
-                    className="mt-2 text-netflix-red hover:underline disabled:opacity-50"
+                    className="mt-2 hover:underline disabled:opacity-50"
+                    style={{ color: 'var(--color-accent)' }}
                   >
                     Remove
                   </button>
@@ -233,11 +235,12 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={parentUploading}
-                    className="btn-primary disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                   >
                     Select Video File
                   </button>
-                  <p className="text-sm text-gray-400 mt-2">
+                  <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                     Max size: 2GB. Supported formats: MP4, AVI, MOV, WMV, FLV, WebM, MKV, 3GP
                   </p>
                 </div>
@@ -248,17 +251,17 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
           {/* Upload Progress - Always visible when uploading */}
           {parentUploading && (
             <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-300 mb-2">
+              <div className="flex justify-between text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 <span className="font-medium">Uploading video...</span>
                 <span className="font-semibold">{Math.round(parentUploadProgress)}%</span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+              <div className="w-full rounded-full h-3 overflow-hidden" style={{ backgroundColor: 'var(--color-hover)' }}>
                 <div
-                  className="bg-netflix-red h-3 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.max(0, Math.min(100, parentUploadProgress))}%` }}
+                  className="h-3 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.max(0, Math.min(100, parentUploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
                 ></div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Please wait while your video is being uploaded. Do not close this window.
               </p>
             </div>
@@ -266,7 +269,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
           {/* Title */}
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="title" className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Title *
             </label>
             <input
@@ -277,14 +280,20 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               onChange={handleInputChange}
               required
               disabled={parentUploading}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{ 
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)'
+              } as React.CSSProperties}
               placeholder="Enter video title"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="description" className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Description *
             </label>
             <textarea
@@ -295,14 +304,20 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               required
               disabled={parentUploading}
               rows={4}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{ 
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)'
+              } as React.CSSProperties}
               placeholder="Enter video description"
             />
           </div>
 
           {/* Category */}
           <div>
-            <label htmlFor="category" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="category" className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Category
             </label>
             <select
@@ -311,10 +326,16 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               value={uploadData.category}
               onChange={handleInputChange}
               disabled={parentUploading}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{ 
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)'
+              } as React.CSSProperties}
             >
               {categories.map(category => (
-                <option key={category.value} value={category.value}>
+                <option key={category.value} value={category.value} style={{ backgroundColor: 'var(--color-secondary)', color: 'var(--color-text)' }}>
                   {category.label}
                 </option>
               ))}
@@ -323,7 +344,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
           {/* Video Type - Premiere or Direct View */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
+            <label className="block text-sm font-medium mb-3" style={{ color: 'var(--color-text-secondary)' }}>
               Video Type
             </label>
             <div className="space-y-3">
@@ -334,11 +355,14 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   checked={!uploadData.isForPremiere}
                   onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: false }))}
                   disabled={parentUploading}
-                  className="w-4 h-4 text-netflix-red bg-gray-700 border-gray-600 focus:ring-netflix-red disabled:opacity-50"
+                  className="w-4 h-4 disabled:opacity-50"
+                  style={{ 
+                    accentColor: 'var(--color-accent)'
+                  }}
                 />
                 <div>
-                  <span className="text-white font-medium">Direct View</span>
-                  <p className="text-xs text-gray-400">Users can view this video directly in the video library</p>
+                  <span className="font-medium" style={{ color: 'var(--color-text)' }}>Direct View</span>
+                  <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Users can view this video directly in the video library</p>
                 </div>
               </label>
               <label className="flex items-center space-x-3 cursor-pointer">
@@ -348,11 +372,14 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   checked={uploadData.isForPremiere === true}
                   onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: true }))}
                   disabled={parentUploading}
-                  className="w-4 h-4 text-netflix-red bg-gray-700 border-gray-600 focus:ring-netflix-red disabled:opacity-50"
+                  className="w-4 h-4 disabled:opacity-50"
+                  style={{ 
+                    accentColor: 'var(--color-accent)'
+                  }}
                 />
                 <div>
-                  <span className="text-white font-medium">For Premiere</span>
-                  <p className="text-xs text-gray-400">This video is intended for a premiere event and will be hidden from regular listings</p>
+                  <span className="font-medium" style={{ color: 'var(--color-text)' }}>For Premiere</span>
+                  <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>This video is intended for a premiere event and will be hidden from regular listings</p>
                 </div>
               </label>
             </div>
@@ -360,7 +387,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
           {/* Tags */}
           <div>
-            <label htmlFor="tags" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="tags" className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Tags
             </label>
             <input
@@ -370,10 +397,16 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               value={uploadData.tags}
               onChange={handleInputChange}
               disabled={parentUploading}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-netflix-red disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{ 
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)'
+              } as React.CSSProperties}
               placeholder="Enter tags separated by commas"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
               Separate tags with commas (e.g., action, adventure, thriller)
             </p>
           </div>
@@ -384,14 +417,16 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               type="button"
               onClick={handleClose}
               disabled={parentUploading}
-              className="flex-1 btn-secondary disabled:opacity-50"
+              className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={parentUploading || !selectedFile}
-              className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
               {parentUploading ? 'Uploading...' : 'Upload Video'}
             </button>

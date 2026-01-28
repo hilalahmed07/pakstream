@@ -72,28 +72,54 @@ class SocketHandler {
           
           // Get or create room data
           if (!this.premiereRooms.has(premiereId)) {
+            // Calculate the actual start time based on when premiere started
+            // If premiere is live, use its startTime, otherwise use now
+            const premiereStartTime = premiere.status === 'live' 
+              ? new Date(premiere.startTime) 
+              : new Date();
+              
             this.premiereRooms.set(premiereId, {
-              viewers: new Set(),
-              isLive: false,
-              currentTime: 0,
+              viewers: new Map(), // Changed from Set to Map to track viewer playback times
+              isLive: premiere.status === 'live',
+              startTime: premiereStartTime, // Track when premiere started playing
               isPlaying: false,
               chat: []
             });
           }
 
           const roomData = this.premiereRooms.get(premiereId);
-          roomData.viewers.add(socket.id);
+          
+          // Calculate the playback time based on when premiere started
+          // This simulates a TV broadcast - viewers join in the middle get the live current time
+          const elapsedTime = (new Date() - roomData.startTime) / 1000; // in seconds
+          const currentPlaybackTime = Math.max(0, Math.min(elapsedTime, premiere.video?.duration || elapsedTime)); // Don't exceed video duration
+          
+          console.log('🎬 Viewer joining premiere:', {
+            premiereId,
+            premiereStatus: premiere.status,
+            roomStartTime: roomData.startTime,
+            elapsedTime,
+            currentPlaybackTime,
+            videoDuration: premiere.video?.duration
+          });
+          
+          // Store viewer info with their playback position
+          roomData.viewers.set(socket.id, {
+            userId: socket.userId,
+            joinedAt: new Date(),
+            lastKnownTime: currentPlaybackTime
+          });
 
           // Update premiere viewer count
           await Premiere.findByIdAndUpdate(premiereId, {
             $inc: { totalViewers: 1 }
           });
 
-          // Send room data to the user
+          // Send room data to the user with their resume position
           socket.emit('premiere-joined', {
             premiere,
             viewerCount: roomData.viewers.size,
-            currentTime: roomData.currentTime,
+            currentTime: currentPlaybackTime, // Send calculated playback time for resume
             isPlaying: roomData.isPlaying,
             chat: roomData.chat.slice(-50) // Last 50 messages
           });
@@ -167,12 +193,21 @@ class SocketHandler {
             return;
           }
 
-          // Update room data
+          // Update room data with start time for TV broadcast behavior
           if (this.premiereRooms.has(premiereId)) {
             const roomData = this.premiereRooms.get(premiereId);
             roomData.isLive = true;
             roomData.isPlaying = true;
-            roomData.currentTime = 0;
+            roomData.startTime = new Date(); // Set start time when admin starts
+          } else {
+            // Create room data if it doesn't exist
+            this.premiereRooms.set(premiereId, {
+              viewers: new Map(),
+              isLive: true,
+              startTime: new Date(),
+              isPlaying: true,
+              chat: []
+            });
           }
 
           // Notify all viewers
@@ -257,7 +292,12 @@ class SocketHandler {
       socket.on('seek-video', (premiereId, time) => {
         if (this.premiereRooms.has(premiereId)) {
           const roomData = this.premiereRooms.get(premiereId);
-          roomData.currentTime = time;
+          
+          // Update viewer's last known time for resume tracking
+          if (roomData.viewers.has(socket.id)) {
+            const viewerData = roomData.viewers.get(socket.id);
+            viewerData.lastKnownTime = time;
+          }
           
           socket.to(`premiere-${premiereId}`).emit('video-seek', { time });
         }

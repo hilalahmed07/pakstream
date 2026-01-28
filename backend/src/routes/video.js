@@ -13,11 +13,12 @@ const {
   getVideoStatus,
   getQueueStatus,
   trackVideoView,
+  toggleVideoLike,
   downloadVideo,
   getVideoHash,
   verifyVideoIntegrity
 } = require('../controllers/videoController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { upload, verificationUpload, handleUploadError } = require('../middleware/upload');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
@@ -74,14 +75,15 @@ function isOriginAllowed(origin, allowedOrigins) {
   return false;
 }
 
-// Public routes
-router.get('/', getVideos);
-router.get('/featured/list', getFeaturedVideos); // Must come before /:id route
+// Public routes (with optional auth to get user like status)
+router.get('/', optionalAuth, getVideos);
+router.get('/featured/list', optionalAuth, getFeaturedVideos); // Must come before /:id route
 router.get('/queue/status', getQueueStatus); // Get processing queue status
-router.get('/:id', getVideoById);
+router.get('/:id', optionalAuth, getVideoById);
 router.get('/:id/status', getVideoStatus);
 router.get('/:id/hash', getVideoHash); // Get video hash for manual verification
 router.post('/:id/view', trackVideoView); // Track video view (public endpoint)
+router.post('/:id/like', authenticateToken, toggleVideoLike); // Toggle video like (requires auth)
 router.post('/:id/verify', verificationUpload, handleUploadError, verifyVideoIntegrity); // Verify video integrity (public endpoint)
 
 // Protected download route (requires authentication)

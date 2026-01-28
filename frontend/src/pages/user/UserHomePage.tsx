@@ -42,7 +42,8 @@ const UserHomePage: React.FC = () => {
 
   useEffect(() => {
     initializeApp();
-    // Check every 5 seconds to catch status updates faster when countdown finishes
+
+    checkActivePremiere();
     const interval = setInterval(checkActivePremiere, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,7 +151,7 @@ const UserHomePage: React.FC = () => {
       if (response.data.premiere) {
         const premiere = response.data.premiere;
         const timeUntilStart = premiereService.getTimeUntilStart(premiere.startTime);
-        const threeMinutesInMs = 3 * 60 * 1000; // 3 minutes in milliseconds
+        const threeMinutesInMs = 3 * 60 * 1000; 
         
         console.log('🎬 Found premiere:', {
           id: premiere._id,
@@ -196,21 +197,12 @@ const UserHomePage: React.FC = () => {
           return;
         }
         
-        // For scheduled premieres, only show if within 3 minutes of start OR countdown has finished
+        // For scheduled premieres, show immediately when created (always show)
         if (premiereService.isPremiereScheduled(premiere)) {
-          // Show if within 3 minutes OR if countdown has finished (timeUntilStart <= 0)
-          // This handles the case where countdown finished but backend hasn't updated status yet
-          if (timeUntilStart > threeMinutesInMs && timeUntilStart > 0) {
-            // Hide premiere if more than 3 minutes away AND countdown hasn't finished
-            if (activePremiere !== null) {
-              setActivePremiere(null);
-              setShowPremiere(false);
-              setPremiereDismissed(false);
-            }
-            return;
-          }
+          // Show all scheduled premieres - users should see premiere details immediately when admin creates it
+          // Previously only showed within 3 minutes - now show immediately
           
-          // Show scheduled premiere if within 3 minutes OR countdown finished
+          // Show scheduled premiere immediately
           setActivePremiere(prev => {
             // If this is a different premiere, reset dismissed state
             if (prev && prev._id !== premiere._id) {
@@ -318,32 +310,47 @@ const UserHomePage: React.FC = () => {
       // Clear any existing interval
       if (reappearIntervalRef.current) {
         clearInterval(reappearIntervalRef.current);
+        reappearIntervalRef.current = null;
       }
       
-      // Set up interval to reappear every 30 seconds
-      reappearIntervalRef.current = setInterval(() => {
-        // Only reappear if premiere is still active and within 3 minutes
-        const currentPremiere = activePremiereRef.current;
-        if (currentPremiere) {
-          const timeUntilStart = premiereService.getTimeUntilStart(currentPremiere.startTime);
-          const threeMinutesInMs = 3 * 60 * 1000;
+      
+      reappearIntervalRef.current = setInterval(async () => {
+        try {
           
-          // Only show if within 3 minutes or countdown finished
-          if (timeUntilStart <= threeMinutesInMs || timeUntilStart <= 0) {
-            setShowPremiere(true);
+          const response = await premiereService.getActivePremiere();
+          
+          if (response.data.premiere) {
+            const premiere = response.data.premiere;
+            const now = new Date();
+            const endTime = new Date(premiere.endTime);
+            
+            
+            activePremiereRef.current = premiere;
+            setActivePremiere(premiere);
+            
+            
+            if (now < endTime) {
+              setShowPremiere(true);
+              
+              setPremiereDismissed(false);
+              localStorage.removeItem(dismissedKey);
+            } else {
+              // If premiere has ended, clear interval
+              if (reappearIntervalRef.current) {
+                clearInterval(reappearIntervalRef.current);
+                reappearIntervalRef.current = null;
+              }
+            }
           } else {
-            // If more than 3 minutes away, clear interval
+            // No active premiere, clear interval
             if (reappearIntervalRef.current) {
               clearInterval(reappearIntervalRef.current);
               reappearIntervalRef.current = null;
             }
           }
-        } else {
-          // If no active premiere, clear interval
-          if (reappearIntervalRef.current) {
-            clearInterval(reappearIntervalRef.current);
-            reappearIntervalRef.current = null;
-          }
+        } catch (error) {
+          console.error('Error checking status:', error);
+          // Continue checking even if there's an error
         }
       }, 30000); // 30 seconds
     }

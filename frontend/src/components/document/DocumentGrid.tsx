@@ -10,30 +10,32 @@ interface DocumentGridProps {
 const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick }) => {
   const [localDocuments, setLocalDocuments] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
 
-  const getLocalData = (id: string, defaultViews: number, defaultLikes: number) => {
+  // Initialize local state from documents when they change
+  React.useEffect(() => {
+    const newMap = new Map<string, { views: number; likes: number; isLiked: boolean }>();
+    documents.forEach(document => {
+      newMap.set(document._id, {
+        views: document.views,
+        likes: document.likes,
+        isLiked: document.isLiked ?? false
+      });
+    });
+    setLocalDocuments(newMap);
+  }, [documents]);
+
+  const getLocalData = (id: string, defaultViews: number, defaultLikes: number, defaultIsLiked: boolean) => {
     const local = localDocuments.get(id);
     return {
       views: local?.views ?? defaultViews,
       likes: local?.likes ?? defaultLikes,
-      isLiked: local?.isLiked ?? false
+      isLiked: local?.isLiked ?? defaultIsLiked
     };
   };
 
   const handleClick = async (document: Document) => {
-    // Track view
-    await documentService.trackView(document._id);
+    // Don't track view here - it will be tracked in the viewer component
+    // This prevents duplicate view tracking
     
-    // Update local state
-    const local = getLocalData(document._id, document.views, document.likes);
-    setLocalDocuments(prev => {
-      const newMap = new Map(prev);
-      newMap.set(document._id, {
-        ...local,
-        views: local.views + 1
-      });
-      return newMap;
-    });
-
     // Call the original click handler
     onDocumentClick(document);
   };
@@ -41,17 +43,17 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
   const handleLikeClick = async (e: React.MouseEvent, document: Document) => {
     e.stopPropagation(); // Prevent triggering the card click
     
-    const local = getLocalData(document._id, document.views, document.likes);
+    const local = getLocalData(document._id, document.views, document.likes, document.isLiked ?? false);
     const action = local.isLiked ? 'unlike' : 'like';
     
     try {
-      const newLikes = await documentService.toggleLike(document._id, action);
+      const result = await documentService.toggleLike(document._id, action);
       setLocalDocuments(prev => {
         const newMap = new Map(prev);
         newMap.set(document._id, {
           ...local,
-          likes: newLikes,
-          isLiked: !local.isLiked
+          likes: result.likes,
+          isLiked: result.isLiked
         });
         return newMap;
       });
@@ -91,7 +93,7 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {documents.map((document) => {
-        const local = getLocalData(document._id, document.views, document.likes);
+        const local = getLocalData(document._id, document.views, document.likes, document.isLiked ?? false);
         return (
         <div
           key={document._id}

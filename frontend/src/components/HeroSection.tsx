@@ -105,12 +105,18 @@ const HeroSection: React.FC = () => {
           setIsPlaying(true);
           console.log('Video started playing');
           
-          // Track "play start" view
+          // Track view only once per session
           if (!playStartTrackedRef.current && latestVideo?._id) {
-            playStartTrackedRef.current = true;
-            videoService.trackVideoView(latestVideo._id, 'start').catch(err => {
-              console.warn('Failed to track play start view:', err);
-            });
+            const sessionKey = `video_view_${latestVideo._id}`;
+            const hasTracked = sessionStorage.getItem(sessionKey);
+            
+            if (!hasTracked) {
+              playStartTrackedRef.current = true;
+              videoService.trackVideoView(latestVideo._id).catch(err => {
+                console.warn('Failed to track video view:', err);
+              });
+              sessionStorage.setItem(sessionKey, 'true');
+            }
           }
         }).catch((error) => {
           console.error('Failed to start video:', error);
@@ -149,12 +155,18 @@ const HeroSection: React.FC = () => {
         video.play().then(() => {
           setIsPlaying(true);
           
-          // Track "play start" view
+          // Track view only once per session
           if (!playStartTrackedRef.current && latestVideo?._id) {
-            playStartTrackedRef.current = true;
-            videoService.trackVideoView(latestVideo._id, 'start').catch(err => {
-              console.warn('Failed to track play start view:', err);
-            });
+            const sessionKey = `video_view_${latestVideo._id}`;
+            const hasTracked = sessionStorage.getItem(sessionKey);
+            
+            if (!hasTracked) {
+              playStartTrackedRef.current = true;
+              videoService.trackVideoView(latestVideo._id).catch(err => {
+                console.warn('Failed to track video view:', err);
+              });
+              sessionStorage.setItem(sessionKey, 'true');
+            }
           }
         }).catch(console.error);
       });
@@ -167,12 +179,18 @@ const HeroSection: React.FC = () => {
       setIsPlaying(true);
       console.log('Video playing');
       
-      // Track "play start" view
+      // Track view only once per session
       if (!playStartTrackedRef.current && latestVideo?._id) {
-        playStartTrackedRef.current = true;
-        videoService.trackVideoView(latestVideo._id, 'start').catch(err => {
-          console.warn('Failed to track play start view:', err);
-        });
+        const sessionKey = `video_view_${latestVideo._id}`;
+        const hasTracked = sessionStorage.getItem(sessionKey);
+        
+        if (!hasTracked) {
+          playStartTrackedRef.current = true;
+          videoService.trackVideoView(latestVideo._id).catch(err => {
+            console.warn('Failed to track video view:', err);
+          });
+          sessionStorage.setItem(sessionKey, 'true');
+        }
       }
     });
     video.addEventListener('pause', () => {
@@ -184,13 +202,7 @@ const HeroSection: React.FC = () => {
       console.log('Video ended');
     });
     video.addEventListener('timeupdate', () => {
-      // Track "30 seconds watched" view
-      if (video.currentTime >= 30 && !watch30TrackedRef.current && latestVideo?._id) {
-        watch30TrackedRef.current = true;
-        videoService.trackVideoView(latestVideo._id, 'watch30').catch(err => {
-          console.warn('Failed to track 30s view:', err);
-        });
-      }
+      // Removed "30 seconds watched" tracking - only track once on play start
     });
     video.addEventListener('error', (e) => {
       console.error('Video error:', e);

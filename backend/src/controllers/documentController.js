@@ -105,8 +105,22 @@ const getDocuments = async (req, res) => {
 
     const total = await Document.countDocuments(query);
 
+    // Add isLiked status for each document if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const documentsWithLikeStatus = documents.map(document => {
+      const documentObj = document.toObject();
+      if (userId && document.likedBy && Array.isArray(document.likedBy)) {
+        documentObj.isLiked = document.likedBy.some(
+          likeId => likeId && likeId.toString() === userId.toString()
+        );
+      } else {
+        documentObj.isLiked = false;
+      }
+      return documentObj;
+    });
+
     res.json({
-      documents,
+      documents: documentsWithLikeStatus,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -132,7 +146,18 @@ const getDocumentById = async (req, res) => {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    res.json({ document });
+    // Add isLiked status if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const documentObj = document.toObject();
+    if (userId && document.likedBy && Array.isArray(document.likedBy)) {
+      documentObj.isLiked = document.likedBy.some(
+        likeId => likeId && likeId.toString() === userId.toString()
+      );
+    } else {
+      documentObj.isLiked = false;
+    }
+
+    res.json({ document: documentObj });
 
   } catch (error) {
     console.error('Get document error:', error);
@@ -144,19 +169,25 @@ const getDocumentById = async (req, res) => {
 const trackDocumentView = async (req, res) => {
   try {
     const { id } = req.params;
+    const { sessionId } = req.query; // Session ID to prevent duplicate tracking
     
     const document = await Document.findById(id);
     if (!document) {
       return res.status(404).json({ success: false, message: 'Document not found' });
     }
 
+    // Check if view was already tracked in this session (prevent duplicate on refresh)
+    // Note: This is a simple check. For production, consider using Redis or a ViewTracking collection
+    // For now, we rely on frontend sessionStorage to prevent duplicate calls
+    
     // Increment view count atomically
-    await Document.findByIdAndUpdate(
+    const updated = await Document.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: false }
+      { new: true }
     ).catch(err => {
       console.error('Failed to update view count:', err);
+      return null;
     });
 
     res.json({
@@ -164,7 +195,7 @@ const trackDocumentView = async (req, res) => {
       message: 'View tracked',
       data: {
         documentId: id,
-        views: document.views + 1
+        views: updated ? updated.views : document.views + 1
       }
     });
   } catch (error) {
@@ -180,19 +211,56 @@ const trackDocumentView = async (req, res) => {
 const toggleDocumentLike = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
     
     const document = await Document.findById(id);
     if (!document) {
       return res.status(404).json({ success: false, message: 'Document not found' });
     }
 
-    // For now, just increment/decrement likes (can be enhanced with user-specific likes later)
-    const increment = req.body.action === 'unlike' ? -1 : 1;
-    const newLikes = Math.max(0, document.likes + increment);
+    // Initialize likedBy array if it doesn't exist
+    if (!document.likedBy) {
+      document.likedBy = [];
+    }
+
+    const isLiked = document.likedBy.some(
+      likeId => likeId && likeId.toString() === userId.toString()
+    );
+
+    let newLikes;
+    let isLikedAfter;
+
+    if (req.body.action === 'unlike') {
+      // Remove user from likedBy array
+      document.likedBy = document.likedBy.filter(
+        likeId => likeId && likeId.toString() !== userId.toString()
+      );
+      newLikes = Math.max(0, document.likes - 1);
+      isLikedAfter = false;
+    } else {
+      // Add user to likedBy array if not already liked
+      if (!isLiked) {
+        document.likedBy.push(userId);
+        newLikes = document.likes + 1;
+      } else {
+        // Already liked, don't increment
+        newLikes = document.likes;
+      }
+      isLikedAfter = true;
+    }
 
     await Document.findByIdAndUpdate(
       id,
-      { $set: { likes: newLikes } },
+      { 
+        $set: { 
+          likes: newLikes,
+          likedBy: document.likedBy
+        }
+      },
       { new: true }
     );
 
@@ -201,7 +269,8 @@ const toggleDocumentLike = async (req, res) => {
       message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
       data: {
         documentId: id,
-        likes: newLikes
+        likes: newLikes,
+        isLiked: isLikedAfter
       }
     });
   } catch (error) {

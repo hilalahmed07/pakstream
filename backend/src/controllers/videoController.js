@@ -180,7 +180,11 @@ const getVideos = async (req, res) => {
     // Filter out videos that are part of active/scheduled premieres (unless admin)
     let videos = allVideos;
     if (!req.user || req.user.role !== 'admin') {
-      const videoIds = allVideos.map(v => v._id);
+      // First, filter out videos marked as isForPremiere
+      videos = allVideos.filter(video => video.isForPremiere !== true);
+      
+      // Then, also filter out videos that are part of active premieres
+      const videoIds = videos.map(v => v._id);
       
       // Find all premieres that include these videos
       const activePremieres = await Premiere.find({
@@ -192,7 +196,7 @@ const getVideos = async (req, res) => {
       const premiereVideoIds = new Set(activePremieres.map(p => p.video.toString()));
       
       // Filter out videos that are part of active premieres
-      videos = allVideos.filter(video => !premiereVideoIds.has(video._id.toString()));
+      videos = videos.filter(video => !premiereVideoIds.has(video._id.toString()));
     }
 
     // Recalculate total excluding premiere videos
@@ -212,10 +216,24 @@ const getVideos = async (req, res) => {
     // Add CDN URLs to videos
     const videosWithCdn = addCdnUrlsToVideos(videos);
 
+    // Add isLiked status for each video if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const videosWithLikeStatus = videosWithCdn.map(video => {
+      const videoObj = typeof video.toObject === 'function' ? video.toObject() : video;
+      if (userId && video.likedBy && Array.isArray(video.likedBy)) {
+        videoObj.isLiked = video.likedBy.some(
+          likeId => likeId && likeId.toString() === userId.toString()
+        );
+      } else {
+        videoObj.isLiked = false;
+      }
+      return videoObj;
+    });
+
     res.json({
       success: true,
       data: {
-        videos: videosWithCdn,
+        videos: videosWithLikeStatus,
         pagination: {
           current: parseInt(page),
           pages: Math.ceil(total / limit),
@@ -341,9 +359,20 @@ const getVideoById = async (req, res) => {
       });
     }
 
+    // Add isLiked status if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const videoObj = video.toObject();
+    if (userId && video.likedBy && Array.isArray(video.likedBy)) {
+      videoObj.isLiked = video.likedBy.some(
+        likeId => likeId && likeId.toString() === userId.toString()
+      );
+    } else {
+      videoObj.isLiked = false;
+    }
+
     res.json({
       success: true,
-      data: { video }
+      data: { video: videoObj }
     });
   } catch (error) {
     res.status(500).json({
@@ -521,19 +550,11 @@ const getVideoStatus = async (req, res) => {
   }
 };
 
-// Track video view (play start or 30 seconds watched)
+// Track video view (only track once per session)
 const trackVideoView = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type = 'start' } = req.query; // 'start' or 'watch30'
-
-    // Validate view type
-    if (type !== 'start' && type !== 'watch30') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid view type. Must be "start" or "watch30"'
-      });
-    }
+    const { sessionId } = req.query; // Session ID to prevent duplicate tracking
 
     // Check if video exists
     const video = await Video.findById(id);
@@ -544,23 +565,26 @@ const trackVideoView = async (req, res) => {
       });
     }
 
-    // Increment view count atomically
-    await Video.findByIdAndUpdate(
+    // Note: We rely on frontend sessionStorage to prevent duplicate calls
+    // For production, consider using Redis or a ViewTracking collection
+    
+    // Increment view count atomically (only once per session)
+    const updated = await Video.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: false }
+      { new: true }
     ).catch(err => {
       console.error('Failed to update view count:', err);
-      // Don't fail the request if view tracking fails
+      return null;
     });
 
     // Return success response
     res.json({
       success: true,
-      message: `View tracked: ${type}`,
+      message: 'View tracked',
       data: {
         videoId: id,
-        viewType: type
+        views: updated ? updated.views : video.views + 1
       }
     });
   } catch (error) {
@@ -806,6 +830,88 @@ const verifyVideoIntegrity = async (req, res) => {
   }
 };
 
+// Toggle video like
+const toggleVideoLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    const video = await Video.findById(id);
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
+      });
+    }
+
+    // Initialize likedBy array if it doesn't exist
+    if (!video.likedBy) {
+      video.likedBy = [];
+    }
+
+    const isLiked = video.likedBy.some(
+      likeId => likeId && likeId.toString() === userId.toString()
+    );
+
+    let newLikes;
+    let isLikedAfter;
+
+    if (req.body.action === 'unlike') {
+      // Remove user from likedBy array
+      video.likedBy = video.likedBy.filter(
+        likeId => likeId && likeId.toString() !== userId.toString()
+      );
+      newLikes = Math.max(0, video.likes - 1);
+      isLikedAfter = false;
+    } else {
+      // Add user to likedBy array if not already liked
+      if (!isLiked) {
+        video.likedBy.push(userId);
+        newLikes = video.likes + 1;
+      } else {
+        // Already liked, don't increment
+        newLikes = video.likes;
+      }
+      isLikedAfter = true;
+    }
+
+    await Video.findByIdAndUpdate(
+      id,
+      { 
+        $set: { 
+          likes: newLikes,
+          likedBy: video.likedBy
+        }
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
+      data: {
+        videoId: id,
+        likes: newLikes,
+        isLiked: isLikedAfter
+      }
+    });
+  } catch (error) {
+    console.error('Like toggle error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle like',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadVideo,
   getVideos,
@@ -817,6 +923,7 @@ module.exports = {
   getVideoStatus,
   getQueueStatus,
   trackVideoView,
+  toggleVideoLike,
   downloadVideo,
   getVideoHash,
   verifyVideoIntegrity

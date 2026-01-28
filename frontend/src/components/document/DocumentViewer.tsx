@@ -9,10 +9,16 @@ interface DocumentViewerProps {
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose }) => {
   React.useEffect(() => {
-    // Track view when document is opened
-    documentService.trackView(document._id).catch(err => {
-      console.warn('Failed to track view:', err);
-    });
+    // Track view when document is opened (only once per session)
+    const sessionKey = `document_view_${document._id}`;
+    const hasTracked = sessionStorage.getItem(sessionKey);
+    
+    if (!hasTracked) {
+      documentService.trackView(document._id).catch(err => {
+        console.warn('Failed to track view:', err);
+      });
+      sessionStorage.setItem(sessionKey, 'true');
+    }
   }, [document._id]);
 
   const handleDownload = () => {

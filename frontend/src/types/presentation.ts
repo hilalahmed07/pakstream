@@ -20,6 +20,7 @@ export interface Presentation {
   duration: number;
   views: number;
   likes: number;
+  isLiked?: boolean;
   category: 'business' | 'education' | 'marketing' | 'technology' | 'design' | 'other';
   tags: string[];
   isPublic: boolean;

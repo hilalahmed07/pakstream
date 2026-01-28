@@ -10,30 +10,32 @@ interface PresentationGridProps {
 const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
   const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
 
-  const getLocalData = (id: string, defaultViews: number, defaultLikes: number) => {
+  // Initialize local state from presentations when they change
+  React.useEffect(() => {
+    const newMap = new Map<string, { views: number; likes: number; isLiked: boolean }>();
+    presentations.forEach(presentation => {
+      newMap.set(presentation._id, {
+        views: presentation.views,
+        likes: presentation.likes,
+        isLiked: presentation.isLiked ?? false
+      });
+    });
+    setLocalPresentations(newMap);
+  }, [presentations]);
+
+  const getLocalData = (id: string, defaultViews: number, defaultLikes: number, defaultIsLiked: boolean) => {
     const local = localPresentations.get(id);
     return {
       views: local?.views ?? defaultViews,
       likes: local?.likes ?? defaultLikes,
-      isLiked: local?.isLiked ?? false
+      isLiked: local?.isLiked ?? defaultIsLiked
     };
   };
 
   const handleClick = async (presentation: Presentation) => {
-    // Track view
-    await presentationService.trackView(presentation._id);
+    // Don't track view here - it will be tracked in the viewer component
+    // This prevents duplicate view tracking
     
-    // Update local state
-    const local = getLocalData(presentation._id, presentation.views, presentation.likes);
-    setLocalPresentations(prev => {
-      const newMap = new Map(prev);
-      newMap.set(presentation._id, {
-        ...local,
-        views: local.views + 1
-      });
-      return newMap;
-    });
-
     // Call the original click handler
     onPresentationClick(presentation);
   };
@@ -41,17 +43,17 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
   const handleLikeClick = async (e: React.MouseEvent, presentation: Presentation) => {
     e.stopPropagation(); // Prevent triggering the card click
     
-    const local = getLocalData(presentation._id, presentation.views, presentation.likes);
+    const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
     const action = local.isLiked ? 'unlike' : 'like';
     
     try {
-      const newLikes = await presentationService.toggleLike(presentation._id, action);
+      const result = await presentationService.toggleLike(presentation._id, action);
       setLocalPresentations(prev => {
         const newMap = new Map(prev);
         newMap.set(presentation._id, {
           ...local,
-          likes: newLikes,
-          isLiked: !local.isLiked
+          likes: result.likes,
+          isLiked: result.isLiked
         });
         return newMap;
       });
@@ -84,7 +86,7 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {presentations.map((presentation) => {
-        const local = getLocalData(presentation._id, presentation.views, presentation.likes);
+        const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
         return (
         <div
           key={presentation._id}

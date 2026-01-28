@@ -49,6 +49,25 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       console.log('Premiere joined:', data);
       setViewerCount(data.viewerCount);
       setChatMessages(data.chat || []);
+      
+      // Resume from current playback time (TV broadcast behavior)
+      // User joins/refreshes and gets the current live playback position
+      // Only seek if premiere is live and we have a valid positive time
+      if (data.currentTime && data.currentTime > 0 && videoRef.current && isVideoReady && premiere.status === 'live') {
+        console.log('Seeking to current premiere time:', data.currentTime, 'status:', premiere.status);
+        // Use a small delay to ensure HLS is loaded
+        const seekTimer = setTimeout(() => {
+          if (videoRef.current && isVideoReady) {
+            try {
+              videoRef.current.seek(data.currentTime);
+              console.log('✅ Seeked to:', data.currentTime);
+            } catch (error) {
+              console.warn('Could not seek to time:', error);
+            }
+          }
+        }, 300);
+        return () => clearTimeout(seekTimer);
+      }
     };
 
     const handleViewerJoined = (data: any) => {
@@ -227,14 +246,29 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     if (isVideoReady && videoRef.current && !autoPlayAttemptedRef.current && premiere.status === 'live') {
       autoPlayAttemptedRef.current = true;
       
-      // Small delay to ensure video player is fully initialized
+      // Small delay to ensure video player is fully initialized and HLS is loaded
       const autoPlayTimer = setTimeout(() => {
-        console.log('Auto-playing premiere video...');
-        videoRef.current?.play();
-        
-        // Notify other viewers via socket
-        socketService.playVideo(premiere._id);
-      }, 1000);
+        try {
+          console.log('Auto-playing premiere video...');
+          const playPromise = videoRef.current?.play() as Promise<void> | undefined;
+          
+          // Handle async play() API
+          if (playPromise instanceof Promise) {
+            playPromise.then(() => {
+              console.log('✅ Premiere video started playing');
+              socketService.playVideo(premiere._id);
+            }).catch((error: any) => {
+              console.warn('⚠️ Autoplay was prevented:', error.message);
+              // Autoplay might be blocked by browser, wait for user interaction
+            });
+          } else {
+            // Older browsers without promise support
+            socketService.playVideo(premiere._id);
+          }
+        } catch (error) {
+          console.error('Error during autoplay:', error);
+        }
+      }, 1500);
 
       return () => clearTimeout(autoPlayTimer);
     }
@@ -335,7 +369,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
         </div>
 
         {/* Video Player or Error Message */}
-        <div className="flex-1 pt-4">
+        <div className="flex-1 pt-4 relative">
           {videoError ? (
             <div className="h-full flex items-center justify-center bg-gray-900">
               <div className="text-center p-8">
@@ -354,16 +388,35 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
               </div>
             </div>
           ) : videoForPlayer ? (
-            <VideoPlayer
-              video={videoForPlayer}
-              autoPlay={true}
-              controls={true}
-              className="h-full"
-              onPlay={handleVideoPlay}
-              onPause={handleVideoPause}
-              onSeek={handleVideoSeek}
-              ref={videoRef}
-            />
+            <>
+              <VideoPlayer
+                video={videoForPlayer}
+                autoPlay={true}
+                controls={true}
+                showProgressBar={false} // Hide progress bar for TV-like broadcast experience
+                className="h-full"
+                onPlay={handleVideoPlay}
+                onPause={handleVideoPause}
+                onSeek={handleVideoSeek}
+                ref={videoRef}
+              />
+              {/* Play button overlay for when autoplay is blocked */}
+              {!isVideoReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <div className="text-center">
+                    <button
+                      onClick={() => videoRef.current?.play()}
+                      className="bg-netflix-red hover:bg-red-700 text-white rounded-full p-4 mb-4 transition-colors"
+                    >
+                      <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                      </svg>
+                    </button>
+                    <p className="text-white text-lg">Click to play</p>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="h-full flex items-center justify-center bg-gray-900">
               <div className="text-white text-xl">Loading video...</div>

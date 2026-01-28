@@ -276,18 +276,21 @@ class DocumentService {
    * Toggle document like
    * @param documentId - Document ID
    * @param action - 'like' or 'unlike'
-   * @returns Updated likes count
+   * @returns Updated likes count and isLiked status
    */
-  async toggleLike(documentId: string, action: 'like' | 'unlike'): Promise<number> {
+  async toggleLike(documentId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
     try {
       const response = await this.request<{
         success: boolean;
-        data: { documentId: string; likes: number };
+        data: { documentId: string; likes: number; isLiked: boolean };
       }>(`/documents/${documentId}/like`, {
         method: 'POST',
         body: JSON.stringify({ action }),
       });
-      return response.data.likes;
+      return {
+        likes: response.data.likes,
+        isLiked: response.data.isLiked
+      };
     } catch (error) {
       console.error('Failed to toggle like:', error);
       throw error;

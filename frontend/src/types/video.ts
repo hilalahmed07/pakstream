@@ -31,6 +31,7 @@ export interface Video {
   fileSize: number;
   views: number;
   likes: number;
+  isLiked?: boolean;
   dislikes: number;
   tags: string[];
   category: 'movie' | 'tv-show' | 'documentary' | 'short-film' | 'other';
