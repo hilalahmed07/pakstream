@@ -26,6 +26,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
   const [newMessage, setNewMessage] = useState('');
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const videoRef = useRef<VideoPlayerRef>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasJoinedRef = useRef(false);
@@ -241,32 +242,43 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
 
-  // Auto-play video when ready (triggered after countdown or when premiere starts)
+  // Auto-play video when ready: try muted first (browsers often allow it), then unmute; show "Click to play" if blocked
   useEffect(() => {
     if (isVideoReady && videoRef.current && !autoPlayAttemptedRef.current && premiere.status === 'live') {
       autoPlayAttemptedRef.current = true;
-      
-      // Small delay to ensure video player is fully initialized and HLS is loaded
-      const autoPlayTimer = setTimeout(() => {
+
+      const autoPlayTimer = setTimeout(async () => {
         try {
-          console.log('Auto-playing premiere video...');
+          console.log('Auto-playing premiere video (trying muted first)...');
+          videoRef.current?.setMuted(true);
           const playPromise = videoRef.current?.play() as Promise<void> | undefined;
-          
-          // Handle async play() API
+
           if (playPromise instanceof Promise) {
-            playPromise.then(() => {
-              console.log('✅ Premiere video started playing');
-              socketService.playVideo(premiere._id);
-            }).catch((error: any) => {
-              console.warn('⚠️ Autoplay was prevented:', error.message);
-              // Autoplay might be blocked by browser, wait for user interaction
-            });
+            await playPromise
+              .then(async () => {
+                console.log('✅ Muted autoplay succeeded, unmuting...');
+                videoRef.current?.setMuted(false);
+                const unmutePlay: unknown = videoRef.current?.play();
+                if (unmutePlay instanceof Promise) {
+                  await unmutePlay.then(() => {
+                    console.log('✅ Premiere video started with sound');
+                    socketService.playVideo(premiere._id);
+                  }).catch(() => {
+                    setAutoplayBlocked(true);
+                  });
+                } else {
+                  socketService.playVideo(premiere._id);
+                }
+              })
+              .catch(() => {
+                setAutoplayBlocked(true);
+              });
           } else {
-            // Older browsers without promise support
             socketService.playVideo(premiere._id);
           }
         } catch (error) {
           console.error('Error during autoplay:', error);
+          setAutoplayBlocked(true);
         }
       }, 1500);
 
@@ -400,19 +412,23 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
                 onSeek={handleVideoSeek}
                 ref={videoRef}
               />
-              {/* Play button overlay for when autoplay is blocked */}
-              {!isVideoReady && (
+              {/* Play button overlay for when video is loading or autoplay is blocked */}
+              {(!isVideoReady || autoplayBlocked) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                   <div className="text-center">
                     <button
-                      onClick={() => videoRef.current?.play()}
+                      onClick={() => {
+                        videoRef.current?.setMuted(false);
+                        videoRef.current?.play();
+                        setAutoplayBlocked(false);
+                      }}
                       className="bg-netflix-red hover:bg-red-700 text-white rounded-full p-4 mb-4 transition-colors"
                     >
                       <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
                       </svg>
                     </button>
-                    <p className="text-white text-lg">Click to play</p>
+                    <p className="text-white text-lg">{autoplayBlocked ? 'Click to play (sound on)' : 'Click to play'}</p>
                   </div>
                 </div>
               )}

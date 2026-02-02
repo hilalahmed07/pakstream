@@ -18,9 +18,10 @@ interface VideoPlayerProps {
 }
 
 export interface VideoPlayerRef {
-  play: () => void;
+  play: () => Promise<void> | void;
   pause: () => void;
   seek: (time: number) => void;
+  setMuted: (muted: boolean) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
   isPlaying: () => boolean;
@@ -71,11 +72,15 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
   useImperativeHandle(ref, () => ({
     play: () => {
       if (videoRef.current && !isInitializingRef.current) {
-        videoRef.current.play().catch(err => {
-          console.warn('Play interrupted:', err);
-        });
+        const p = videoRef.current.play();
+        if (p instanceof Promise) {
+          p.catch(err => {
+            console.warn('Play interrupted:', err);
+          });
+        }
         setIsPlaying(true);
         onPlay?.();
+        return p;
       }
     },
     pause: () => {
@@ -90,6 +95,12 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
         videoRef.current.currentTime = time;
         setCurrentTime(time);
         onSeek?.(time);
+      }
+    },
+    setMuted: (muted: boolean) => {
+      if (videoRef.current) {
+        videoRef.current.muted = muted;
+        setIsMuted(muted);
       }
     },
     getCurrentTime: () => currentTime,

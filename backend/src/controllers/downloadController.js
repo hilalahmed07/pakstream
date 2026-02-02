@@ -198,14 +198,64 @@ const getAllDownloads = async (req, res) => {
       if (endDate) query.downloadedAt.$lte = new Date(endDate);
     }
 
-    const downloads = await VideoDownload.find(query)
-      .populate('user', 'username email profile organization contactNumber address')
-      .populate('video', 'title')
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Only return downloads where both user and video still exist (exclude "User deleted" / "Video deleted" rows)
+    const pipeline = [
+      { $match: query },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'userDoc',
+          pipeline: [{ $project: { username: 1, email: 1, profile: 1, organization: 1, contactNumber: 1, address: 1 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: 'videos',
+          localField: 'video',
+          foreignField: '_id',
+          as: 'videoDoc',
+          pipeline: [{ $project: { title: 1 } }]
+        }
+      },
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $gt: [{ $size: '$userDoc' }, 0] },
+              { $gt: [{ $size: '$videoDoc' }, 0] }
+            ]
+          }
+        }
+      },
+      {
+        $facet: {
+          totalBranch: [{ $count: 'total' }],
+          dataBranch: [
+            { $sort: sortOptions },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+              $project: {
+                _id: 1,
+                user: { $arrayElemAt: ['$userDoc', 0] },
+                video: { $arrayElemAt: ['$videoDoc', 0] },
+                downloadedAt: 1,
+                ipAddress: 1,
+                userAgent: 1,
+                createdAt: 1,
+                updatedAt: 1
+              }
+            }
+          ]
+        }
+      }
+    ];
 
-    const total = await VideoDownload.countDocuments(query);
+    const result = await VideoDownload.aggregate(pipeline);
+    const total = result[0]?.totalBranch?.[0]?.total ?? 0;
+    const downloads = result[0]?.dataBranch ?? [];
 
     res.json({
       success: true,

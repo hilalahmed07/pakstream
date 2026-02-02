@@ -42,6 +42,10 @@ const createPremiere = async (req, res) => {
     });
 
     await premiere.save();
+    
+    // Mark video as premiere-only so it stays out of the main "all videos" list
+    await Video.findByIdAndUpdate(videoId, { isForPremiere: true });
+
     await premiere.populate({
       path: 'video',
       select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
@@ -97,6 +101,36 @@ const getActivePremiere = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get active premiere',
+      error: error.message
+    });
+  }
+};
+
+const getPremiereById = async (req, res) => {
+  try {
+    const premiere = await Premiere.findById(req.params.id)
+      .populate({
+        path: 'video',
+        select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
+      })
+      .populate('createdBy', 'username');
+
+    if (!premiere) {
+      return res.status(404).json({
+        success: false,
+        message: 'Premiere not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { premiere }
+    });
+  } catch (error) {
+    console.error('Get premiere by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get premiere',
       error: error.message
     });
   }
@@ -337,6 +371,7 @@ const deletePremiere = async (req, res) => {
 module.exports = {
   createPremiere,
   getActivePremiere,
+  getPremiereById,
   getUpcomingPremieres,
   getAllPremieres,
   joinPremiere,

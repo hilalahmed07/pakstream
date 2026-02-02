@@ -329,21 +329,9 @@ const AdminDownloadDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                  {downloads.map((download) => {
-                    if (!download.user || !download.video) {
-                      return (
-                        <tr key={download._id} className="transition-colors">
-                          <td colSpan={7} className="px-4 py-3 text-sm italic text-center" style={{ color: 'var(--color-text-secondary)' }}>
-                            {!download.user && !download.video 
-                              ? 'User and video deleted' 
-                              : !download.user 
-                              ? 'User deleted' 
-                              : 'Video deleted'}
-                          </td>
-                        </tr>
-                      );
-                    }
-
+                  {downloads
+                    .filter((download) => download.user && download.video)
+                    .map((download) => {
                     const fullName = download.user.profile?.firstName && download.user.profile?.lastName
                       ? `${download.user.profile.firstName} ${download.user.profile.lastName}`
                       : download.user.username;

@@ -49,10 +49,11 @@ const UserHomePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-check premiere when user state changes (e.g., after login)
+  // Re-check premiere and fetch upcoming list when user state changes (e.g., after login)
   useEffect(() => {
     if (user && user.role !== 'admin') {
       checkActivePremiere();
+      fetchUpcomingPremieres();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
