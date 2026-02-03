@@ -37,7 +37,7 @@ class PresentationService {
     search?: string;
   } = {}): Promise<PresentationResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
@@ -45,7 +45,7 @@ class PresentationService {
 
     const queryString = queryParams.toString();
     const endpoint = `/presentations${queryString ? `?${queryString}` : ''}`;
-    
+
     return this.request<PresentationResponse>(endpoint);
   }
 
@@ -63,8 +63,8 @@ class PresentationService {
   ): Promise<{ message: string; presentation: any }> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-    const url = `${API_BASE_URL}/presentations/upload`;
-    const token = localStorage.getItem('token');
+      const url = `${API_BASE_URL}/presentations/upload`;
+      const token = localStorage.getItem('token');
 
       // Track upload progress
       xhr.upload.onprogress = (e) => {
@@ -77,7 +77,7 @@ class PresentationService {
       // Handle completion
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-    try {
+          try {
             const data = JSON.parse(xhr.responseText);
             // Don't set to 100% here - let the component handle the transition
             // Upload phase is 0-90%, processing will be 90-100%
@@ -92,7 +92,7 @@ class PresentationService {
           try {
             const errorData = JSON.parse(xhr.responseText);
             reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
-    } catch (error) {
+          } catch (error) {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
@@ -110,11 +110,11 @@ class PresentationService {
 
       // Open and send request
       xhr.open('POST', url);
-      
+
       // Set authorization header if token exists
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
+      }
 
       // Send request
       xhr.send(formData);
@@ -289,6 +289,50 @@ class PresentationService {
       };
     } catch (error) {
       console.error('Failed to toggle like:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get users who liked a presentation
+   * @param presentationId - Presentation ID
+   * @returns List of users who liked the presentation
+   */
+  async getLikedByUsers(presentationId: string): Promise<{
+    presentationId: string;
+    totalLikes: number;
+    likedBy: Array<{
+      _id: string;
+      username: string;
+      email: string;
+      profile?: {
+        firstName?: string;
+        lastName?: string;
+        avatar?: string;
+      };
+    }>;
+  }> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: {
+          presentationId: string;
+          totalLikes: number;
+          likedBy: Array<{
+            _id: string;
+            username: string;
+            email: string;
+            profile?: {
+              firstName?: string;
+              lastName?: string;
+              avatar?: string;
+            };
+          }>;
+        };
+      }>(`/presentations/${presentationId}/likedby`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
       throw error;
     }
   }

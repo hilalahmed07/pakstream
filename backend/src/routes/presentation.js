@@ -13,7 +13,8 @@ const {
   getPresentationHash,
   verifyPresentationIntegrity,
   trackPresentationView,
-  togglePresentationLike
+  togglePresentationLike,
+  getPresentationLikedByUsers
 } = require('../controllers/presentationController');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/presentationUpload');
@@ -26,6 +27,7 @@ router.get('/:id/slides', getPresentationSlides);
 router.get('/:id/image/:slideNumber', getPresentationImage);
 router.get('/:id/thumbnail', getPresentationThumbnail);
 router.get('/:id/hash', getPresentationHash); // Get presentation hash for manual verification
+router.get('/:id/likedby', getPresentationLikedByUsers); // Get users who liked a presentation
 router.post('/:id/verify', verificationUpload, handleUploadError, verifyPresentationIntegrity); // Verify presentation integrity (public endpoint)
 router.post('/:id/view', trackPresentationView); // Track presentation view
 router.post('/:id/like', authenticateToken, togglePresentationLike); // Toggle presentation like (requires auth)

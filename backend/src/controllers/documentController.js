@@ -553,6 +553,54 @@ const verifyDocumentIntegrity = async (req, res) => {
   }
 };
 
+// Get users who liked a document
+const getDocumentLikedByUsers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const document = await Document.findById(id)
+      .populate({
+        path: 'likedBy',
+        select: 'username email profile',
+        model: 'User'
+      });
+
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Document not found' 
+      });
+    }
+
+    // Filter out any null entries and format the response
+    const likedByUsers = (document.likedBy || [])
+      .filter(user => user !== null)
+      .map(user => ({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        profile: user.profile || {}
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        documentId: id,
+        totalLikes: document.likes || likedByUsers.length,
+        likedBy: likedByUsers
+      }
+    });
+
+  } catch (error) {
+    console.error('Get liked by users error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch liked by users', 
+      error: error.message 
+    });
+  }
+};
+
 module.exports = {
   uploadDocument,
   getDocuments,
@@ -565,6 +613,7 @@ module.exports = {
   getDocumentHash,
   verifyDocumentIntegrity,
   trackDocumentView,
-  toggleDocumentLike
+  toggleDocumentLike,
+  getDocumentLikedByUsers
 };
 

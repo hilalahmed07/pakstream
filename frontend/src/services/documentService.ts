@@ -37,7 +37,7 @@ class DocumentService {
     search?: string;
   } = {}): Promise<DocumentsResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
@@ -45,7 +45,7 @@ class DocumentService {
 
     const queryString = queryParams.toString();
     const endpoint = `/documents${queryString ? `?${queryString}` : ''}`;
-    
+
     return this.request<DocumentsResponse>(endpoint);
   }
 
@@ -54,17 +54,17 @@ class DocumentService {
   }
 
   async uploadDocument(
-    file: File, 
+    file: File,
     uploadData: DocumentUploadData,
     onProgress?: (progress: number) => void
   ): Promise<{ message: string; document: any }> {
     return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append('document', file);
-    formData.append('title', uploadData.title);
-    formData.append('description', uploadData.description);
-    formData.append('category', uploadData.category);
-    formData.append('tags', uploadData.tags);
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('title', uploadData.title);
+      formData.append('description', uploadData.description);
+      formData.append('category', uploadData.category);
+      formData.append('tags', uploadData.tags);
 
       const xhr = new XMLHttpRequest();
       const url = `${API_BASE_URL}/documents/upload`;
@@ -81,7 +81,7 @@ class DocumentService {
       // Handle completion
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-    try {
+          try {
             const data = JSON.parse(xhr.responseText);
             // Don't set to 100% here - let the component handle the transition
             // Upload phase is 0-90%, processing will be 90-100%
@@ -96,7 +96,7 @@ class DocumentService {
           try {
             const errorData = JSON.parse(xhr.responseText);
             reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
-    } catch (error) {
+          } catch (error) {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
@@ -114,11 +114,11 @@ class DocumentService {
 
       // Open and send request
       xhr.open('POST', url);
-      
+
       // Set authorization header if token exists
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
+      }
 
       // Send request
       xhr.send(formData);
@@ -293,6 +293,50 @@ class DocumentService {
       };
     } catch (error) {
       console.error('Failed to toggle like:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get users who liked a document
+   * @param documentId - Document ID
+   * @returns List of users who liked the document
+   */
+  async getLikedByUsers(documentId: string): Promise<{
+    documentId: string;
+    totalLikes: number;
+    likedBy: Array<{
+      _id: string;
+      username: string;
+      email: string;
+      profile?: {
+        firstName?: string;
+        lastName?: string;
+        avatar?: string;
+      };
+    }>;
+  }> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: {
+          documentId: string;
+          totalLikes: number;
+          likedBy: Array<{
+            _id: string;
+            username: string;
+            email: string;
+            profile?: {
+              firstName?: string;
+              lastName?: string;
+              avatar?: string;
+            };
+          }>;
+        };
+      }>(`/documents/${documentId}/likedby`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
       throw error;
     }
   }

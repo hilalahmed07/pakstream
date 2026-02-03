@@ -12,7 +12,8 @@ const {
   getDocumentHash,
   verifyDocumentIntegrity,
   trackDocumentView,
-  toggleDocumentLike
+  toggleDocumentLike,
+  getDocumentLikedByUsers
 } = require('../controllers/documentController');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/documentUpload');
@@ -24,6 +25,7 @@ router.get('/:id', optionalAuth, getDocumentById);
 router.get('/:id/file', getDocumentFile);
 router.get('/:id/thumbnail', getDocumentThumbnail);
 router.get('/:id/hash', getDocumentHash); // Get document hash for manual verification
+router.get('/:id/likedby', getDocumentLikedByUsers); // Get users who liked a document
 router.post('/:id/verify', verificationUpload, handleUploadError, verifyDocumentIntegrity); // Verify document integrity (public endpoint)
 router.post('/:id/view', trackDocumentView); // Track document view
 router.post('/:id/like', authenticateToken, toggleDocumentLike); // Toggle document like (requires auth)

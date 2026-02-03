@@ -85,11 +85,11 @@ const getPresentations = async (req, res) => {
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
-    
+
     if (category && category !== 'all') {
       query.category = category;
     }
-    
+
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -139,7 +139,7 @@ const getPresentations = async (req, res) => {
 const getPresentationById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id)
       .populate('uploadedBy', 'username email');
 
@@ -171,7 +171,7 @@ const trackPresentationView = async (req, res) => {
   try {
     const { id } = req.params;
     const { sessionId } = req.query; // Session ID to prevent duplicate tracking
-    
+
     const presentation = await Presentation.findById(id);
     if (!presentation) {
       return res.status(404).json({ success: false, message: 'Presentation not found' });
@@ -180,7 +180,7 @@ const trackPresentationView = async (req, res) => {
     // Check if view was already tracked in this session (prevent duplicate on refresh)
     // Note: This is a simple check. For production, consider using Redis or a ViewTracking collection
     // For now, we rely on frontend sessionStorage to prevent duplicate calls
-    
+
     // Increment view count atomically
     const updated = await Presentation.findByIdAndUpdate(
       id,
@@ -213,11 +213,11 @@ const togglePresentationLike = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
-    
+
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    
+
     const presentation = await Presentation.findById(id);
     if (!presentation) {
       return res.status(404).json({ success: false, message: 'Presentation not found' });
@@ -260,8 +260,8 @@ const togglePresentationLike = async (req, res) => {
 
     await Presentation.findByIdAndUpdate(
       id,
-      { 
-        $set: { 
+      {
+        $set: {
           likes: newLikes,
           likedBy: presentation.likedBy
         }
@@ -292,9 +292,9 @@ const togglePresentationLike = async (req, res) => {
 const getPresentationSlides = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -315,21 +315,21 @@ const getPresentationSlides = async (req, res) => {
 const getPresentationImage = async (req, res) => {
   try {
     const { id, slideNumber } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
 
     const slide = presentation.slides.find(s => s.slideNumber === parseInt(slideNumber));
-    
+
     if (!slide) {
       return res.status(404).json({ message: 'Slide not found' });
     }
 
     const imagePath = path.join(__dirname, '../../uploads', slide.imagePath);
-    
+
     if (!fs.existsSync(imagePath)) {
       return res.status(404).json({ message: 'Image file not found' });
     }
@@ -346,9 +346,9 @@ const getPresentationImage = async (req, res) => {
 const getPresentationThumbnail = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -358,7 +358,7 @@ const getPresentationThumbnail = async (req, res) => {
     }
 
     const thumbnailPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
-    
+
     if (!fs.existsSync(thumbnailPath)) {
       return res.status(404).json({ message: 'Thumbnail file not found' });
     }
@@ -390,9 +390,9 @@ const getAdminPresentations = async (req, res) => {
 const deletePresentation = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -422,13 +422,13 @@ const updatePresentation = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, tags, isPublic } = req.body;
-    
+
     const presentation = await Presentation.findByIdAndUpdate(
       id,
-      { 
-        title, 
-        description, 
-        category, 
+      {
+        title,
+        description,
+        category,
         tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
         isPublic,
         updatedAt: new Date()
@@ -512,7 +512,7 @@ const verifyPresentationIntegrity = async (req, res) => {
 
     // Check if file was uploaded or hash string was provided
     let providedHash = null;
-    
+
     if (req.file) {
       // File was uploaded, calculate its hash
       try {
@@ -554,8 +554,8 @@ const verifyPresentationIntegrity = async (req, res) => {
         verified: matches,
         providedHash: providedHash,
         storedHash: storedHash,
-        message: matches 
-          ? 'Presentation integrity verified. The file matches the original.' 
+        message: matches
+          ? 'Presentation integrity verified. The file matches the original.'
           : 'Presentation integrity check failed. The file does not match the original and may have been tampered with.',
         verifiedAt: new Date().toISOString()
       }
@@ -565,6 +565,54 @@ const verifyPresentationIntegrity = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to verify presentation integrity',
+      error: error.message
+    });
+  }
+};
+
+// Get users who liked a presentation
+const getPresentationLikedByUsers = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const presentation = await Presentation.findById(id)
+      .populate({
+        path: 'likedBy',
+        select: 'username email profile',
+        model: 'User'
+      });
+
+    if (!presentation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Presentation not found'
+      });
+    }
+
+    // Filter out any null entries and format the response
+    const likedByUsers = (presentation.likedBy || [])
+      .filter(user => user !== null)
+      .map(user => ({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        profile: user.profile || {}
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        presentationId: id,
+        totalLikes: presentation.likes || likedByUsers.length,
+        likedBy: likedByUsers
+      }
+    });
+
+  } catch (error) {
+    console.error('Get liked by users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch liked by users',
       error: error.message
     });
   }
@@ -583,5 +631,6 @@ module.exports = {
   getPresentationHash,
   verifyPresentationIntegrity,
   trackPresentationView,
-  togglePresentationLike
+  togglePresentationLike,
+  getPresentationLikedByUsers
 };

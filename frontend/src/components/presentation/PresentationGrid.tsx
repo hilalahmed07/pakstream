@@ -1,14 +1,33 @@
 import React, { useState } from 'react';
 import { Presentation } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
+import LikesModal from '../common/LikesModal';
 
 interface PresentationGridProps {
   presentations: Presentation[];
   onPresentationClick: (presentation: Presentation) => void;
 }
 
+interface LikeUser {
+  _id: string;
+  username: string;
+  email: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+}
+
 const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
   const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{
+    title: string;
+    totalLikes: number;
+    likedBy: LikeUser[];
+  }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Initialize local state from presentations when they change
   React.useEffect(() => {
@@ -61,6 +80,25 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
       console.error('Failed to toggle like:', error);
     }
   };
+
+  const handleLikesCountClick = async (e: React.MouseEvent, presentation: Presentation) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    setLoadingLikes(true);
+    try {
+      const result = await presentationService.getLikedByUsers(presentation._id);
+      setLikesModalData({
+        title: presentation.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+    } finally {
+      setLoadingLikes(false);
+    }
+  };
   const getCategoryColor = (category: string) => {
     const colors = {
       business: 'bg-blue-600',
@@ -84,6 +122,7 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
   }
 
   return (
+    <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {presentations.map((presentation) => {
         const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
@@ -180,14 +219,23 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
                     title={local.isLiked ? 'Unlike' : 'Like'}
                   >
                     <svg 
-                      className={`w-4 h-4 mr-1 ${local.isLiked ? 'fill-current' : ''}`} 
+                      className={`w-4 h-4 ${local.isLiked ? 'fill-current' : ''}`} 
                       fill={local.isLiked ? 'currentColor' : 'none'} 
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
-                    {local.likes}
+                  </button>
+                  <button
+                    onClick={(e) => handleLikesCountClick(e, presentation)}
+                    className={`ml-1 transition-colors cursor-pointer hover:underline ${
+                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
+                    }`}
+                    title="View who liked this"
+                    disabled={loadingLikes}
+                  >
+                    {loadingLikes ? '...' : local.likes}
                   </button>
                 </div>
                 
@@ -220,6 +268,17 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
         );
       })}
     </div>
+
+      {/* Likes Modal */}
+      <LikesModal
+        isOpen={likesModalOpen}
+        title={likesModalData.title}
+        totalLikes={likesModalData.totalLikes}
+        likedBy={likesModalData.likedBy}
+        contentType="presentation"
+        onClose={() => setLikesModalOpen(false)}
+      />
+    </>
   );
 };
 
