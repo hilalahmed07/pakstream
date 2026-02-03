@@ -1,10 +1,10 @@
-# Airgapped Native Deployment Guide (Without Docker)
+﻿# Airgapped Native Deployment Guide (Without Docker)
 
 Complete step-by-step guide for deploying PakStream on an airgapped system without Docker.
 
 ---
 
-## 📋 Table of Contents
+## ≡ƒôï Table of Contents
 
 1. [Prerequisites (Prepare on Internet-Connected Machine)](#prerequisites-prepare-on-internet-connected-machine)
 2. [Installation on Airgapped Machine](#installation-on-airgapped-machine)
@@ -1017,27 +1017,27 @@ echo "=== PakStream Health Check ==="
 echo ""
 
 echo "MongoDB:"
-sudo systemctl is-active mongod && echo "✓ Running" || echo "✗ Not running"
+sudo systemctl is-active mongod && echo "Γ£ô Running" || echo "Γ£ù Not running"
 
 echo ""
 echo "MinIO:"
-sudo systemctl is-active minio && echo "✓ Running" || echo "✗ Not running"
+sudo systemctl is-active minio && echo "Γ£ô Running" || echo "Γ£ù Not running"
 
 echo ""
 echo "Backend:"
-sudo systemctl is-active pakstream-backend && echo "✓ Running" || echo "✗ Not running"
+sudo systemctl is-active pakstream-backend && echo "Γ£ô Running" || echo "Γ£ù Not running"
 
 echo ""
 echo "Nginx:"
-sudo systemctl is-active nginx && echo "✓ Running" || echo "✗ Not running"
+sudo systemctl is-active nginx && echo "Γ£ô Running" || echo "Γ£ù Not running"
 
 echo ""
 echo "API Test:"
-curl -s http://localhost:5000/api/videos > /dev/null && echo "✓ API responding" || echo "✗ API not responding"
+curl -s http://localhost:5000/api/videos > /dev/null && echo "Γ£ô API responding" || echo "Γ£ù API not responding"
 
 echo ""
 echo "Frontend Test:"
-curl -s http://localhost/ > /dev/null && echo "✓ Frontend accessible" || echo "✗ Frontend not accessible"
+curl -s http://localhost/ > /dev/null && echo "Γ£ô Frontend accessible" || echo "Γ£ù Frontend not accessible"
 EOF
 
 sudo chmod +x /usr/local/bin/pakstream-health.sh
@@ -1052,14 +1052,14 @@ sudo chmod +x /usr/local/bin/pakstream-health.sh
 
 This guide provides a complete native deployment solution for PakStream in an airgapped environment without Docker. The deployment includes:
 
-✅ **Node.js Runtime** (v20.19.2)  
-✅ **MongoDB Database** (v7.0)  
-✅ **MinIO Object Storage**  
-✅ **FFmpeg** for video processing  
-✅ **LibreOffice** for presentations  
-✅ **Nginx** web server  
-✅ **Systemd services** for auto-start  
-✅ **Complete airgapped deployment** (no internet required)
+Γ£à **Node.js Runtime** (v20.19.2)  
+Γ£à **MongoDB Database** (v7.0)  
+Γ£à **MinIO Object Storage**  
+Γ£à **FFmpeg** for video processing  
+Γ£à **LibreOffice** for presentations  
+Γ£à **Nginx** web server  
+Γ£à **Systemd services** for auto-start  
+Γ£à **Complete airgapped deployment** (no internet required)
 
 All services run as native system services and start automatically on boot.
 

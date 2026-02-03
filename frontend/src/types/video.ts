@@ -31,11 +31,13 @@ export interface Video {
   fileSize: number;
   views: number;
   likes: number;
+  isLiked?: boolean;
   dislikes: number;
   tags: string[];
   category: 'movie' | 'tv-show' | 'documentary' | 'short-film' | 'other';
   isPublic: boolean;
   isFeatured: boolean;
+  isForPremiere?: boolean;
   sha256Hash?: string;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +55,7 @@ export interface VideoUploadData {
   description: string;
   category: string;
   tags: string;
+  isForPremiere?: boolean;
 }
 
 export interface VideoResponse {

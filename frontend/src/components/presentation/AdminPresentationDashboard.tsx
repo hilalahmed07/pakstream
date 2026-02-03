@@ -3,8 +3,11 @@ import { Presentation, CreatePresentationData } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import PresentationVerificationModal from './PresentationVerificationModal';
 import ProtectedRoute from '../ProtectedRoute';
+import { useNotification } from '../../contexts/NotificationContext';
+import ConfirmationDialog from '../common/ConfirmationDialog';
 
 const AdminPresentationDashboard: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [activeTab, setActiveTab] = useState<'presentations' | 'verification'>('presentations');
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +17,10 @@ const AdminPresentationDashboard: React.FC = () => {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [presentationToVerify, setPresentationToVerify] = useState<Presentation | null>(null);
   const [verificationSearch, setVerificationSearch] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; presentationId: string | null }>({
+    isOpen: false,
+    presentationId: null,
+  });
 
   useEffect(() => {
     fetchPresentations();
@@ -92,20 +99,26 @@ const AdminPresentationDashboard: React.FC = () => {
       console.error('Upload failed:', error);
       setUploading(false);
       setUploadProgress(0);
-      alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      showError('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this presentation?')) {
-      return;
-    }
+    setDeleteConfirm({ isOpen: true, presentationId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.presentationId) return;
 
     try {
-      await presentationService.deletePresentation(id);
+      await presentationService.deletePresentation(deleteConfirm.presentationId);
+      showSuccess('Presentation has been deleted');
       fetchPresentations();
+      setDeleteConfirm({ isOpen: false, presentationId: null });
     } catch (error) {
       console.error('Delete failed:', error);
+      showError('Failed to delete presentation: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setDeleteConfirm({ isOpen: false, presentationId: null });
     }
   };
 
@@ -490,6 +503,18 @@ const AdminPresentationDashboard: React.FC = () => {
               presentation={presentationToVerify}
             />
           )}
+
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            isOpen={deleteConfirm.isOpen}
+            title="Delete Presentation"
+            message="Are you sure you want to delete this presentation? This action cannot be undone."
+            confirmText="Delete"
+            cancelText="Cancel"
+            type="danger"
+            onConfirm={confirmDelete}
+            onCancel={() => setDeleteConfirm({ isOpen: false, presentationId: null })}
+          />
         </div>
       </div>
     </ProtectedRoute>
@@ -504,6 +529,7 @@ interface PresentationUploadModalProps {
 }
 
 const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload, uploading = false }) => {
+  const { showWarning } = useNotification();
   const [formData, setFormData] = useState<CreatePresentationData>({
     title: '',
     description: '',
@@ -517,7 +543,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
     e.preventDefault();
     
     if (!selectedFile) {
-      alert('Please select a presentation file');
+      showWarning('Please select a presentation file');
       return;
     }
 

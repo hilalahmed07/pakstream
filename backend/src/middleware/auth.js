@@ -68,8 +68,35 @@ const requireAdminOrOwner = (req, res, next) => {
   });
 };
 
+// Optional authentication - doesn't fail if no token, but sets req.user if token is valid
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId).select('-password');
+        
+        if (user && user.isActive) {
+          req.user = user;
+        }
+      } catch (error) {
+        // Invalid token, but continue without user
+        // Don't set req.user, just continue
+      }
+    }
+    next();
+  } catch (error) {
+    // Continue without user on any error
+    next();
+  }
+};
+
 module.exports = {
   authenticateToken,
   requireAdmin,
-  requireAdminOrOwner
+  requireAdminOrOwner,
+  optionalAuth
 };

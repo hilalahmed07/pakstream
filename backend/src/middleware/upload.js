@@ -58,7 +58,7 @@ const fileFilter = (req, file, cb) => {
     'video/webm',
     'video/mkv',
     'video/3gp',
-    'application/octet-stream' // Allow this for MP4 files
+    'application/octet-stream'
   ];
   
   const allowedExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.3gp'];

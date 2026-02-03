@@ -50,6 +50,22 @@
   --color-accent-text: #01411C;
 }
 
+/* Maritime Horizon Theme */
+[data-theme="maritimeHorizon"] {
+  --color-primary: #0A1929;
+  --color-secondary: #1E3A5F;
+  --color-accent: #00B4D8;
+  --color-text: #FFFFFF;
+  --color-text-secondary: #B8D4E3;
+  --color-border: #2E5A7F;
+  --color-hover: #153047;
+  --color-card: #0F2338;
+  --color-card-hover: #1A2F47;
+  --color-button-bg: #1E3A5F;
+  --color-button-text: #FFFFFF;
+  --color-accent-text: #0A1929;
+}
+
 @layer base {
   body {
     @apply bg-primary text-text-primary font-sans;
@@ -218,4 +234,24 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Toast Animations */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
 }

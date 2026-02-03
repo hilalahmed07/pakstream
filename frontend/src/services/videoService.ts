@@ -44,6 +44,9 @@ class VideoService {
       formData.append('description', uploadData.description);
       formData.append('category', uploadData.category);
       formData.append('tags', uploadData.tags);
+      if (uploadData.isForPremiere !== undefined) {
+        formData.append('isForPremiere', uploadData.isForPremiere.toString());
+      }
 
       const xhr = new XMLHttpRequest();
       const url = `${API_BASE_URL}/videos/upload`;
@@ -257,14 +260,13 @@ class VideoService {
   }
 
   /**
-   * Track video view
+   * Track video view (only once per session)
    * @param videoId - Video ID
-   * @param viewType - 'start' for playback start, 'watch30' for 30 seconds watched
    */
-  async trackVideoView(videoId: string, viewType: 'start' | 'watch30'): Promise<void> {
+  async trackVideoView(videoId: string): Promise<void> {
     try {
       // Make POST request to track view (no auth needed, public endpoint)
-      await fetch(`${API_BASE_URL}/videos/${videoId}/view?type=${viewType}`, {
+      await fetch(`${API_BASE_URL}/videos/${videoId}/view`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,6 +279,39 @@ class VideoService {
       // Silently handle errors - don't interrupt video playback
       console.warn('Failed to track video view:', error);
     }
+  }
+
+  /**
+   * Toggle video like
+   * @param videoId - Video ID
+   * @param action - 'like' or 'unlike'
+   * @returns Updated likes count and isLiked status
+   */
+  async toggleLike(videoId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/videos/${videoId}/like`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to toggle like');
+    }
+
+    const result = await response.json();
+    return {
+      likes: result.data.likes,
+      isLiked: result.data.isLiked
+    };
   }
 
   /**

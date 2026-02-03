@@ -69,9 +69,19 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, o
     };
   }, [isPlaying, slides.length]);
 
-  // Load slides
+  // Load slides and track view
   useEffect(() => {
     loadSlides();
+    // Track view when presentation is opened (only once per session)
+    const sessionKey = `presentation_view_${presentation._id}`;
+    const hasTracked = sessionStorage.getItem(sessionKey);
+    
+    if (!hasTracked) {
+      presentationService.trackView(presentation._id).catch(err => {
+        console.warn('Failed to track view:', err);
+      });
+      sessionStorage.setItem(sessionKey, 'true');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -37,7 +37,7 @@ class DocumentService {
     search?: string;
   } = {}): Promise<DocumentsResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
@@ -45,7 +45,7 @@ class DocumentService {
 
     const queryString = queryParams.toString();
     const endpoint = `/documents${queryString ? `?${queryString}` : ''}`;
-    
+
     return this.request<DocumentsResponse>(endpoint);
   }
 
@@ -54,17 +54,17 @@ class DocumentService {
   }
 
   async uploadDocument(
-    file: File, 
+    file: File,
     uploadData: DocumentUploadData,
     onProgress?: (progress: number) => void
   ): Promise<{ message: string; document: any }> {
     return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append('document', file);
-    formData.append('title', uploadData.title);
-    formData.append('description', uploadData.description);
-    formData.append('category', uploadData.category);
-    formData.append('tags', uploadData.tags);
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('title', uploadData.title);
+      formData.append('description', uploadData.description);
+      formData.append('category', uploadData.category);
+      formData.append('tags', uploadData.tags);
 
       const xhr = new XMLHttpRequest();
       const url = `${API_BASE_URL}/documents/upload`;
@@ -81,7 +81,7 @@ class DocumentService {
       // Handle completion
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-    try {
+          try {
             const data = JSON.parse(xhr.responseText);
             // Don't set to 100% here - let the component handle the transition
             // Upload phase is 0-90%, processing will be 90-100%
@@ -96,7 +96,7 @@ class DocumentService {
           try {
             const errorData = JSON.parse(xhr.responseText);
             reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
-    } catch (error) {
+          } catch (error) {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
@@ -114,11 +114,11 @@ class DocumentService {
 
       // Open and send request
       xhr.open('POST', url);
-      
+
       // Set authorization header if token exists
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
+      }
 
       // Send request
       xhr.send(formData);
@@ -183,16 +183,16 @@ class DocumentService {
   }
 
   /**
-   * Verify document integrity by uploading a file or providing a hash
+   * Verify document integrity by providing a hash or file
    * @param documentId - Document ID
-   * @param file - Optional document file to verify
-   * @param hash - Optional hash string to verify
+   * @param hash - Hash string to verify (optional if file is provided)
+   * @param file - File to verify (optional if hash is provided)
    * @returns Verification result
    */
   async verifyDocumentIntegrity(
     documentId: string,
-    file?: File,
-    hash?: string
+    hash?: string,
+    file?: File
   ): Promise<{
     success: boolean;
     data: {
@@ -205,26 +205,29 @@ class DocumentService {
       verifiedAt: string;
     };
   }> {
+    const url = `${API_BASE_URL}/documents/${documentId}/verify`;
+    const token = localStorage.getItem('token');
+
     if (file) {
-      // Upload file for verification
+      // Upload file for server-side hash calculation
       const formData = new FormData();
       formData.append('document', file);
 
-      return this.request<{
-        success: boolean;
-        data: {
-          documentId: string;
-          title: string;
-          verified: boolean;
-          providedHash: string;
-          storedHash: string;
-          message: string;
-          verifiedAt: string;
-        };
-      }>(`/documents/${documentId}/verify`, {
+      const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: formData,
       });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Verification failed');
+      }
+
+      return data;
     } else if (hash) {
       // Send hash string for verification
       return this.request<{
@@ -246,7 +249,95 @@ class DocumentService {
         body: JSON.stringify({ hash }),
       });
     } else {
-      throw new Error('Either file or hash must be provided');
+      throw new Error('Either hash or file must be provided');
+    }
+  }
+
+  /**
+   * Track document view
+   * @param documentId - Document ID
+   */
+  async trackView(documentId: string): Promise<void> {
+    try {
+      await fetch(`${API_BASE_URL}/documents/${documentId}/view`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(err => {
+        console.warn('Failed to track document view:', err);
+      });
+    } catch (error) {
+      console.warn('Failed to track document view:', error);
+    }
+  }
+
+  /**
+   * Toggle document like
+   * @param documentId - Document ID
+   * @param action - 'like' or 'unlike'
+   * @returns Updated likes count and isLiked status
+   */
+  async toggleLike(documentId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: { documentId: string; likes: number; isLiked: boolean };
+      }>(`/documents/${documentId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      return {
+        likes: response.data.likes,
+        isLiked: response.data.isLiked
+      };
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get users who liked a document
+   * @param documentId - Document ID
+   * @returns List of users who liked the document
+   */
+  async getLikedByUsers(documentId: string): Promise<{
+    documentId: string;
+    totalLikes: number;
+    likedBy: Array<{
+      _id: string;
+      username: string;
+      email: string;
+      profile?: {
+        firstName?: string;
+        lastName?: string;
+        avatar?: string;
+      };
+    }>;
+  }> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: {
+          documentId: string;
+          totalLikes: number;
+          likedBy: Array<{
+            _id: string;
+            username: string;
+            email: string;
+            profile?: {
+              firstName?: string;
+              lastName?: string;
+              avatar?: string;
+            };
+          }>;
+        };
+      }>(`/documents/${documentId}/likedby`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      throw error;
     }
   }
 }

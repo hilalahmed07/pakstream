@@ -11,3 +11,8 @@ venv/
 # Windows Zone.Identifier files
 *Zone.Identifier
 
+offline-packages/
+pakstream-offline-packages.iso
+pakstream-verification-update.iso
+pakstream-verification-update/
+system-packages.tar.gz

@@ -10,19 +10,25 @@ const {
   deleteDocument,
   updateDocument,
   getDocumentHash,
-  verifyDocumentIntegrity
+  verifyDocumentIntegrity,
+  trackDocumentView,
+  toggleDocumentLike,
+  getDocumentLikedByUsers
 } = require('../controllers/documentController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/documentUpload');
-const { verificationUpload } = require('../middleware/documentUpload');
+const { verificationUpload, handleUploadError } = require('../middleware/documentUpload');
 
-// Public routes
-router.get('/', getDocuments);
-router.get('/:id', getDocumentById);
+// Public routes (with optional auth to get user like status)
+router.get('/', optionalAuth, getDocuments);
+router.get('/:id', optionalAuth, getDocumentById);
 router.get('/:id/file', getDocumentFile);
 router.get('/:id/thumbnail', getDocumentThumbnail);
 router.get('/:id/hash', getDocumentHash); // Get document hash for manual verification
-router.post('/:id/verify', verificationUpload, verifyDocumentIntegrity); // Verify document integrity (public endpoint)
+router.get('/:id/likedby', getDocumentLikedByUsers); // Get users who liked a document
+router.post('/:id/verify', verificationUpload, handleUploadError, verifyDocumentIntegrity); // Verify document integrity (public endpoint)
+router.post('/:id/view', trackDocumentView); // Track document view
+router.post('/:id/like', authenticateToken, toggleDocumentLike); // Toggle document like (requires auth)
 
 // Admin routes
 router.post('/upload', authenticateToken, requireAdmin, upload.single('document'), uploadDocument);

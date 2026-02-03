@@ -42,6 +42,10 @@ const createPremiere = async (req, res) => {
     });
 
     await premiere.save();
+    
+    // Mark video as premiere-only so it stays out of the main "all videos" list
+    await Video.findByIdAndUpdate(videoId, { isForPremiere: true });
+
     await premiere.populate({
       path: 'video',
       select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
@@ -102,15 +106,45 @@ const getActivePremiere = async (req, res) => {
   }
 };
 
+const getPremiereById = async (req, res) => {
+  try {
+    const premiere = await Premiere.findById(req.params.id)
+      .populate({
+        path: 'video',
+        select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
+      })
+      .populate('createdBy', 'username');
+
+    if (!premiere) {
+      return res.status(404).json({
+        success: false,
+        message: 'Premiere not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { premiere }
+    });
+  } catch (error) {
+    console.error('Get premiere by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get premiere',
+      error: error.message
+    });
+  }
+};
+
 const getUpcomingPremieres = async (req, res) => {
   try {
     const now = new Date();
     
-    // Get scheduled premieres that haven't started yet, sorted by start time
+    // Get scheduled premieres and live premieres, sorted by start time
     const premieres = await Premiere.find({
-      status: 'scheduled',
+      status: { $in: ['scheduled', 'live'] },
       isActive: true,
-      startTime: { $gt: now } // Only future premieres
+      startTime: { $lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) } // Within 7 days
     })
       .populate({
         path: 'video',
@@ -337,6 +371,7 @@ const deletePremiere = async (req, res) => {
 module.exports = {
   createPremiere,
   getActivePremiere,
+  getPremiereById,
   getUpcomingPremieres,
   getAllPremieres,
   joinPremiere,

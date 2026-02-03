@@ -13,11 +13,12 @@ const {
   getVideoStatus,
   getQueueStatus,
   trackVideoView,
+  toggleVideoLike,
   downloadVideo,
   getVideoHash,
   verifyVideoIntegrity
 } = require('../controllers/videoController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { upload, verificationUpload, handleUploadError } = require('../middleware/upload');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
@@ -74,14 +75,15 @@ function isOriginAllowed(origin, allowedOrigins) {
   return false;
 }
 
-// Public routes
-router.get('/', getVideos);
-router.get('/featured/list', getFeaturedVideos); // Must come before /:id route
+// Public routes (with optional auth to get user like status)
+router.get('/', optionalAuth, getVideos);
+router.get('/featured/list', optionalAuth, getFeaturedVideos); // Must come before /:id route
 router.get('/queue/status', getQueueStatus); // Get processing queue status
-router.get('/:id', getVideoById);
+router.get('/:id', optionalAuth, getVideoById);
 router.get('/:id/status', getVideoStatus);
 router.get('/:id/hash', getVideoHash); // Get video hash for manual verification
 router.post('/:id/view', trackVideoView); // Track video view (public endpoint)
+router.post('/:id/like', authenticateToken, toggleVideoLike); // Toggle video like (requires auth)
 router.post('/:id/verify', verificationUpload, handleUploadError, verifyVideoIntegrity); // Verify video integrity (public endpoint)
 
 // Protected download route (requires authentication)
@@ -91,10 +93,32 @@ router.get('/:id/download', authenticateToken, downloadVideo);
 router.get('/:id/original', async (req, res) => {
   try {
     const Video = require('../models/Video');
+    const Premiere = require('../models/Premiere');
     const video = await Video.findById(req.params.id);
     
     if (!video || !video.originalFile) {
       return res.status(404).json({ message: 'Video not found' });
+    }
+
+    // Check if video is part of a premiere and restrict access if needed
+    const premiere = await Premiere.findOne({
+      video: req.params.id,
+      status: { $in: ['scheduled', 'live'] },
+      isActive: true
+    });
+
+    if (premiere) {
+      // Admins can always access
+      const isAdmin = req.user && req.user.role === 'admin';
+      
+      if (!isAdmin) {
+        // If premiere is scheduled and hasn't started, deny access
+        if (premiere.status === 'scheduled' && premiere.startTime > new Date()) {
+          return res.status(403).json({ 
+            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.' 
+          });
+        }
+      }
     }
 
     // Determine object name in storage
@@ -238,6 +262,29 @@ router.get('/:id/hls/*', async (req, res) => {
     
     if (!video) {
       return res.status(404).json({ message: 'Video not found' });
+    }
+
+    // Check if video is part of a premiere and restrict access if needed
+    // Note: We check the DB directly here instead of cache to ensure we have latest premiere status
+    const Premiere = require('../models/Premiere');
+    const premiere = await Premiere.findOne({
+      video: req.params.id,
+      status: { $in: ['scheduled', 'live'] },
+      isActive: true
+    });
+
+    if (premiere) {
+      // Admins can always access
+      const isAdmin = req.user && req.user.role === 'admin';
+      
+      if (!isAdmin) {
+        // If premiere is scheduled and hasn't started, deny access
+        if (premiere.status === 'scheduled' && premiere.startTime > new Date()) {
+          return res.status(403).json({ 
+            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.' 
+          });
+        }
+      }
     }
 
     const requestedFile = req.params[0]; // The * part of the route

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Premiere } from '../../types/premiere';
 import premiereService from '../../services/premiereService';
+import { formatVideoDuration } from '../../utils/videoUtils';
 
 interface PremiereGridProps {
   premieres: Premiere[];
@@ -120,7 +121,7 @@ const PremiereGrid: React.FC<PremiereGridProps> = ({ premieres, loading }) => {
             {premiere.video?.duration && (
               <div className="absolute top-3 right-3">
                 <span className="bg-black bg-opacity-75 text-white px-2 py-1 rounded text-xs font-semibold">
-                  {Math.floor(premiere.video.duration / 60)}:{(premiere.video.duration % 60).toString().padStart(2, '0')}
+                  {formatVideoDuration(premiere.video.duration)}
                 </span>
               </div>
             )}

@@ -1,270 +1,520 @@
-# Airgapped Deployment Guide
+# PakStream - Air-Gapped Windows Deployment Guide
 
-This guide explains how to deploy PakStream in an airgapped (offline) environment without internet connectivity.
+This guide provides complete instructions for deploying PakStream on a **fully air-gapped Windows machine** using Docker Desktop.
 
-## Overview
+## Table of Contents
 
-PakStream has been configured to work in airgapped environments by:
-1. Removing internet dependencies (ffmpeg-static replaced with system FFmpeg)
-2. Supporting MinIO object storage (runs in Docker, no internet needed)
-3. Using Docker for containerized deployment
-4. Allowing offline npm package installation
+1. [Prerequisites](#prerequisites)
+2. [Phase 1: Online Build (Internet-Connected Machine)](#phase-1-online-build-internet-connected-machine)
+3. [Phase 2: Offline Docker Desktop Installation (Windows)](#phase-2-offline-docker-desktop-installation-windows)
+4. [Phase 3: Image Export and Transfer](#phase-3-image-export-and-transfer)
+5. [Phase 4: Air-Gapped Installation and Run](#phase-4-air-gapped-installation-and-run)
+6. [Verification and Troubleshooting](#verification-and-troubleshooting)
+
+---
 
 ## Prerequisites
 
-Before deploying in an airgapped environment, you need to:
+### On Internet-Connected Machine:
+- Docker Desktop installed (Windows, macOS, or Linux)
+- Git (to clone repository)
+- Sufficient disk space (~5GB for images)
+- USB drive (minimum 8GB, recommended 16GB+)
 
-1. **Prepare Docker images** (on a machine with internet):
-   - Pull base images: `node:18-slim`, `mongo:7.0`, `minio/minio:latest`, `nginx:alpine`
-   - Build application images: `docker-compose build`
-   - Save images: `docker save -o pakstream-images.tar $(docker-compose config | grep image | awk '{print $2}')`
+### On Air-Gapped Windows Machine:
+- Windows 10/11 (64-bit)
+- Administrator access
+- Minimum 8GB RAM (16GB recommended)
+- Hyper-V or WSL2 enabled (required for Docker Desktop)
+- USB port for file transfer
 
-2. **Prepare npm packages** (on a machine with internet):
-   - Run `npm ci` in both `backend/` and `frontend/` directories
-   - Copy `node_modules` directories to airgapped machine
+---
 
-3. **Transfer to airgapped machine**:
-   - Docker images tar file
-   - Source code with node_modules
-   - This deployment guide
+## Phase 1: Online Build (Internet-Connected Machine)
 
-## Deployment Steps
+### Step 1.1: Clone and Prepare Repository
 
-### Step 1: Load Docker Images
+```powershell
+# Clone the repository
+git clone <repository-url>
+cd PakStream
 
-```bash
-# Load Docker images
-docker load -i pakstream-images.tar
+# Verify project structure
+dir
+# Should see: backend/, frontend/, docker-compose.yml
+```
 
-# Verify images are loaded
+### Step 1.2: Create Environment File
+
+Create a `.env` file in the project root:
+
+```powershell
+# Create .env file
+@"
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=mongodb://mongodb:27017/pakstream
+JWT_SECRET=change-this-to-a-secure-random-string-in-production
+CORS_ORIGIN=*
+"@ | Out-File -FilePath .env -Encoding utf8
+```
+
+**⚠️ IMPORTANT:** Change `JWT_SECRET` to a secure random string in production!
+
+### Step 1.3: Build Docker Images
+
+Build all images using docker-compose:
+
+```powershell
+# Build all images
+docker-compose build
+
+# Verify images were created
 docker images
 ```
 
-### Step 2: Configure Environment Variables
+Expected output should show:
+- `pakstream-frontend` (latest)
+- `pakstream-backend` (latest)
+- `mongo:6`
+- `node:20-alpine` (intermediate)
+- `nginx:alpine` (intermediate)
 
-```bash
-# Copy example environment files
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+### Step 1.4: Pull Base Images (if not already present)
 
-# Edit .env files with your configuration
-nano .env
-nano backend/.env
-nano frontend/.env
+Ensure all required base images are available:
+
+```powershell
+# Pull base images explicitly
+docker pull node:20-alpine
+docker pull nginx:alpine
+docker pull mongo:6
+
+# Verify all images
+docker images
 ```
 
-**Important environment variables:**
+### Step 1.5: Export All Images to Single Tar File
 
-```bash
-# In root .env (for docker-compose)
-STORAGE_TYPE=minio  # or 'local' for local filesystem
-MINIO_ROOT_USER=your-minio-user
-MINIO_ROOT_PASSWORD=your-minio-password
-JWT_SECRET=your-strong-random-secret-key
-CORS_ORIGIN=*  # or specific origins
+Export all images into a single tar file for transfer:
 
-# In backend/.env
-STORAGE_TYPE=minio  # Must match docker-compose
-MINIO_ENDPOINT=minio  # Docker service name
-MINIO_PORT=9000
-MINIO_ACCESS_KEY=your-minio-user
-MINIO_SECRET_KEY=your-minio-password
-MINIO_BUCKET_NAME=pakstream-videos
+```powershell
+# Export all images to a single tar file
+docker save `
+  node:20-alpine `
+  nginx:alpine `
+  mongo:6 `
+  pakstream-frontend:latest `
+  pakstream-backend:latest `
+  -o pakstream-images.tar
 
-# In frontend/.env
-REACT_APP_API_URL=http://your-backend-ip:5000/api
-REACT_APP_SOCKET_URL=http://your-backend-ip:5000
+# Verify tar file was created
+Get-Item pakstream-images.tar | Select-Object Name, Length, LastWriteTime
 ```
 
-### Step 3: Build Frontend (if needed)
+**Note:** The tar file will be large (approximately 1-3GB). Ensure your USB drive has sufficient space.
 
-If you need to rebuild the frontend with new environment variables:
+### Step 1.6: Prepare Transfer Package
 
-```bash
-cd frontend
-npm run build
-cd ..
+Create a complete transfer package on USB drive:
+
+```powershell
+# Create transfer directory structure
+$transferDir = "D:\PakStream-Transfer"  # Adjust to your USB drive letter
+New-Item -ItemType Directory -Path $transferDir -Force
+New-Item -ItemType Directory -Path "$transferDir\DockerDesktop" -Force
+New-Item -ItemType Directory -Path "$transferDir\Project" -Force
+
+# Copy project files (excluding node_modules, .git, etc.)
+Copy-Item -Path ".\*" -Destination "$transferDir\Project\" -Recurse -Exclude "node_modules",".git","*.log","uploads"
+
+# Copy Docker images tar file
+Copy-Item -Path ".\pakstream-images.tar" -Destination "$transferDir\pakstream-images.tar"
+
+# Copy this deployment guide
+Copy-Item -Path ".\AIRGAPPED_DEPLOYMENT.md" -Destination "$transferDir\AIRGAPPED_DEPLOYMENT.md"
 ```
 
-### Step 4: Start Services
+---
 
-```bash
+## Phase 2: Offline Docker Desktop Installation (Windows)
+
+### Step 2.1: Download Docker Desktop Offline Installer
+
+**On Internet-Connected Machine:**
+
+1. Visit: https://www.docker.com/products/docker-desktop/
+2. Navigate to "Download Docker Desktop"
+3. Download the **offline installer** for Windows:
+   - Direct link (check for latest version): https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe
+   - Or search for "Docker Desktop offline installer Windows"
+   - File name: `Docker Desktop Installer.exe` (approximately 500MB-1GB)
+
+4. Copy the installer to USB drive:
+   ```powershell
+   # On internet machine
+   Copy-Item -Path ".\Docker Desktop Installer.exe" -Destination "D:\PakStream-Transfer\DockerDesktop\"
+   ```
+
+**Alternative:** If offline installer is not available, you can use the online installer but it requires internet during installation. For fully air-gapped systems, you must use the offline installer.
+
+### Step 2.2: Enable Required Windows Features
+
+**On Air-Gapped Windows Machine:**
+
+Docker Desktop requires either **Hyper-V** or **WSL2**. Check which is available:
+
+```powershell
+# Run PowerShell as Administrator
+# Check if Hyper-V is available
+Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
+
+# Check if WSL2 is available
+wsl --status
+```
+
+**Option A: Enable Hyper-V (Recommended for Windows Pro/Enterprise)**
+
+```powershell
+# Run as Administrator
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart
+
+# If prompted, restart the computer
+Restart-Computer
+```
+
+**Option B: Enable WSL2 (Works on Windows Home)**
+
+```powershell
+# Run as Administrator
+# Enable WSL
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+
+# Enable Virtual Machine Platform
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+
+# Restart computer
+Restart-Computer
+
+# After restart, set WSL2 as default
+wsl --set-default-version 2
+```
+
+### Step 2.3: Install Docker Desktop Offline
+
+**On Air-Gapped Windows Machine:**
+
+1. Copy Docker Desktop installer from USB to local drive:
+   ```powershell
+   # Copy installer to local drive
+   Copy-Item -Path "E:\PakStream-Transfer\DockerDesktop\Docker Desktop Installer.exe" -Destination "C:\Temp\"
+   ```
+
+2. Run the installer:
+   ```powershell
+   # Run installer (right-click and "Run as Administrator")
+   Start-Process -FilePath "C:\Temp\Docker Desktop Installer.exe" -Verb RunAs
+   ```
+
+3. Follow installation wizard:
+   - Accept license agreement
+   - Choose installation location (default is fine)
+   - **Important:** Uncheck "Use WSL 2 instead of Hyper-V" if you're using Hyper-V
+   - Click "Install"
+   - Wait for installation to complete
+
+4. **DO NOT** start Docker Desktop yet if it auto-starts (we'll configure it first)
+
+### Step 2.4: Verify Docker Desktop Installation
+
+```powershell
+# Verify Docker is installed
+docker --version
+# Expected: Docker version 24.x.x or similar
+
+docker-compose --version
+# Expected: Docker Compose version v2.x.x or similar
+
+# If commands not found, add Docker to PATH or restart PowerShell
+```
+
+### Step 2.5: Start Docker Desktop
+
+1. Launch Docker Desktop from Start Menu
+2. Wait for Docker to start (whale icon in system tray)
+3. Verify Docker is running:
+
+```powershell
+# Check Docker daemon
+docker info
+
+# Should show Docker system information without errors
+```
+
+---
+
+## Phase 3: Image Export and Transfer
+
+### Step 3.1: Transfer Files to Air-Gapped Machine
+
+1. Insert USB drive into air-gapped machine
+2. Copy entire `PakStream-Transfer` folder to local drive:
+
+```powershell
+# On air-gapped machine
+$projectPath = "C:\PakStream"
+New-Item -ItemType Directory -Path $projectPath -Force
+
+# Copy project files
+Copy-Item -Path "E:\PakStream-Transfer\Project\*" -Destination $projectPath -Recurse
+
+# Copy Docker images tar file
+Copy-Item -Path "E:\PakStream-Transfer\pakstream-images.tar" -Destination "$projectPath\pakstream-images.tar"
+```
+
+### Step 3.2: Load Docker Images
+
+```powershell
+# Navigate to project directory
+cd C:\PakStream
+
+# Load all images from tar file
+docker load -i pakstream-images.tar
+
+# Verify images were loaded
+docker images
+```
+
+Expected output:
+```
+REPOSITORY              TAG       IMAGE ID       CREATED         SIZE
+pakstream-frontend      latest    ...            ...             ...
+pakstream-backend       latest    ...            ...             ...
+mongo                   6         ...            ...             ...
+node                    20-alpine ...            ...             ...
+nginx                   alpine    ...            ...             ...
+```
+
+---
+
+## Phase 4: Air-Gapped Installation and Run
+
+### Step 4.1: Create Environment File
+
+```powershell
+# Create .env file in project root
+cd C:\PakStream
+
+@"
+NODE_ENV=production
+PORT=5000
+MONGODB_URI=mongodb://mongodb:27017/pakstream
+JWT_SECRET=change-this-to-a-secure-random-string-in-production
+CORS_ORIGIN=*
+"@ | Out-File -FilePath .env -Encoding utf8
+```
+
+**⚠️ IMPORTANT:** Change `JWT_SECRET` to a secure random string!
+
+### Step 4.2: Start Application with Docker Compose
+
+```powershell
+# Ensure you're in project root
+cd C:\PakStream
+
 # Start all services
 docker-compose up -d
-
-# Check service status
-docker-compose ps
 
 # View logs
 docker-compose logs -f
 ```
 
-### Step 5: Initialize MinIO Bucket (if using MinIO)
+### Step 4.3: Verify Services are Running
 
-```bash
-# Access MinIO console
-# Open browser to: http://your-server-ip:9001
-# Login with MINIO_ROOT_USER and MINIO_ROOT_PASSWORD
-# Create bucket: pakstream-videos (or your configured bucket name)
-# Set bucket policy to public-read or use presigned URLs
+```powershell
+# Check container status
+docker-compose ps
+
+# Expected output:
+# NAME                    STATUS          PORTS
+# pakstream-frontend      Up              0.0.0.0:3000->80/tcp
+# pakstream-backend       Up              0.0.0.0:5000->5000/tcp
+# pakstream-mongodb       Up              0.0.0.0:27017->27017/tcp
 ```
 
-Alternatively, use MinIO client:
+### Step 4.4: Check Service Health
 
-```bash
-# Install MinIO client (mc) on airgapped machine
-# Or use Docker:
-docker run --rm -it --network pakstream_pakstream-network \
-  minio/mc alias set myminio http://minio:9000 minioadmin minioadmin
-docker run --rm -it --network pakstream_pakstream-network \
-  minio/mc mb myminio/pakstream-videos
+```powershell
+# Check MongoDB
+docker-compose exec mongodb mongosh --eval "db.adminCommand('ping')"
+
+# Check Backend API
+Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
+
+# Check Frontend
+Invoke-WebRequest -Uri "http://localhost:3000" -UseBasicParsing
 ```
 
-### Step 6: Verify Deployment
+---
 
-1. **Check backend health:**
-   ```bash
-   curl http://localhost:5000/api/videos
-   ```
+## Verification and Troubleshooting
 
-2. **Check frontend:**
-   ```bash
-   curl http://localhost:3000
-   ```
+### Access the Application
 
-3. **Check MinIO (if enabled):**
-   ```bash
-   curl http://localhost:9000/minio/health/live
-   ```
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:5000/api
+- **MongoDB:** localhost:27017
 
-## Storage Options
+### Common Commands
 
-### Option 1: Local Filesystem (Simpler)
+```powershell
+# View logs
+docker-compose logs -f                    # All services
+docker-compose logs -f backend            # Backend only
+docker-compose logs -f frontend           # Frontend only
+docker-compose logs -f mongodb            # MongoDB only
 
-Set `STORAGE_TYPE=local` in environment variables. Files are stored in Docker volumes.
+# Stop services
+docker-compose stop
 
-**Pros:**
-- Simpler setup
-- No additional service needed
-- Good for single-server deployments
+# Start services
+docker-compose start
 
-**Cons:**
-- Not scalable
-- Files lost if volume deleted
-- Harder to backup
+# Restart services
+docker-compose restart
 
-### Option 2: MinIO Object Storage (Recommended)
+# Stop and remove containers (keeps volumes)
+docker-compose down
 
-Set `STORAGE_TYPE=minio` in environment variables. Files are stored in MinIO.
+# Stop and remove everything including volumes
+docker-compose down -v
 
-**Pros:**
-- Scalable
-- S3-compatible API
-- Better for distributed deployments
-- Easier backup and migration
+# Rebuild and restart
+docker-compose up -d --build
+```
 
-**Cons:**
-- Additional service to manage
-- Slightly more complex setup
+### Troubleshooting
 
-## Troubleshooting
+#### Issue: Docker Desktop won't start
 
-### Videos Not Playing
+**Solution:**
+1. Ensure Hyper-V or WSL2 is enabled
+2. Check Windows features: `Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq "Enabled"}`
+3. Restart computer
+4. Run Docker Desktop as Administrator
 
-1. **Check CORS configuration:**
-   - Ensure `CORS_ORIGIN=*` or includes your frontend URL
-   - Check browser console for CORS errors
+#### Issue: Port already in use
 
-2. **Check HLS segment serving:**
-   - Verify segments are accessible: `curl http://localhost:5000/api/videos/{videoId}/hls/{segment}.ts`
-   - Check CORS headers are present
+**Solution:**
+```powershell
+# Check what's using the port
+netstat -ano | findstr :3000
+netstat -ano | findstr :5000
+netstat -ano | findstr :27017
 
-3. **Check storage:**
-   - Verify files exist in storage (local or MinIO)
-   - Check storage service logs: `docker-compose logs backend`
+# Stop the conflicting service or change ports in docker-compose.yml
+```
 
-### FFmpeg Not Found
+#### Issue: Containers exit immediately
 
-1. **Check FFmpeg path:**
-   ```bash
-   docker-compose exec backend which ffmpeg
-   docker-compose exec backend ffmpeg -version
-   ```
+**Solution:**
+```powershell
+# Check logs for errors
+docker-compose logs
 
-2. **Set FFMPEG_PATH environment variable:**
-   ```bash
-   # In backend/.env
-   FFMPEG_PATH=/usr/bin/ffmpeg
-   ```
+# Check container status
+docker-compose ps -a
 
-### MinIO Connection Issues
+# Restart containers
+docker-compose restart
+```
 
-1. **Check MinIO is running:**
-   ```bash
-   docker-compose ps minio
-   docker-compose logs minio
-   ```
+#### Issue: MongoDB connection failed
 
-2. **Verify network connectivity:**
-   ```bash
-   docker-compose exec backend ping minio
-   ```
+**Solution:**
+```powershell
+# Check MongoDB container
+docker-compose logs mongodb
 
-3. **Check credentials:**
-   - Ensure `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` match `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`
+# Verify MongoDB is healthy
+docker-compose exec mongodb mongosh --eval "db.adminCommand('ping')"
 
-## Maintenance
+# Check environment variable
+docker-compose exec backend env | findstr MONGODB_URI
+```
 
-### Backup
+#### Issue: Frontend can't connect to backend
 
-1. **MongoDB backup:**
-   ```bash
-   docker-compose exec mongodb mongodump --out /data/backup
-   docker cp pakstream-mongodb:/data/backup ./mongodb-backup
-   ```
+**Solution:**
+1. Verify backend is running: `docker-compose ps`
+2. Check backend logs: `docker-compose logs backend`
+3. Test backend directly: `Invoke-WebRequest -Uri "http://localhost:5000/api/health"`
+4. Verify network: `docker network inspect pakstream-network`
 
-2. **MinIO backup (if using):**
-   ```bash
-   docker-compose exec minio mc mirror /data/pakstream-videos ./minio-backup
-   ```
+### Data Persistence
 
-3. **Local files backup (if using):**
-   ```bash
-   docker cp pakstream-backend:/app/uploads ./uploads-backup
-   ```
+All data is stored in Docker volumes:
+- **MongoDB data:** `pakstream-mongodb-data`
+- **MongoDB config:** `pakstream-mongodb-config`
+- **Backend uploads:** `pakstream-backend-uploads`
 
-### Updates
+To backup data:
+```powershell
+# Backup MongoDB
+docker run --rm -v pakstream-mongodb-data:/data -v ${PWD}:/backup mongo:6 tar czf /backup/mongodb-backup.tar.gz /data
 
-To update the application in airgapped environment:
+# Backup uploads
+docker run --rm -v pakstream-backend-uploads:/data -v ${PWD}:/backup alpine tar czf /backup/uploads-backup.tar.gz /data
+```
 
-1. Build new images on internet-connected machine
-2. Transfer images to airgapped machine
-3. Load new images: `docker load -i new-images.tar`
-4. Restart services: `docker-compose up -d --force-recreate`
+---
 
-## Security Considerations
+## Summary Checklist
 
-1. **Change default passwords:**
-   - JWT_SECRET
-   - MinIO root credentials
-   - MongoDB (if authentication enabled)
+### On Internet Machine:
+- [ ] Clone repository
+- [ ] Create .env file
+- [ ] Build Docker images (`docker-compose build`)
+- [ ] Pull base images (node:20-alpine, nginx:alpine, mongo:6)
+- [ ] Export images to tar (`docker save ... -o pakstream-images.tar`)
+- [ ] Download Docker Desktop offline installer
+- [ ] Copy everything to USB drive
 
-2. **Restrict network access:**
-   - Use firewall rules
-   - Limit exposed ports
-   - Use internal Docker networks
+### On Air-Gapped Machine:
+- [ ] Enable Hyper-V or WSL2
+- [ ] Install Docker Desktop offline
+- [ ] Verify Docker installation
+- [ ] Copy project files from USB
+- [ ] Load Docker images (`docker load -i pakstream-images.tar`)
+- [ ] Create .env file
+- [ ] Start services (`docker-compose up -d`)
+- [ ] Verify all services are running
+- [ ] Access application at http://localhost:3000
 
-3. **Regular updates:**
-   - Keep Docker images updated
-   - Monitor security advisories
-   - Apply patches when available
+---
+
+## Security Notes
+
+1. **Change JWT_SECRET:** Use a strong random string in production
+2. **Change MongoDB default credentials** if needed
+3. **Firewall:** Configure Windows Firewall to restrict access if needed
+4. **HTTPS:** For production, consider adding reverse proxy with SSL
+5. **Backup:** Regularly backup MongoDB data and uploads
+
+---
 
 ## Support
 
 For issues or questions:
-- Check logs: `docker-compose logs`
-- Review configuration files
-- Verify environment variables
-- Check network connectivity between services
+1. Check Docker logs: `docker-compose logs`
+2. Verify container status: `docker-compose ps`
+3. Check network connectivity: `docker network inspect pakstream-network`
+4. Review this guide's troubleshooting section
+
+---
+
+**Last Updated:** 2024
+**Docker Version:** 24.x
+**Node Version:** 20
+**MongoDB Version:** 6
 

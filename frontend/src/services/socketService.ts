@@ -18,13 +18,20 @@ class SocketService {
     }
 
     console.log('Creating new Socket.IO connection...');
+    const token = localStorage.getItem('token');
     this.socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
+      reconnectionAttempts: 5,
+      auth: {
+        token: token || null
+      },
+      extraHeaders: token ? {
+        Authorization: `Bearer ${token}`
+      } : {}
     });
 
     this.socket.on('connect', () => {
@@ -162,10 +169,10 @@ class SocketService {
   }
 
   // Chat methods
-  sendMessage(premiereId: string, message: string) {
+  sendMessage(premiereId: string, message: string, username?: string) {
     const socket = this.getSocket();
     if (socket) {
-      socket.emit('send-message', premiereId, message);
+      socket.emit('send-message', premiereId, message, username);
     }
   }
 

@@ -3,8 +3,11 @@ import { Document, DocumentUploadData } from '../../types/document';
 import documentService from '../../services/documentService';
 import DocumentVerificationModal from './DocumentVerificationModal';
 import ProtectedRoute from '../ProtectedRoute';
+import { useNotification } from '../../contexts/NotificationContext';
+import ConfirmationDialog from '../common/ConfirmationDialog';
 
 const AdminDocumentDashboard: React.FC = () => {
+  const { showError, showSuccess } = useNotification();
   const [activeTab, setActiveTab] = useState<'documents' | 'verification'>('documents');
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +17,10 @@ const AdminDocumentDashboard: React.FC = () => {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [documentToVerify, setDocumentToVerify] = useState<Document | null>(null);
   const [verificationSearch, setVerificationSearch] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; documentId: string | null }>({
+    isOpen: false,
+    documentId: null,
+  });
 
   useEffect(() => {
     fetchDocuments();
@@ -93,20 +100,26 @@ const AdminDocumentDashboard: React.FC = () => {
       console.error('Upload failed:', error);
       setUploading(false);
       setUploadProgress(0);
-      alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      showError('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    setDeleteConfirm({ isOpen: true, documentId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.documentId) return;
 
     try {
-      await documentService.deleteDocument(id);
+      await documentService.deleteDocument(deleteConfirm.documentId);
+      showSuccess('Document has been deleted');
       fetchDocuments();
+      setDeleteConfirm({ isOpen: false, documentId: null });
     } catch (error) {
       console.error('Delete failed:', error);
+      showError('Failed to delete document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setDeleteConfirm({ isOpen: false, documentId: null });
     }
   };
 
@@ -414,6 +427,18 @@ const AdminDocumentDashboard: React.FC = () => {
               document={documentToVerify}
             />
           )}
+
+          {/* Confirmation Dialog */}
+          <ConfirmationDialog
+            isOpen={deleteConfirm.isOpen}
+            title="Delete Document"
+            message="Are you sure you want to delete this document? This action cannot be undone."
+            confirmText="Delete"
+            cancelText="Cancel"
+            type="danger"
+            onConfirm={confirmDelete}
+            onCancel={() => setDeleteConfirm({ isOpen: false, documentId: null })}
+          />
         </div>
       </div>
     </ProtectedRoute>

@@ -1,13 +1,104 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Presentation } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
+import LikesModal from '../common/LikesModal';
 
 interface PresentationGridProps {
   presentations: Presentation[];
   onPresentationClick: (presentation: Presentation) => void;
 }
 
+interface LikeUser {
+  _id: string;
+  username: string;
+  email: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
+}
+
 const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
+  const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{
+    title: string;
+    totalLikes: number;
+    likedBy: LikeUser[];
+  }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
+
+  // Initialize local state from presentations when they change
+  React.useEffect(() => {
+    const newMap = new Map<string, { views: number; likes: number; isLiked: boolean }>();
+    presentations.forEach(presentation => {
+      newMap.set(presentation._id, {
+        views: presentation.views,
+        likes: presentation.likes,
+        isLiked: presentation.isLiked ?? false
+      });
+    });
+    setLocalPresentations(newMap);
+  }, [presentations]);
+
+  const getLocalData = (id: string, defaultViews: number, defaultLikes: number, defaultIsLiked: boolean) => {
+    const local = localPresentations.get(id);
+    return {
+      views: local?.views ?? defaultViews,
+      likes: local?.likes ?? defaultLikes,
+      isLiked: local?.isLiked ?? defaultIsLiked
+    };
+  };
+
+  const handleClick = async (presentation: Presentation) => {
+    // Don't track view here - it will be tracked in the viewer component
+    // This prevents duplicate view tracking
+    
+    // Call the original click handler
+    onPresentationClick(presentation);
+  };
+
+  const handleLikeClick = async (e: React.MouseEvent, presentation: Presentation) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
+    const action = local.isLiked ? 'unlike' : 'like';
+    
+    try {
+      const result = await presentationService.toggleLike(presentation._id, action);
+      setLocalPresentations(prev => {
+        const newMap = new Map(prev);
+        newMap.set(presentation._id, {
+          ...local,
+          likes: result.likes,
+          isLiked: result.isLiked
+        });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+    }
+  };
+
+  const handleLikesCountClick = async (e: React.MouseEvent, presentation: Presentation) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    setLoadingLikes(true);
+    try {
+      const result = await presentationService.getLikedByUsers(presentation._id);
+      setLikesModalData({
+        title: presentation.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+    } finally {
+      setLoadingLikes(false);
+    }
+  };
   const getCategoryColor = (category: string) => {
     const colors = {
       business: 'bg-blue-600',
@@ -31,11 +122,14 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
   }
 
   return (
+    <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {presentations.map((presentation) => (
+      {presentations.map((presentation) => {
+        const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
+        return (
         <div
           key={presentation._id}
-          onClick={() => onPresentationClick(presentation)}
+          onClick={() => handleClick(presentation)}
           className="group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:z-10"
         >
           <div className="relative bg-card rounded-lg overflow-hidden shadow-lg hover:bg-card-hover transition-colors">
@@ -114,15 +208,35 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                     </svg>
-                    {presentation.views}
+                    {local.views}
                   </span>
                   
-                  <span className="flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                  <button
+                    onClick={(e) => handleLikeClick(e, presentation)}
+                    className={`flex items-center transition-colors ${
+                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-500'
+                    }`}
+                    title={local.isLiked ? 'Unlike' : 'Like'}
+                  >
+                    <svg 
+                      className={`w-4 h-4 ${local.isLiked ? 'fill-current' : ''}`} 
+                      fill={local.isLiked ? 'currentColor' : 'none'} 
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
-                    {presentation.likes}
-                  </span>
+                  </button>
+                  <button
+                    onClick={(e) => handleLikesCountClick(e, presentation)}
+                    className={`ml-1 transition-colors cursor-pointer hover:underline ${
+                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
+                    }`}
+                    title="View who liked this"
+                    disabled={loadingLikes}
+                  >
+                    {loadingLikes ? '...' : local.likes}
+                  </button>
                 </div>
                 
                 <span className="text-xs">
@@ -151,8 +265,20 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
             </div>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
+
+      {/* Likes Modal */}
+      <LikesModal
+        isOpen={likesModalOpen}
+        title={likesModalData.title}
+        totalLikes={likesModalData.totalLikes}
+        likedBy={likesModalData.likedBy}
+        contentType="presentation"
+        onClose={() => setLikesModalOpen(false)}
+      />
+    </>
   );
 };
 

@@ -1,10 +1,68 @@
 const Video = require('../models/Video');
+const Premiere = require('../models/Premiere');
 const VideoDownload = require('../models/VideoDownload');
 const videoQueue = require('../services/videoQueue');
 const { addCdnUrlsToVideos, addCdnUrlsToVideo } = require('../utils/cdnUtils');
 const { calculateFileHash, calculateBufferHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
+
+/**
+ * Check if a video is part of an active/scheduled premiere
+ * Returns the premiere if found, null otherwise
+ */
+const getActivePremiereForVideo = async (videoId) => {
+  try {
+    const premiere = await Premiere.findOne({
+      video: videoId,
+      status: { $in: ['scheduled', 'live'] },
+      isActive: true
+    });
+    return premiere;
+  } catch (error) {
+    console.error('Error checking premiere for video:', error);
+    return null;
+  }
+};
+
+/**
+ * Check if a video can be accessed (not part of a premiere or premiere has started)
+ * Returns { canAccess: boolean, premiere: Premiere | null, message: string }
+ */
+const checkVideoAccess = async (videoId, user = null) => {
+  const premiere = await getActivePremiereForVideo(videoId);
+  
+  // If not part of a premiere, allow access
+  if (!premiere) {
+    return { canAccess: true, premiere: null, message: null };
+  }
+  
+  // Admins can always access premiere videos
+  if (user && user.role === 'admin') {
+    return { canAccess: true, premiere, message: null };
+  }
+  
+  // If premiere is live, allow access (but should be through premiere interface)
+  if (premiere.status === 'live') {
+    return { canAccess: true, premiere, message: 'This video is part of a live premiere' };
+  }
+  
+  // If premiere is scheduled and hasn't started, deny access
+  if (premiere.status === 'scheduled') {
+    const now = new Date();
+    if (premiere.startTime > now) {
+      return { 
+        canAccess: false, 
+        premiere, 
+        message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.' 
+      };
+    }
+    // If start time has passed but status hasn't updated, allow access
+    return { canAccess: true, premiere, message: null };
+  }
+  
+  return { canAccess: true, premiere, message: null };
+};
 
 const uploadVideo = async (req, res) => {
   try {
@@ -15,7 +73,7 @@ const uploadVideo = async (req, res) => {
       });
     }
 
-    const { title, description, category, tags } = req.body;
+    const { title, description, category, tags, isForPremiere } = req.body;
     
     // Calculate SHA-256 hash of the uploaded file
     let sha256Hash = null;
@@ -31,9 +89,10 @@ const uploadVideo = async (req, res) => {
     const video = new Video({
       title,
       description,
-      category: category || 'general',
+      category: category || 'other',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
       uploadedBy: req.user.id,
+      isForPremiere: isForPremiere === 'true' || isForPremiere === true,
       originalFile: {
         filename: req.file.filename,
         path: req.file.path,
@@ -96,6 +155,8 @@ const getVideos = async (req, res) => {
     // Admins can see all via /admin/all endpoint
     if (!req.user || req.user.role !== 'admin') {
       query.status = 'ready';
+      // Exclude premiere-only videos from public listings
+      query.isForPremiere = { $ne: true };
     } else if (status) {
       // Admin can filter by status
       query.status = status;
@@ -109,21 +170,70 @@ const getVideos = async (req, res) => {
       ];
     }
 
-    const videos = await Video.find(query)
+    // Get all videos matching the query
+    const allVideos = await Video.find(query)
       .populate('uploadedBy', 'username email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Video.countDocuments(query);
+    // Filter out videos that are part of active/scheduled premieres (unless admin)
+    let videos = allVideos;
+    if (!req.user || req.user.role !== 'admin') {
+      // First, filter out videos marked as isForPremiere
+      videos = allVideos.filter(video => video.isForPremiere !== true);
+      
+      // Then, also filter out videos that are part of active premieres
+      const videoIds = videos.map(v => v._id);
+      
+      // Find all premieres that include these videos
+      const activePremieres = await Premiere.find({
+        video: { $in: videoIds },
+        status: { $in: ['scheduled', 'live'] },
+        isActive: true
+      }).select('video status startTime');
+      
+      const premiereVideoIds = new Set(activePremieres.map(p => p.video.toString()));
+      
+      // Filter out videos that are part of active premieres
+      videos = videos.filter(video => !premiereVideoIds.has(video._id.toString()));
+    }
+
+    // Recalculate total excluding premiere videos
+    let total = await Video.countDocuments(query);
+    if (!req.user || req.user.role !== 'admin') {
+      const allVideoIds = await Video.find(query).select('_id');
+      const allIds = allVideoIds.map(v => v._id);
+      const premiereVideos = await Premiere.find({
+        video: { $in: allIds },
+        status: { $in: ['scheduled', 'live'] },
+        isActive: true
+      }).select('video');
+      const premiereIds = new Set(premiereVideos.map(p => p.video.toString()));
+      total = allIds.filter(id => !premiereIds.has(id.toString())).length;
+    }
 
     // Add CDN URLs to videos
     const videosWithCdn = addCdnUrlsToVideos(videos);
 
+    // Add isLiked status for each video if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const videosWithLikeStatus = videosWithCdn.map(video => {
+      const videoObj = typeof video.toObject === 'function' ? video.toObject() : video;
+      if (userId && video.likedBy && Array.isArray(video.likedBy)) {
+        videoObj.isLiked = video.likedBy.some(
+          likeId => likeId && likeId.toString() === userId.toString()
+        );
+      } else {
+        videoObj.isLiked = false;
+      }
+      return videoObj;
+    });
+
     res.json({
       success: true,
       data: {
-        videos: videosWithCdn,
+        videos: videosWithLikeStatus,
         pagination: {
           current: parseInt(page),
           pages: Math.ceil(total / limit),
@@ -145,24 +255,54 @@ const getFeaturedVideos = async (req, res) => {
     const { limit = 10 } = req.query;
 
     // Get featured videos that are ready for playback
-    const videos = await Video.find({
+    const allFeaturedVideos = await Video.find({
       isPublic: true,
       isFeatured: true,
-      status: 'ready'
+      status: 'ready',
+      // Exclude premiere-only videos from featured listings (unless admin)
+      ...((!req.user || req.user.role !== 'admin') ? { isForPremiere: { $ne: true } } : {})
     })
       .populate('uploadedBy', 'username email')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
-    // If no featured videos, return latest ready videos
+    // Filter out premiere videos (unless admin)
+    let videos = allFeaturedVideos;
+    if (!req.user || req.user.role !== 'admin') {
+      const videoIds = allFeaturedVideos.map(v => v._id);
+      const activePremieres = await Premiere.find({
+        video: { $in: videoIds },
+        status: { $in: ['scheduled', 'live'] },
+        isActive: true
+      }).select('video');
+      const premiereVideoIds = new Set(activePremieres.map(p => p.video.toString()));
+      videos = allFeaturedVideos.filter(video => !premiereVideoIds.has(video._id.toString()));
+    }
+
+    // If no featured videos, return latest ready videos (excluding premieres)
     if (videos.length === 0) {
-      const latestVideos = await Video.find({
+      const allLatestVideos = await Video.find({
         isPublic: true,
-        status: 'ready'
+        status: 'ready',
+        // Exclude premiere-only videos from fallback listings (unless admin)
+        ...((!req.user || req.user.role !== 'admin') ? { isForPremiere: { $ne: true } } : {})
       })
         .populate('uploadedBy', 'username email')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit));
+
+      // Filter out premiere videos
+      let latestVideos = allLatestVideos;
+      if (!req.user || req.user.role !== 'admin') {
+        const latestVideoIds = allLatestVideos.map(v => v._id);
+        const latestPremieres = await Premiere.find({
+          video: { $in: latestVideoIds },
+          status: { $in: ['scheduled', 'live'] },
+          isActive: true
+        }).select('video');
+        const latestPremiereIds = new Set(latestPremieres.map(p => p.video.toString()));
+        latestVideos = allLatestVideos.filter(video => !latestPremiereIds.has(video._id.toString()));
+      }
 
       return res.json({
         success: true,
@@ -202,9 +342,37 @@ const getVideoById = async (req, res) => {
       });
     }
 
+    // Check if video is part of a premiere and if access should be restricted
+    const accessCheck = await checkVideoAccess(req.params.id, req.user);
+    
+    if (!accessCheck.canAccess) {
+      return res.status(403).json({
+        success: false,
+        message: accessCheck.message || 'This video is not available yet',
+        data: {
+          premiere: accessCheck.premiere ? {
+            title: accessCheck.premiere.title,
+            startTime: accessCheck.premiere.startTime,
+            status: accessCheck.premiere.status
+          } : null
+        }
+      });
+    }
+
+    // Add isLiked status if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const videoObj = video.toObject();
+    if (userId && video.likedBy && Array.isArray(video.likedBy)) {
+      videoObj.isLiked = video.likedBy.some(
+        likeId => likeId && likeId.toString() === userId.toString()
+      );
+    } else {
+      videoObj.isLiked = false;
+    }
+
     res.json({
       success: true,
-      data: { video }
+      data: { video: videoObj }
     });
   } catch (error) {
     res.status(500).json({
@@ -382,19 +550,11 @@ const getVideoStatus = async (req, res) => {
   }
 };
 
-// Track video view (play start or 30 seconds watched)
+// Track video view (only track once per session)
 const trackVideoView = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type = 'start' } = req.query; // 'start' or 'watch30'
-
-    // Validate view type
-    if (type !== 'start' && type !== 'watch30') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid view type. Must be "start" or "watch30"'
-      });
-    }
+    const { sessionId } = req.query; // Session ID to prevent duplicate tracking
 
     // Check if video exists
     const video = await Video.findById(id);
@@ -405,23 +565,26 @@ const trackVideoView = async (req, res) => {
       });
     }
 
-    // Increment view count atomically
-    await Video.findByIdAndUpdate(
+    // Note: We rely on frontend sessionStorage to prevent duplicate calls
+    // For production, consider using Redis or a ViewTracking collection
+    
+    // Increment view count atomically (only once per session)
+    const updated = await Video.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: false }
+      { new: true }
     ).catch(err => {
       console.error('Failed to update view count:', err);
-      // Don't fail the request if view tracking fails
+      return null;
     });
 
     // Return success response
     res.json({
       success: true,
-      message: `View tracked: ${type}`,
+      message: 'View tracked',
       data: {
         videoId: id,
-        viewType: type
+        views: updated ? updated.views : video.views + 1
       }
     });
   } catch (error) {
@@ -667,6 +830,88 @@ const verifyVideoIntegrity = async (req, res) => {
   }
 };
 
+// Toggle video like
+const toggleVideoLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    const video = await Video.findById(id);
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
+      });
+    }
+
+    // Initialize likedBy array if it doesn't exist
+    if (!video.likedBy) {
+      video.likedBy = [];
+    }
+
+    const isLiked = video.likedBy.some(
+      likeId => likeId && likeId.toString() === userId.toString()
+    );
+
+    let newLikes;
+    let isLikedAfter;
+
+    if (req.body.action === 'unlike') {
+      // Remove user from likedBy array
+      video.likedBy = video.likedBy.filter(
+        likeId => likeId && likeId.toString() !== userId.toString()
+      );
+      newLikes = Math.max(0, video.likes - 1);
+      isLikedAfter = false;
+    } else {
+      // Add user to likedBy array if not already liked
+      if (!isLiked) {
+        video.likedBy.push(userId);
+        newLikes = video.likes + 1;
+      } else {
+        // Already liked, don't increment
+        newLikes = video.likes;
+      }
+      isLikedAfter = true;
+    }
+
+    await Video.findByIdAndUpdate(
+      id,
+      { 
+        $set: { 
+          likes: newLikes,
+          likedBy: video.likedBy
+        }
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
+      data: {
+        videoId: id,
+        likes: newLikes,
+        isLiked: isLikedAfter
+      }
+    });
+  } catch (error) {
+    console.error('Like toggle error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle like',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadVideo,
   getVideos,
@@ -678,6 +923,7 @@ module.exports = {
   getVideoStatus,
   getQueueStatus,
   trackVideoView,
+  toggleVideoLike,
   downloadVideo,
   getVideoHash,
   verifyVideoIntegrity

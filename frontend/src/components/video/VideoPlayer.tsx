@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   video: Video;
   autoPlay?: boolean;
   controls?: boolean;
+  showProgressBar?: boolean; // Add option to hide progress bar (for TV-like broadcast)
   className?: string;
   onClose?: () => void;
   onPlay?: () => void;
@@ -17,9 +18,10 @@ interface VideoPlayerProps {
 }
 
 export interface VideoPlayerRef {
-  play: () => void;
+  play: () => Promise<void> | void;
   pause: () => void;
   seek: (time: number) => void;
+  setMuted: (muted: boolean) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
   isPlaying: () => boolean;
@@ -29,6 +31,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
   video, 
   autoPlay = false, 
   controls = true,
+  showProgressBar = true, // Default to true, can be disabled for premiere
   className = '',
   onClose,
   onPlay,
@@ -69,11 +72,15 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
   useImperativeHandle(ref, () => ({
     play: () => {
       if (videoRef.current && !isInitializingRef.current) {
-        videoRef.current.play().catch(err => {
-          console.warn('Play interrupted:', err);
-        });
+        const p = videoRef.current.play();
+        if (p instanceof Promise) {
+          p.catch(err => {
+            console.warn('Play interrupted:', err);
+          });
+        }
         setIsPlaying(true);
         onPlay?.();
+        return p;
       }
     },
     pause: () => {
@@ -88,6 +95,12 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
         videoRef.current.currentTime = time;
         setCurrentTime(time);
         onSeek?.(time);
+      }
+    },
+    setMuted: (muted: boolean) => {
+      if (videoRef.current) {
+        videoRef.current.muted = muted;
+        setIsMuted(muted);
       }
     },
     getCurrentTime: () => currentTime,
@@ -282,25 +295,25 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
           const newTime = videoElement.currentTime;
           setCurrentTime(newTime);
           
-          // Track "30 seconds watched" view
-          if (newTime >= 30 && !watch30TrackedRef.current && video._id) {
-            watch30TrackedRef.current = true;
-            videoService.trackVideoView(video._id, 'watch30').catch(err => {
-              console.warn('Failed to track 30s view:', err);
-            });
-          }
+          // Removed "30 seconds watched" tracking - only track once on play start
         };
 
         const handlePlay = () => {
           setIsPlaying(true);
           onPlay?.();
           
-          // Track "play start" view
+          // Track view only once per session (on first play)
           if (!playStartTrackedRef.current && video._id) {
-            playStartTrackedRef.current = true;
-            videoService.trackVideoView(video._id, 'start').catch(err => {
-              console.warn('Failed to track play start view:', err);
-            });
+            const sessionKey = `video_view_${video._id}`;
+            const hasTracked = sessionStorage.getItem(sessionKey);
+            
+            if (!hasTracked) {
+              playStartTrackedRef.current = true;
+              videoService.trackVideoView(video._id).catch(err => {
+                console.warn('Failed to track video view:', err);
+              });
+              sessionStorage.setItem(sessionKey, 'true');
+            }
           }
         };
 
@@ -466,7 +479,8 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
       // Download completed successfully
     } catch (error) {
       console.error('Download failed:', error);
-      alert(error instanceof Error ? error.message : 'Failed to download video');
+      // Note: VideoPlayer might not have access to useNotification, so we'll keep console.error
+      // The error will be handled by the download service
     } finally {
       setIsDownloading(false);
     }
@@ -543,6 +557,7 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
         className="w-full h-full object-contain"
         playsInline
         preload="metadata"
+        autoPlay={autoPlay}
       />
       
       {(isLoading || isRetrying) && (
@@ -565,22 +580,24 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
       {controls && (
         <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-          {/* Progress bar */}
-          <div className="px-4 pt-4 pb-2">
-            <div 
-              className="w-full bg-gray-700 rounded-full h-1.5 cursor-pointer hover:h-2 transition-all group relative"
-              onClick={handleProgressBarClick}
-              title="Click to seek"
-            >
+          {/* Progress bar - Hidden during premiere for TV-like broadcast */}
+          {showProgressBar && (
+            <div className="px-4 pt-4 pb-2">
               <div 
-                className="bg-red-600 h-full rounded-full transition-all duration-200 relative"
-                style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                className="w-full bg-gray-700 rounded-full h-1.5 cursor-pointer hover:h-2 transition-all group relative"
+                onClick={handleProgressBarClick}
+                title="Click to seek"
               >
-                {/* Seek handle */}
-                <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"></div>
+                <div 
+                  className="bg-red-600 h-full rounded-full transition-all duration-200 relative"
+                  style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                >
+                  {/* Seek handle */}
+                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"></div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Controls */}
           <div className="flex items-center justify-between text-white px-4 pb-4">

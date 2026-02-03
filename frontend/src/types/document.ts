@@ -18,6 +18,7 @@ export interface Document {
   pageCount: number;
   views: number;
   likes: number;
+  isLiked?: boolean;
   category: 'academic' | 'business' | 'legal' | 'technical' | 'other';
   tags: string[];
   isPublic: boolean;

@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Premiere } from '../../types/premiere';
 import premiereService from '../../services/premiereService';
+import { formatVideoDuration } from '../../utils/videoUtils';
 
 interface ScheduledPremiereProps {
   premiere: Premiere;
   onClose?: () => void;
   onCountdownFinish?: () => void;
+  isDismissed?: boolean;
 }
 
-const ScheduledPremiere: React.FC<ScheduledPremiereProps> = ({ premiere, onClose, onCountdownFinish }) => {
+const ScheduledPremiere: React.FC<ScheduledPremiereProps> = ({ premiere, onClose, onCountdownFinish, isDismissed = false }) => {
   const [timeUntilStart, setTimeUntilStart] = useState(0);
   const hasFinishedRef = React.useRef(false);
   const recheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -83,6 +85,55 @@ const ScheduledPremiere: React.FC<ScheduledPremiereProps> = ({ premiere, onClose
     return premiereService.getPosterUrl(premiere.video);
   };
 
+  // If dismissed, show in bottom-right corner as a smaller notification
+  if (isDismissed) {
+    return (
+      <div className="fixed bottom-6 right-6 z-50 max-w-md w-full mx-4 animate-slide-up">
+        <div className="bg-netflix-gray rounded-lg p-6 shadow-2xl border border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-bold text-white">Upcoming Premiere</h1>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-white mb-1 line-clamp-1">{premiere.title}</h2>
+              <p className="text-gray-300 text-sm line-clamp-2">{premiere.description}</p>
+            </div>
+
+            <div className={`${timeUntilStart <= 0 ? 'bg-gradient-to-r from-green-900/30 to-green-700/30 border border-green-500' : 'bg-gradient-to-r from-yellow-900/30 to-yellow-700/30 border border-yellow-500'} rounded-lg p-3 transition-all duration-500`}>
+              <div className="text-center">
+                {timeUntilStart <= 0 ? (
+                  <>
+                    <h3 className="text-sm font-bold text-green-400 mb-1 animate-pulse">🎬 Starting...</h3>
+                    <div className="text-xs text-white">
+                      Loading video player...
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-xs font-semibold text-yellow-400 mb-1">Starts In</h3>
+                    <div className="text-lg font-mono text-white">
+                      {formatTimeUntilStart(timeUntilStart)}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // First time: show in center as full modal
   return (
     <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
       <div className="bg-netflix-gray rounded-lg p-8 max-w-4xl w-full mx-4">
@@ -132,7 +183,7 @@ const ScheduledPremiere: React.FC<ScheduledPremiereProps> = ({ premiere, onClose
                   <div className="flex justify-between">
                     <span className="text-gray-400">Duration:</span>
                     <span className="text-white">
-                      {Math.floor(premiere.video?.duration / 60)}:{(premiere.video?.duration % 60).toString().padStart(2, '0')}
+                      {formatVideoDuration(premiere.video?.duration || 0)}
                     </span>
                   </div>
                   <div className="flex justify-between">

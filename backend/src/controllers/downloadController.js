@@ -1,6 +1,7 @@
 const VideoDownload = require('../models/VideoDownload');
 const Video = require('../models/Video');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 // Get download statistics
 const getDownloadStats = async (req, res) => {
@@ -146,10 +147,50 @@ const getAllDownloads = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-    // Build query
+    // Build query with ObjectId validation
     const query = {};
-    if (userId) query.user = userId;
-    if (videoId) query.video = videoId;
+    
+    // Validate and add userId only if it's a valid ObjectId
+    if (userId) {
+      if (mongoose.Types.ObjectId.isValid(userId)) {
+        query.user = userId;
+      } else {
+        // If not a valid ObjectId, no results will match (return empty)
+        return res.json({
+          success: true,
+          data: {
+            downloads: [],
+            pagination: {
+              current: parseInt(page),
+              pages: 0,
+              total: 0,
+              limit: parseInt(limit)
+            }
+          }
+        });
+      }
+    }
+    
+    // Validate and add videoId only if it's a valid ObjectId
+    if (videoId) {
+      if (mongoose.Types.ObjectId.isValid(videoId)) {
+        query.video = videoId;
+      } else {
+        // If not a valid ObjectId, no results will match (return empty)
+        return res.json({
+          success: true,
+          data: {
+            downloads: [],
+            pagination: {
+              current: parseInt(page),
+              pages: 0,
+              total: 0,
+              limit: parseInt(limit)
+            }
+          }
+        });
+      }
+    }
     
     if (startDate || endDate) {
       query.downloadedAt = {};
@@ -157,14 +198,64 @@ const getAllDownloads = async (req, res) => {
       if (endDate) query.downloadedAt.$lte = new Date(endDate);
     }
 
-    const downloads = await VideoDownload.find(query)
-      .populate('user', 'username email profile organization contactNumber address')
-      .populate('video', 'title')
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Only return downloads where both user and video still exist (exclude "User deleted" / "Video deleted" rows)
+    const pipeline = [
+      { $match: query },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'userDoc',
+          pipeline: [{ $project: { username: 1, email: 1, profile: 1, organization: 1, contactNumber: 1, address: 1 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: 'videos',
+          localField: 'video',
+          foreignField: '_id',
+          as: 'videoDoc',
+          pipeline: [{ $project: { title: 1 } }]
+        }
+      },
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $gt: [{ $size: '$userDoc' }, 0] },
+              { $gt: [{ $size: '$videoDoc' }, 0] }
+            ]
+          }
+        }
+      },
+      {
+        $facet: {
+          totalBranch: [{ $count: 'total' }],
+          dataBranch: [
+            { $sort: sortOptions },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+              $project: {
+                _id: 1,
+                user: { $arrayElemAt: ['$userDoc', 0] },
+                video: { $arrayElemAt: ['$videoDoc', 0] },
+                downloadedAt: 1,
+                ipAddress: 1,
+                userAgent: 1,
+                createdAt: 1,
+                updatedAt: 1
+              }
+            }
+          ]
+        }
+      }
+    ];
 
-    const total = await VideoDownload.countDocuments(query);
+    const result = await VideoDownload.aggregate(pipeline);
+    const total = result[0]?.totalBranch?.[0]?.total ?? 0;
+    const downloads = result[0]?.dataBranch ?? [];
 
     res.json({
       success: true,
