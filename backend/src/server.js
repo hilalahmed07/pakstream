@@ -1,5 +1,7 @@
 // Load environment variables first
 require('dotenv').config();
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const express = require('express');
 const http = require('http');
@@ -19,9 +21,20 @@ videoQueue.setSocketIO(socketHandler.io);
 
 // Middleware - CORS configuration from appConfig
 app.use(cors(appConfig.cors));
+app.use(helmet({ contentSecurityPolicy: false })); // Security headers; CSP disabled to avoid breaking frontend scripts
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// General API rate limit: max requests per IP per window (reduces abuse/DoS)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { success: false, message: 'Too many requests, try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', apiLimiter);
 
 // Database connection
 mongoose.connect(appConfig.database.uri).then(() => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks';
+import { useNotification } from '../../contexts/NotificationContext';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface LoginModalProps {
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { login } = useAuth();
+  const { showError } = useNotification();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -30,7 +32,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         navigate('/admin');
       }
     } catch (err) {
-      setError('Invalid email or password');
+      const message = err instanceof Error ? err.message : 'Invalid email or password';
+      setError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }

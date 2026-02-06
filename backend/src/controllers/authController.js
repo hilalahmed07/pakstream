@@ -7,6 +7,9 @@ const generateToken = (userId) => {
     expiresIn: '7d' 
   });
 };
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+const LOCKOUT_DURATION_MS = LOCKOUT_MINUTES * 60 * 1000;
 
 // Register new user
 const register = async (req, res) => {
@@ -165,7 +168,6 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -173,7 +175,6 @@ const login = async (req, res) => {
       });
     }
 
-    // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({
@@ -182,7 +183,6 @@ const login = async (req, res) => {
       });
     }
 
-    // Check if user is active
     if (!user.isActive) {
       return res.status(401).json({
         success: false,
@@ -190,18 +190,47 @@ const login = async (req, res) => {
       });
     }
 
-    // Verify password
+    // Account locked: reject until lockUntil has passed
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const remainingMs = user.lockUntil - new Date();
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      return res.status(423).json({
+        success: false,
+        message: `Account temporarily locked due to too many failed attempts. Try again in ${remainingMins} minute(s).`
+      });
+    }
+
+    // Lockout window expired: reset attempts so user can try again
+    if (user.lockUntil && user.lockUntil <= new Date()) {
+      user.loginAttempts = 0;
+      user.lockUntil = null;
+      await user.save({ validateBeforeSave: false });
+    }
+
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        user.lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await user.save({ validateBeforeSave: false });
+        return res.status(423).json({
+          success: false,
+          message: `Account locked after ${MAX_LOGIN_ATTEMPTS} failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`
+        });
+      }
+      await user.save({ validateBeforeSave: false });
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Success: clear lockout and return token
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    await user.save({ validateBeforeSave: false });
 
+    const token = generateToken(user._id);
     res.json({
       success: true,
       message: 'Login successful',
@@ -210,7 +239,6 @@ const login = async (req, res) => {
         token
       }
     });
-
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
