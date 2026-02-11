@@ -1,35 +1,14 @@
 import React, { useState } from 'react';
 import { Document } from '../../types/document';
 import documentService from '../../services/documentService';
-import LikesModal from '../common/LikesModal';
-import { useAuth } from '../../hooks';
+
 interface DocumentGridProps {
   documents: Document[];
   onDocumentClick: (document: Document) => void;
 }
 
-interface LikeUser {
-  _id: string;
-  username: string;
-  email: string;
-  profile?: {
-    firstName?: string;
-    lastName?: string;
-    avatar?: string;
-  };
-}
-
 const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick }) => {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const [localDocuments, setLocalDocuments] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
-  const [likesModalOpen, setLikesModalOpen] = useState(false);
-  const [likesModalData, setLikesModalData] = useState<{
-    title: string;
-    totalLikes: number;
-    likedBy: LikeUser[];
-  }>({ title: '', totalLikes: 0, likedBy: [] });
-  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Initialize local state from documents when they change
   React.useEffect(() => {
@@ -83,24 +62,6 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
     }
   };
 
-  const handleLikesCountClick = async (e: React.MouseEvent, document: Document) => {
-    e.stopPropagation(); // Prevent triggering the card click
-    
-    setLoadingLikes(true);
-    try {
-      const result = await documentService.getLikedByUsers(document._id);
-      setLikesModalData({
-        title: document.title,
-        totalLikes: result.totalLikes,
-        likedBy: result.likedBy
-      });
-      setLikesModalOpen(true);
-    } catch (error) {
-      console.error('Failed to get liked by users:', error);
-    } finally {
-      setLoadingLikes(false);
-    }
-  };
   const getCategoryColor = (category: string) => {
     const colors = {
       academic: 'bg-blue-600',
@@ -238,22 +199,9 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
                   </button>
-                  {isAdmin ? (
-                    <button
-                      onClick={(e) => handleLikesCountClick(e, document)}
-                      className={`ml-1 transition-colors cursor-pointer hover:underline ${
-                        local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
-                      }`}
-                      title="View who liked this"
-                      disabled={loadingLikes}
-                    >
-                      {loadingLikes ? '...' : local.likes}
-                    </button>
-                  ) : (
-                    <span className="ml-1">
+                  <span className="ml-1">
                       {local.likes}
                     </span>
-                  )}
                 </div>
                 
                 <span className="text-xs">
@@ -292,18 +240,6 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
         );
       })}
     </div>
-
-      {/* Likes Modal - visible only to admins */}
-      {isAdmin && (
-        <LikesModal
-          isOpen={likesModalOpen}
-          title={likesModalData.title}
-          totalLikes={likesModalData.totalLikes}
-          likedBy={likesModalData.likedBy}
-          contentType="document"
-          onClose={() => setLikesModalOpen(false)}
-        />
-      )}
     </>
   );
 };

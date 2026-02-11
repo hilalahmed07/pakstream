@@ -21,12 +21,28 @@ videoQueue.setSocketIO(socketHandler.io);
 
 // Middleware - CORS configuration from appConfig
 app.use(cors(appConfig.cors));
+
+// Build frame-ancestors for CSP so frontend (e.g. localhost:3000) can embed backend URLs in iframes (e.g. document viewer)
+const corsOrigin = appConfig.cors.origin;
+const frameAncestors =
+  corsOrigin === '*'
+    ? ["*"]
+    : Array.isArray(corsOrigin)
+      ? ["'self'", ...corsOrigin.filter((o) => typeof o === 'string')]
+      : ["'self'", "http://localhost:3000", "http://127.0.0.1:3000"];
+
 app.use(
   helmet({
-    // Disable CSP to avoid breaking frontend scripts
-    contentSecurityPolicy: false,
+    // Disable CSP for most directives to avoid breaking frontend scripts
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        frameAncestors,
+      },
+    },
+    // Do not set X-Frame-Options; use CSP frame-ancestors above so frontend (e.g. :3000) can embed doc viewer (e.g. :5000)
+    frameguard: false,
     // Allow static assets (images, HLS, slides) to be embedded from other origins
-    // e.g. frontend on :3000 loading files from backend on :5000
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );

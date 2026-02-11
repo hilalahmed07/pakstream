@@ -5,7 +5,6 @@ import downloadService from '../../services/downloadService';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../hooks';
 import { formatVideoDuration } from '../../utils/videoUtils';
-import LikesModal from '../common/LikesModal';
 
 interface VideoGridProps {
   videos: Video[];
@@ -13,17 +12,6 @@ interface VideoGridProps {
   onVideoClick: (video: Video) => void;
   onDeleteClick?: (video: Video) => void;
   showDeleteButton?: boolean;
-}
-
-interface LikeUser {
-  _id: string;
-  username: string;
-  email: string;
-  profile?: {
-    firstName?: string;
-    lastName?: string;
-    avatar?: string;
-  };
 }
 
 const VideoGrid: React.FC<VideoGridProps> = ({ 
@@ -34,17 +22,9 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   showDeleteButton = false 
 }) => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const { showError } = useNotification();
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
   const [localVideos, setLocalVideos] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
-  const [likesModalOpen, setLikesModalOpen] = useState(false);
-  const [likesModalData, setLikesModalData] = useState<{
-    title: string;
-    totalLikes: number;
-    likedBy: LikeUser[];
-  }>({ title: '', totalLikes: 0, likedBy: [] });
-  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Initialize local state from videos when they change
   React.useEffect(() => {
@@ -111,30 +91,6 @@ const VideoGrid: React.FC<VideoGridProps> = ({
     } catch (error) {
       console.error('Failed to toggle like:', error);
       showError(error instanceof Error ? error.message : 'Failed to toggle like');
-    }
-  };
-
-  const handleLikesCountClick = async (e: React.MouseEvent, video: Video) => {
-    e.stopPropagation();
-
-    if (!isAdmin) {
-      return;
-    }
-
-    setLoadingLikes(true);
-    try {
-      const result = await videoService.getLikedByUsers(video._id);
-      setLikesModalData({
-        title: video.title,
-        totalLikes: result.totalLikes,
-        likedBy: result.likedBy
-      });
-      setLikesModalOpen(true);
-    } catch (error) {
-      console.error('Failed to get liked by users:', error);
-      showError(error instanceof Error ? error.message : 'Failed to load likes');
-    } finally {
-      setLoadingLikes(false);
     }
   };
 
@@ -298,7 +254,6 @@ const VideoGrid: React.FC<VideoGridProps> = ({
                       ? 'Unlike'
                       : 'Like'
                   }
-                  disabled={loadingLikes}
                 >
                   <svg
                     className={`w-4 h-4 ${local.isLiked ? 'fill-current' : ''}`}
@@ -310,23 +265,9 @@ const VideoGrid: React.FC<VideoGridProps> = ({
                   </svg>
                 </button>
 
-                {/* Likes count - admin can click to see who liked, users see number only */}
-                {isAdmin ? (
-                  <button
-                    onClick={(e) => handleLikesCountClick(e, video)}
-                    className={`text-sm transition-colors cursor-pointer hover:underline ${
-                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
-                    }`}
-                    title="View who liked this video"
-                    disabled={loadingLikes}
-                  >
-                    {loadingLikes ? '...' : local.likes}
-                  </button>
-                ) : (
-                  <span className="text-sm">
-                    {local.likes}
-                  </span>
-                )}
+                <span className="text-sm">
+                  {local.likes}
+                </span>
               </div>
             </div>
 
@@ -354,18 +295,6 @@ const VideoGrid: React.FC<VideoGridProps> = ({
         </div>
       );})}
     </div>
-
-    {/* Likes Modal - visible only to admins */}
-    {isAdmin && (
-      <LikesModal
-        isOpen={likesModalOpen}
-        title={likesModalData.title}
-        totalLikes={likesModalData.totalLikes}
-        likedBy={likesModalData.likedBy}
-        contentType="video"
-        onClose={() => setLikesModalOpen(false)}
-      />
-    )}
   </>
   );
 };

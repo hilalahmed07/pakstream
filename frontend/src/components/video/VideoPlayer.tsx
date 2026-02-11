@@ -4,7 +4,6 @@ import { Video } from '../../types/video';
 import videoService from '../../services/videoService';
 import downloadService from '../../services/downloadService';
 import { useAuth } from '../../hooks';
-import LikesModal from '../common/LikesModal';
 
 interface VideoPlayerProps {
   video: Video;
@@ -16,17 +15,6 @@ interface VideoPlayerProps {
   onPlay?: () => void;
   onPause?: () => void;
   onSeek?: (time: number) => void;
-}
-
-interface LikeUser {
-  _id: string;
-  username: string;
-  email: string;
-  profile?: {
-    firstName?: string;
-    lastName?: string;
-    avatar?: string;
-  };
 }
 
 export interface VideoPlayerRef {
@@ -79,19 +67,11 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
   // Auth hook for checking if user is logged in
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
 
   // Like state
   const [likes, setLikes] = useState<number>(video.likes ?? 0);
   const [isLiked, setIsLiked] = useState<boolean>(video.isLiked ?? false);
   const [likeLoading, setLikeLoading] = useState(false);
-  const [likesModalOpen, setLikesModalOpen] = useState(false);
-  const [likesModalData, setLikesModalData] = useState<{
-    title: string;
-    totalLikes: number;
-    likedBy: LikeUser[];
-  }>({ title: video.title, totalLikes: video.likes ?? 0, likedBy: [] });
-  const [loadingLikesList, setLoadingLikesList] = useState(false);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -139,11 +119,6 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
     // Reset like state when video changes
     setLikes(video.likes ?? 0);
     setIsLiked(video.isLiked ?? false);
-    setLikesModalData({
-      title: video.title,
-      totalLikes: video.likes ?? 0,
-      likedBy: []
-    });
 
     // Reset view tracking when video changes
     if (currentVideoIdRef.current !== video._id) {
@@ -556,35 +531,10 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
       const result = await videoService.toggleLike(video._id, action);
       setLikes(result.likes);
       setIsLiked(result.isLiked);
-      setLikesModalData(prev => ({
-        ...prev,
-        totalLikes: result.likes
-      }));
     } catch (err) {
       console.error('Failed to toggle like:', err);
     } finally {
       setLikeLoading(false);
-    }
-  };
-
-  const handleLikesCountClick = async () => {
-    if (!video || !video._id) return;
-    if (!isAdmin) return;
-    if (loadingLikesList) return;
-
-    setLoadingLikesList(true);
-    try {
-      const result = await videoService.getLikedByUsers(video._id);
-      setLikesModalData({
-        title: video.title,
-        totalLikes: result.totalLikes,
-        likedBy: result.likedBy
-      });
-      setLikesModalOpen(true);
-    } catch (error) {
-      console.error('Failed to get liked by users:', error);
-    } finally {
-      setLoadingLikesList(false);
     }
   };
 
@@ -716,22 +666,9 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
                   >
                     <span className="text-xl">{isLiked ? '♥' : '♡'}</span>
                   </button>
-                  {isAdmin ? (
-                    <button
-                      onClick={handleLikesCountClick}
-                      disabled={loadingLikesList}
-                      className={`text-sm transition-colors hover:underline ${
-                        isLiked ? 'text-red-400' : 'text-gray-300 hover:text-red-400'
-                      }`}
-                      title="View who liked this video"
-                    >
-                      {loadingLikesList ? '...' : likes}
-                    </button>
-                  ) : (
-                    <span className="text-sm text-gray-300">
+                  <span className="text-sm text-gray-300">
                       {likes}
                     </span>
-                  )}
                 </div>
 
                 {/* Volume control */}
@@ -827,18 +764,6 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
           </div>
         )}
       </div>
-
-      {/* Likes Modal - visible only to admins */}
-      {isAdmin && (
-        <LikesModal
-          isOpen={likesModalOpen}
-          title={likesModalData.title}
-          totalLikes={likesModalData.totalLikes}
-          likedBy={likesModalData.likedBy}
-          contentType="video"
-          onClose={() => setLikesModalOpen(false)}
-        />
-      )}
     </>
   );
 });
