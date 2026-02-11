@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Presentation } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import LikesModal from '../common/LikesModal';
+import { useAuth } from '../../hooks';
 
 interface PresentationGridProps {
   presentations: Presentation[];
@@ -20,6 +21,8 @@ interface LikeUser {
 }
 
 const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesModalData, setLikesModalData] = useState<{
@@ -227,16 +230,22 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
                       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
                   </button>
-                  <button
-                    onClick={(e) => handleLikesCountClick(e, presentation)}
-                    className={`ml-1 transition-colors cursor-pointer hover:underline ${
-                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
-                    }`}
-                    title="View who liked this"
-                    disabled={loadingLikes}
-                  >
-                    {loadingLikes ? '...' : local.likes}
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      onClick={(e) => handleLikesCountClick(e, presentation)}
+                      className={`ml-1 transition-colors cursor-pointer hover:underline ${
+                        local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
+                      }`}
+                      title="View who liked this"
+                      disabled={loadingLikes}
+                    >
+                      {loadingLikes ? '...' : local.likes}
+                    </button>
+                  ) : (
+                    <span className="ml-1">
+                      {local.likes}
+                    </span>
+                  )}
                 </div>
                 
                 <span className="text-xs">
@@ -269,15 +278,17 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
       })}
     </div>
 
-      {/* Likes Modal */}
-      <LikesModal
-        isOpen={likesModalOpen}
-        title={likesModalData.title}
-        totalLikes={likesModalData.totalLikes}
-        likedBy={likesModalData.likedBy}
-        contentType="presentation"
-        onClose={() => setLikesModalOpen(false)}
-      />
+      {/* Likes Modal - visible only to admins */}
+      {isAdmin && (
+        <LikesModal
+          isOpen={likesModalOpen}
+          title={likesModalData.title}
+          totalLikes={likesModalData.totalLikes}
+          likedBy={likesModalData.likedBy}
+          contentType="presentation"
+          onClose={() => setLikesModalOpen(false)}
+        />
+      )}
     </>
   );
 };

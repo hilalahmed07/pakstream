@@ -4,6 +4,7 @@ import videoService from '../../services/videoService';
 import VideoGrid from './VideoGrid';
 import VideoUploadModal from './VideoUploadModal';
 import VideoVerificationModal from './VideoVerificationModal';
+import Pagination from '../common/Pagination';
 import ProtectedRoute from '../ProtectedRoute';
 
 const AdminVideoDashboard: React.FC = () => {
@@ -25,15 +26,20 @@ const AdminVideoDashboard: React.FC = () => {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [videoToVerify, setVideoToVerify] = useState<Video | null>(null);
   const [verificationSearch, setVerificationSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const fetchVideos = async () => {
     try {
       setLoading(true);
       const response = await videoService.getAdminVideos({
         ...filter,
-        limit: 50
+        page: currentPage,
+        // limit: 10 for testing
+        limit: 3
       });
       setVideos(response.data.videos);
+      setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch videos:', error);
     } finally {
@@ -42,9 +48,13 @@ const AdminVideoDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
+
+  useEffect(() => {
     fetchVideos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, currentPage]);
 
   const handleUploadStart = () => {
     setUploading(true);
@@ -65,7 +75,9 @@ const AdminVideoDashboard: React.FC = () => {
         pollCount++;
         const updatedVideos = await videoService.getAdminVideos({
           ...filter,
-          limit: 50
+          page: currentPage,
+          // limit: 10 for testing
+          limit: 3
         });
         const uploadedVideo = updatedVideos.data.videos.find(
           v => v._id === videoId
@@ -153,7 +165,7 @@ const AdminVideoDashboard: React.FC = () => {
   };
 
   const getStats = () => {
-    const total = videos.length;
+    const total = pagination.total || videos.length;
     const ready = videos.filter(v => v.status === 'ready').length;
     const processing = videos.filter(v => v.status === 'processing').length;
     const error = videos.filter(v => v.status === 'error').length;
@@ -365,6 +377,14 @@ const AdminVideoDashboard: React.FC = () => {
                 onVideoClick={handleVideoClick}
                 onDeleteClick={handleDeleteClick}
                 showDeleteButton={true}
+              />
+              <Pagination
+                currentPage={pagination.current}
+                totalPages={pagination.pages}
+                total={pagination.total}
+                // limit={10} for testing
+                limit={3}
+                onPageChange={setCurrentPage}
               />
 
               {/* Video Detail Modal */}

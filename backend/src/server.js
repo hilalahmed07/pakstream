@@ -21,11 +21,37 @@ videoQueue.setSocketIO(socketHandler.io);
 
 // Middleware - CORS configuration from appConfig
 app.use(cors(appConfig.cors));
-app.use(helmet({ contentSecurityPolicy: false })); // Security headers; CSP disabled to avoid breaking frontend scripts
+app.use(
+  helmet({
+    // Disable CSP to avoid breaking frontend scripts
+    contentSecurityPolicy: false,
+    // Allow static assets (images, HLS, slides) to be embedded from other origins
+    // e.g. frontend on :3000 loading files from backend on :5000
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+
+// Health check - no auth, no rate limit (for load balancers / k8s probes)
+app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+  const dbOk = dbState === 1;
+  const ok = dbOk;
+
+  res.status(ok ? 200 : 503).json({
+    ok,
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    database: {
+      status: dbOk ? 'connected' : 'disconnected',
+      readyState: dbState,
+    },
+  });
+});
 // General API rate limit: max requests per IP per window (reduces abuse/DoS)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

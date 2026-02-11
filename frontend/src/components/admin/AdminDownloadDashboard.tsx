@@ -10,7 +10,7 @@ const AdminDownloadDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState(10);
   
   // Filters
   const [userIdFilter, setUserIdFilter] = useState('');

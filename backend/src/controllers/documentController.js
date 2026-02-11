@@ -80,7 +80,8 @@ const uploadDocument = async (req, res) => {
 // Get all documents
 const getDocuments = async (req, res) => {
   try {
-    const { page = 1, limit = 12, category, search } = req.query;
+    // const { page = 1, limit = 10, category, search } = req.query; for testing
+    const { page = 1, limit = 3, category, search } = req.query;
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
@@ -357,11 +358,26 @@ const getDocumentThumbnail = async (req, res) => {
 // Get admin documents
 const getAdminDocuments = async (req, res) => {
   try {
+    // const { page = 1, limit = 10 } = req.query; for testing
+    const { page = 1, limit = 3 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const documents = await Document.find()
       .populate('uploadedBy', 'username email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    res.json({ documents });
+    const total = await Document.countDocuments();
+
+    res.json({
+      documents,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total
+      }
+    });
 
   } catch (error) {
     console.error('Get admin documents error:', error);
@@ -556,6 +572,15 @@ const verifyDocumentIntegrity = async (req, res) => {
 // Get users who liked a document
 const getDocumentLikedByUsers = async (req, res) => {
   try {
+    // Only admins are allowed to see who liked a document
+    const user = req.user;
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Admin access required to view like details' 
+      });
+    }
+
     const { id } = req.params;
     
     const document = await Document.findById(id)

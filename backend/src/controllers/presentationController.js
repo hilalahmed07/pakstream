@@ -81,7 +81,8 @@ const uploadPresentation = async (req, res) => {
 // Get all presentations
 const getPresentations = async (req, res) => {
   try {
-    const { page = 1, limit = 12, category, search } = req.query;
+    // const { page = 1, limit = 12, category, search } = req.query;
+    const { page = 1, limit = 3, category, search } = req.query; // for testing 
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
@@ -374,11 +375,26 @@ const getPresentationThumbnail = async (req, res) => {
 // Get admin presentations
 const getAdminPresentations = async (req, res) => {
   try {
+    // const { page = 1, limit = 10 } = req.query;  for testing
+    const { page = 1, limit = 3 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const presentations = await Presentation.find()
       .populate('uploadedBy', 'username email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    res.json({ presentations });
+    const total = await Presentation.countDocuments();
+
+    res.json({
+      presentations,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total
+      }
+    });
 
   } catch (error) {
     console.error('Get admin presentations error:', error);
@@ -573,6 +589,15 @@ const verifyPresentationIntegrity = async (req, res) => {
 // Get users who liked a presentation
 const getPresentationLikedByUsers = async (req, res) => {
   try {
+    // Only admins are allowed to see who liked a presentation
+    const user = req.user;
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required to view like details'
+      });
+    }
+
     const { id } = req.params;
 
     const presentation = await Presentation.findById(id)

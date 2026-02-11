@@ -146,7 +146,8 @@ const getQueueStatus = async (req, res) => {
 
 const getVideos = async (req, res) => {
   try {
-    const { page = 1, limit = 10, category, search, status } = req.query;
+    // const { page = 1, limit = 10, category, search, status } = req.query; for testing
+    const { page = 1, limit = 3, category, search, status } = req.query;
     const skip = (page - 1) * limit;
 
     let query = { isPublic: true };
@@ -252,7 +253,8 @@ const getVideos = async (req, res) => {
 
 const getFeaturedVideos = async (req, res) => {
   try {
-    const { limit = 10 } = req.query;
+    // const { limit = 10 } = req.query; for testing
+    const { limit = 3 } = req.query;
 
     // Get featured videos that are ready for playback
     const allFeaturedVideos = await Video.find({
@@ -385,7 +387,8 @@ const getVideoById = async (req, res) => {
 
 const getUserVideos = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    // const { page = 1, limit = 10 } = req.query; for testing
+    const { page = 1, limit = 3 } = req.query;
     const skip = (page - 1) * limit;
 
     const videos = await Video.find({ uploadedBy: req.user.id })
@@ -912,6 +915,62 @@ const toggleVideoLike = async (req, res) => {
   }
 };
 
+// Get users who liked a video
+const getVideoLikedByUsers = async (req, res) => {
+  try {
+    // Only admins are allowed to see who liked a video
+    const user = req.user;
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required to view like details'
+      });
+    }
+
+    const { id } = req.params;
+
+    const video = await Video.findById(id)
+      .populate({
+        path: 'likedBy',
+        select: 'username email profile',
+        model: 'User'
+      });
+
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
+      });
+    }
+
+    // Filter out any null entries and format the response
+    const likedByUsers = (video.likedBy || [])
+      .filter(user => user !== null)
+      .map(user => ({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        profile: user.profile || {}
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        videoId: id,
+        totalLikes: video.likes || likedByUsers.length,
+        likedBy: likedByUsers
+      }
+    });
+  } catch (error) {
+    console.error('Get liked by users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch liked by users',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadVideo,
   getVideos,
@@ -926,5 +985,6 @@ module.exports = {
   toggleVideoLike,
   downloadVideo,
   getVideoHash,
-  verifyVideoIntegrity
+  verifyVideoIntegrity,
+  getVideoLikedByUsers
 };

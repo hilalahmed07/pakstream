@@ -16,7 +16,8 @@ const {
   toggleVideoLike,
   downloadVideo,
   getVideoHash,
-  verifyVideoIntegrity
+  verifyVideoIntegrity,
+  getVideoLikedByUsers
 } = require('../controllers/videoController');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { upload, verificationUpload, handleUploadError } = require('../middleware/upload');
@@ -84,6 +85,8 @@ router.get('/:id/status', getVideoStatus);
 router.get('/:id/hash', getVideoHash); // Get video hash for manual verification
 router.post('/:id/view', trackVideoView); // Track video view (public endpoint)
 router.post('/:id/like', authenticateToken, toggleVideoLike); // Toggle video like (requires auth)
+// Only admins can see who liked a video
+router.get('/:id/likedby', authenticateToken, requireAdmin, getVideoLikedByUsers);
 router.post('/:id/verify', verificationUpload, handleUploadError, verifyVideoIntegrity); // Verify video integrity (public endpoint)
 
 // Protected download route (requires authentication)

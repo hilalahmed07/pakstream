@@ -10,6 +10,7 @@ import LivePremiere from '../../components/premiere/LivePremiere';
 import ScheduledPremiere from '../../components/premiere/ScheduledPremiere';
 import PremiereGrid from '../../components/premiere/PremiereGrid';
 import VideoProcessingStatus from '../../components/video/VideoProcessingStatus';
+import Pagination from '../../components/common/Pagination';
 import videoService from '../../services/videoService';
 import presentationService from '../../services/presentationService';
 import documentService from '../../services/documentService';
@@ -25,7 +26,16 @@ const UserHomePage: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [videoPage, setVideoPage] = useState(1);
+  const [documentPage, setDocumentPage] = useState(1);
+  const [presentationPage, setPresentationPage] = useState(1);
+  const [videoPagination, setVideoPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [documentPagination, setDocumentPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [presentationPagination, setPresentationPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [hasFetchedVideos, setHasFetchedVideos] = useState(false);
+  const [hasFetchedDocuments, setHasFetchedDocuments] = useState(false);
+  const [hasFetchedPresentations, setHasFetchedPresentations] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -61,33 +71,33 @@ const UserHomePage: React.FC = () => {
   const initializeApp = async () => {
     try {
       setLoading(true);
-      const promises = [
-        fetchVideos(),
-        fetchPresentations(),
-        fetchDocuments()
-      ];
-      
-      // Only check premieres if user is logged in (non-admin)
+      const promises: Promise<void>[] = [];
       if (user && user.role !== 'admin') {
         promises.push(checkActivePremiere(), fetchUpcomingPremieres());
       }
-      
       await Promise.all(promises);
     } catch (error) {
       console.error('Failed to initialize app:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const fetchVideos = async () => {
     try {
-      const response = await videoService.getVideos({ limit: 12 });
+      // const response = await videoService.getVideos({ page: videoPage, limit: 10 }); 
+      const response = await videoService.getVideos({ page: videoPage, limit: 3 }); 
       setVideos(response.data.videos);
+      setVideoPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch videos:', error);
+    } finally {
+      setHasFetchedVideos(true);
     }
   };
+
+  useEffect(() => {
+    fetchVideos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoPage]);
 
   const fetchUpcomingPremieres = async () => {
     // Only fetch premieres for logged-in users (non-admin)
@@ -110,21 +120,45 @@ const UserHomePage: React.FC = () => {
 
   const fetchPresentations = async () => {
     try {
-      const response = await presentationService.getPresentations({ limit: 12 });
+      // const response = await presentationService.getPresentations({ page: presentationPage, limit: 10 }); for testing
+      const response = await presentationService.getPresentations({ page: presentationPage, limit: 3 });
       setPresentations(response.presentations);
+      setPresentationPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch presentations:', error);
+    } finally {
+      setHasFetchedPresentations(true);
     }
   };
 
   const fetchDocuments = async () => {
     try {
-      const response = await documentService.getDocuments({ limit: 12 });
+      // const response = await documentService.getDocuments({ page: documentPage, limit: 4 });  // for testing
+      const response = await documentService.getDocuments({ page: documentPage, limit: 3 });
       setDocuments(response.documents);
+      setDocumentPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch documents:', error);
+    } finally {
+      setHasFetchedDocuments(true);
     }
   };
+
+  useEffect(() => {
+    fetchPresentations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentationPage]);
+
+  useEffect(() => {
+    fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentPage]);
+
+  useEffect(() => {
+    if (hasFetchedVideos && hasFetchedDocuments && hasFetchedPresentations) {
+      setLoading(false);
+    }
+  }, [hasFetchedVideos, hasFetchedDocuments, hasFetchedPresentations]);
 
   const checkActivePremiere = async () => {
     try {
@@ -415,6 +449,14 @@ const UserHomePage: React.FC = () => {
             loading={loading}
             onVideoClick={handleVideoClick}
           />
+          <Pagination
+            currentPage={videoPagination.current}
+            totalPages={videoPagination.pages}
+            total={videoPagination.total}
+            // limit={10} for testing
+            limit={3}
+            onPageChange={setVideoPage}
+          />
         </div>
       </section>
 
@@ -431,6 +473,14 @@ const UserHomePage: React.FC = () => {
             presentations={presentations} 
             onPresentationClick={handlePresentationClick}
           />
+          <Pagination
+            currentPage={presentationPagination.current}
+            totalPages={presentationPagination.pages}
+            total={presentationPagination.total}
+            // limit={10} for testing
+            limit={3}
+            onPageChange={setPresentationPage}
+          />
         </div>
       </section>
 
@@ -446,6 +496,14 @@ const UserHomePage: React.FC = () => {
           <DocumentGrid 
             documents={documents} 
             onDocumentClick={handleDocumentClick}
+          />
+          <Pagination
+            currentPage={documentPagination.current}
+            totalPages={documentPagination.pages}
+            total={documentPagination.total}
+            // limit={10} for testing
+            limit={3}
+            onPageChange={setDocumentPage}
           />
         </div>
       </section>

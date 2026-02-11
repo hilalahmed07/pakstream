@@ -147,6 +147,10 @@ class SocketService {
   }
 
   // Video controls
+  /**
+   * Admin-only playback controls.
+   * The server enforces role checks; viewers should never call these.
+   */
   playVideo(premiereId: string) {
     const socket = this.getSocket();
     if (socket) {

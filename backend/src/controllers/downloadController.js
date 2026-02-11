@@ -134,7 +134,7 @@ const getAllDownloads = async (req, res) => {
   try {
     const { 
       page = 1, 
-      limit = 25, 
+      limit = 10, 
       userId, 
       videoId, 
       startDate, 
@@ -283,7 +283,7 @@ const getAllDownloads = async (req, res) => {
 const getUserDownloads = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { page = 1, limit = 25 } = req.query;
+    const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
     const downloads = await VideoDownload.find({ user: userId })
@@ -320,7 +320,7 @@ const getUserDownloads = async (req, res) => {
 const getVideoDownloads = async (req, res) => {
   try {
     const { videoId } = req.params;
-    const { page = 1, limit = 25 } = req.query;
+    const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
     const downloads = await VideoDownload.find({ video: videoId })

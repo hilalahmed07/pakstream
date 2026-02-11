@@ -32,6 +32,9 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
   const hasJoinedRef = useRef(false);
   const autoPlayAttemptedRef = useRef(false);
 
+  // Flag to ignore local player callbacks while applying server commands
+  const isApplyingServerCommandRef = useRef(false);
+
   useEffect(() => {
     // Prevent duplicate joins
     if (hasJoinedRef.current) {
@@ -55,18 +58,31 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       // User joins/refreshes and gets the current live playback position
       // Only seek if premiere is live and we have a valid positive time
       if (data.currentTime && data.currentTime > 0 && videoRef.current && isVideoReady && premiere.status === 'live') {
-        console.log('Seeking to current premiere time:', data.currentTime, 'status:', premiere.status);
-        // Use a small delay to ensure HLS is loaded
-        const seekTimer = setTimeout(() => {
-          if (videoRef.current && isVideoReady) {
-            try {
-              videoRef.current.seek(data.currentTime);
-              console.log('✅ Seeked to:', data.currentTime);
-            } catch (error) {
-              console.warn('Could not seek to time:', error);
-            }
+        console.log('Seeking to current premiere time on join:', data.currentTime, 'status:', premiere.status);
+        const targetTime = data.currentTime;
+
+        // Drift-tolerant join seek: only correct if we're far enough off
+        const applyJoinSync = () => {
+          if (!videoRef.current) return;
+          const current = videoRef.current.getCurrentTime();
+          const drift = Math.abs(current - targetTime);
+          const DRIFT_TOLERANCE_SECONDS = 1.5;
+
+          if (drift > DRIFT_TOLERANCE_SECONDS) {
+            console.log('Applying join sync seek. Current:', current, 'Target:', targetTime, 'Drift:', drift);
+            isApplyingServerCommandRef.current = true;
+            videoRef.current.seek(targetTime);
+            // Release lock shortly after applying
+            setTimeout(() => {
+              isApplyingServerCommandRef.current = false;
+            }, 300);
+          } else {
+            console.log('Skipping join sync seek, drift within tolerance:', drift);
           }
-        }, 300);
+        };
+
+        // Use a small delay to ensure HLS is loaded before we inspect time/seek
+        const seekTimer = setTimeout(applyJoinSync, 500);
         return () => clearTimeout(seekTimer);
       }
     };
@@ -81,14 +97,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
 
     const handlePremiereStarted = (data: any) => {
       console.log('Premiere started:', data);
-      // Auto-play video when premiere starts
-      if (videoRef.current && isVideoReady) {
-        setTimeout(() => {
-          console.log('Auto-playing video after premiere started');
-          videoRef.current?.play();
-          socketService.playVideo(premiere._id);
-        }, 500);
-      }
+      // Server is the authority; clients only follow commands via video-play event
     };
 
     const handlePremiereEnded = (data: any) => {
@@ -97,21 +106,52 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     };
 
     const handleVideoPlay = () => {
-      if (videoRef.current) {
-        videoRef.current.play();
+      if (!videoRef.current) return;
+      console.log('Socket command: video-play');
+      isApplyingServerCommandRef.current = true;
+      const playResult = videoRef.current.play();
+      if (playResult instanceof Promise) {
+        playResult.finally(() => {
+          setTimeout(() => {
+            isApplyingServerCommandRef.current = false;
+          }, 300);
+        });
+      } else {
+        setTimeout(() => {
+          isApplyingServerCommandRef.current = false;
+        }, 300);
       }
     };
 
     const handleVideoPause = () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-      }
+      if (!videoRef.current) return;
+      console.log('Socket command: video-pause');
+      isApplyingServerCommandRef.current = true;
+      videoRef.current.pause();
+      setTimeout(() => {
+        isApplyingServerCommandRef.current = false;
+      }, 300);
     };
 
     const handleVideoSeek = (data: { time: number }) => {
-      if (videoRef.current) {
-        videoRef.current.seek(data.time);
+      if (!videoRef.current) return;
+      const targetTime = data.time;
+      const current = videoRef.current.getCurrentTime();
+      const drift = Math.abs(current - targetTime);
+      const DRIFT_TOLERANCE_SECONDS = 1.5;
+
+      console.log('Socket command: video-seek', { targetTime, current, drift });
+
+      if (drift <= DRIFT_TOLERANCE_SECONDS) {
+        console.log('Skipping seek, drift within tolerance');
+        return;
       }
+
+      isApplyingServerCommandRef.current = true;
+      videoRef.current.seek(targetTime);
+      setTimeout(() => {
+        isApplyingServerCommandRef.current = false;
+      }, 300);
     };
 
     const handleNewMessage = (message: any) => {
@@ -197,16 +237,28 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     }
   };
 
+  // Local player callbacks: viewers never emit socket controls; they only follow server.
+  // We still accept callbacks for UI/logging if needed, but we ignore them for syncing.
   const handleVideoPlay = () => {
-    socketService.playVideo(premiere._id);
+    if (isApplyingServerCommandRef.current) {
+      // This play came from a server command; ignore.
+      return;
+    }
+    // Viewers do not emit play-video; admin page is the only control surface.
   };
 
   const handleVideoPause = () => {
-    socketService.pauseVideo(premiere._id);
+    if (isApplyingServerCommandRef.current) {
+      return;
+    }
+    // Viewers do not emit pause-video.
   };
 
   const handleVideoSeek = (time: number) => {
-    socketService.seekVideo(premiere._id, time);
+    if (isApplyingServerCommandRef.current) {
+      return;
+    }
+    // Viewers do not emit seek-video; they are passive followers.
   };
 
   // Validate premiere video data before rendering player (run only once on mount)

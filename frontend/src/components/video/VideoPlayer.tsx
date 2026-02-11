@@ -4,6 +4,7 @@ import { Video } from '../../types/video';
 import videoService from '../../services/videoService';
 import downloadService from '../../services/downloadService';
 import { useAuth } from '../../hooks';
+import LikesModal from '../common/LikesModal';
 
 interface VideoPlayerProps {
   video: Video;
@@ -15,6 +16,17 @@ interface VideoPlayerProps {
   onPlay?: () => void;
   onPause?: () => void;
   onSeek?: (time: number) => void;
+}
+
+interface LikeUser {
+  _id: string;
+  username: string;
+  email: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
 }
 
 export interface VideoPlayerRef {
@@ -67,6 +79,19 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
   // Auth hook for checking if user is logged in
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // Like state
+  const [likes, setLikes] = useState<number>(video.likes ?? 0);
+  const [isLiked, setIsLiked] = useState<boolean>(video.isLiked ?? false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{
+    title: string;
+    totalLikes: number;
+    likedBy: LikeUser[];
+  }>({ title: video.title, totalLikes: video.likes ?? 0, likedBy: [] });
+  const [loadingLikesList, setLoadingLikesList] = useState(false);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -110,6 +135,15 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
 
   useEffect(() => {
     if (!video || !video._id) return;
+
+    // Reset like state when video changes
+    setLikes(video.likes ?? 0);
+    setIsLiked(video.isLiked ?? false);
+    setLikesModalData({
+      title: video.title,
+      totalLikes: video.likes ?? 0,
+      likedBy: []
+    });
 
     // Reset view tracking when video changes
     if (currentVideoIdRef.current !== video._id) {
@@ -507,6 +541,53 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
     }
   };
 
+  const handleToggleLike = async () => {
+    if (!video || !video._id) return;
+    if (!user) {
+      console.warn('User must be logged in to like videos.');
+      return;
+    }
+
+    if (likeLoading) return;
+
+    setLikeLoading(true);
+    const action = isLiked ? 'unlike' : 'like';
+    try {
+      const result = await videoService.toggleLike(video._id, action);
+      setLikes(result.likes);
+      setIsLiked(result.isLiked);
+      setLikesModalData(prev => ({
+        ...prev,
+        totalLikes: result.likes
+      }));
+    } catch (err) {
+      console.error('Failed to toggle like:', err);
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
+  const handleLikesCountClick = async () => {
+    if (!video || !video._id) return;
+    if (!isAdmin) return;
+    if (loadingLikesList) return;
+
+    setLoadingLikesList(true);
+    try {
+      const result = await videoService.getLikedByUsers(video._id);
+      setLikesModalData({
+        title: video.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+    } finally {
+      setLoadingLikesList(false);
+    }
+  };
+
   if (error) {
     return (
       <div className={`bg-black flex items-center justify-center ${className}`}>
@@ -547,168 +628,218 @@ const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(({
   }
 
   return (
-    <div 
-      className={`relative bg-black ${className}`}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setShowControls(false)}
-    >
-      <video
-        ref={videoRef}
-        className="w-full h-full object-contain"
-        playsInline
-        preload="metadata"
-        autoPlay={autoPlay}
-      />
-      
-      {(isLoading || isRetrying) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="text-center text-white">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            {isRetrying ? (
-              <>
-                <p>Reconnecting...</p>
-                <p className="text-sm text-gray-400 mt-2">
-                  Attempt {retryCount}/{MAX_RETRY_ATTEMPTS}
-                </p>
-              </>
-            ) : (
-              <p>Loading video...</p>
-            )}
+    <>
+      <div 
+        className={`relative bg-black ${className}`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setShowControls(false)}
+      >
+        <video
+          ref={videoRef}
+          className="w-full h-full object-contain"
+          playsInline
+          preload="metadata"
+          autoPlay={autoPlay}
+        />
+        
+        {(isLoading || isRetrying) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="text-center text-white">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+              {isRetrying ? (
+                <>
+                  <p>Reconnecting...</p>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Attempt {retryCount}/{MAX_RETRY_ATTEMPTS}
+                  </p>
+                </>
+              ) : (
+                <p>Loading video...</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {controls && (
-        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-          {/* Progress bar - Hidden during premiere for TV-like broadcast */}
-          {showProgressBar && (
-            <div className="px-4 pt-4 pb-2">
-              <div 
-                className="w-full bg-gray-700 rounded-full h-1.5 cursor-pointer hover:h-2 transition-all group relative"
-                onClick={handleProgressBarClick}
-                title="Click to seek"
-              >
+        {controls && (
+          <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            {/* Progress bar - Hidden during premiere for TV-like broadcast */}
+            {showProgressBar && (
+              <div className="px-4 pt-4 pb-2">
                 <div 
-                  className="bg-red-600 h-full rounded-full transition-all duration-200 relative"
-                  style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                  className="w-full bg-gray-700 rounded-full h-1.5 cursor-pointer hover:h-2 transition-all group relative"
+                  onClick={handleProgressBarClick}
+                  title="Click to seek"
                 >
-                  {/* Seek handle */}
-                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"></div>
+                  <div 
+                    className="bg-red-600 h-full rounded-full transition-all duration-200 relative"
+                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                  >
+                    {/* Seek handle */}
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Controls */}
-          <div className="flex items-center justify-between text-white px-4 pb-4">
-            <div className="flex items-center space-x-3">
-              <button 
-                onClick={handlePlayPause} 
-                className="hover:text-gray-300 hover:scale-110 transition-transform text-2xl"
-                title={isPlaying ? 'Pause' : 'Play'}
-              >
-                {isPlaying ? '⏸️' : '▶️'}
-              </button>
-              
-              <span className="text-sm font-medium">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {/* Volume control */}
-              <div className="flex items-center space-x-2">
+            {/* Controls */}
+            <div className="flex items-center justify-between text-white px-4 pb-4">
+              <div className="flex items-center space-x-3">
                 <button 
-                  onClick={handleMuteToggle} 
-                  className="hover:text-gray-300 hover:scale-110 transition-transform text-xl"
-                  title={isMuted ? 'Unmute' : 'Mute'}
+                  onClick={handlePlayPause} 
+                  className="hover:text-gray-300 hover:scale-110 transition-transform text-2xl"
+                  title={isPlaying ? 'Pause' : 'Play'}
                 >
-                  {isMuted ? '🔇' : '🔊'}
+                  {isPlaying ? '⏸️' : '▶️'}
                 </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                  className="w-20 cursor-pointer"
-                />
+                
+                <span className="text-sm font-medium">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
               </div>
 
-              {/* Quality selector - always show if we have HLS */}
-              {Hls.isSupported() && availableQualities.length > 0 && (
-                <div className="relative">
+              <div className="flex items-center space-x-3">
+                {/* Like + count */}
+                <div className="flex items-center space-x-1">
                   <button
-                    onClick={() => setShowQualityMenu(!showQualityMenu)}
-                    className="hover:text-gray-300 hover:bg-gray-700 px-3 py-1.5 bg-gray-800 rounded text-sm font-medium transition-colors flex items-center gap-1"
-                    title="Video quality settings"
+                    onClick={handleToggleLike}
+                    disabled={likeLoading || !user}
+                    className={`flex items-center transition-colors ${
+                      isLiked ? 'text-red-500' : 'text-gray-300 hover:text-red-500'
+                    } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={
+                      !user
+                        ? 'Login to like this video'
+                        : isLiked
+                        ? 'Unlike'
+                        : 'Like'
+                    }
                   >
-                    <span className="text-base">⚙️</span>
-                    <span>{selectedQuality === 'auto' ? 'Auto' : selectedQuality}</span>
+                    <span className="text-xl">{isLiked ? '♥' : '♡'}</span>
                   </button>
-                  {showQualityMenu && (
-                    <div className="absolute bottom-12 right-0 bg-gray-900 bg-opacity-98 rounded-lg shadow-2xl p-2 min-w-[140px] border-2 border-gray-600 z-50">
-                      <div className="text-xs text-gray-400 px-3 py-1 font-semibold uppercase">Quality</div>
-                      {availableQualities.map(quality => (
-                        <button
-                          key={quality}
-                          onClick={() => {
-                            handleQualityChange(quality);
-                            setShowQualityMenu(false);
-                          }}
-                          className={`block w-full text-left px-3 py-2 rounded transition-colors text-sm ${
-                            quality === selectedQuality 
-                              ? 'bg-red-600 text-white font-semibold' 
-                              : 'text-gray-200 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>{quality === 'auto' ? 'Auto (recommended)' : quality}</span>
-                            {quality === selectedQuality && <span className="text-green-400">✓</span>}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                  {isAdmin ? (
+                    <button
+                      onClick={handleLikesCountClick}
+                      disabled={loadingLikesList}
+                      className={`text-sm transition-colors hover:underline ${
+                        isLiked ? 'text-red-400' : 'text-gray-300 hover:text-red-400'
+                      }`}
+                      title="View who liked this video"
+                    >
+                      {loadingLikesList ? '...' : likes}
+                    </button>
+                  ) : (
+                    <span className="text-sm text-gray-300">
+                      {likes}
+                    </span>
                   )}
                 </div>
-              )}
 
-              {/* Download button - only show if user is logged in and video is ready */}
-              {user && video.status === 'ready' && (
-                <button
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                  className="hover:text-gray-300 hover:scale-110 transition-transform text-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={isDownloading ? 'Downloading...' : 'Download video'}
-                >
-                  {isDownloading ? '⏳' : '⬇️'}
-                </button>
-              )}
+                {/* Volume control */}
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={handleMuteToggle} 
+                    className="hover:text-gray-300 hover:scale-110 transition-transform text-xl"
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted ? '🔇' : '🔊'}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                    className="w-20 cursor-pointer"
+                  />
+                </div>
+
+                {/* Quality selector - always show if we have HLS */}
+                {Hls.isSupported() && availableQualities.length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowQualityMenu(!showQualityMenu)}
+                      className="hover:text-gray-300 hover:bg-gray-700 px-3 py-1.5 bg-gray-800 rounded text-sm font-medium transition-colors flex items-center gap-1"
+                      title="Video quality settings"
+                    >
+                      <span className="text-base">⚙️</span>
+                      <span>{selectedQuality === 'auto' ? 'Auto' : selectedQuality}</span>
+                    </button>
+                    {showQualityMenu && (
+                      <div className="absolute bottom-12 right-0 bg-gray-900 bg-opacity-98 rounded-lg shadow-2xl p-2 min-w-[140px] border-2 border-gray-600 z-50">
+                        <div className="text-xs text-gray-400 px-3 py-1 font-semibold uppercase">Quality</div>
+                        {availableQualities.map(quality => (
+                          <button
+                            key={quality}
+                            onClick={() => {
+                              handleQualityChange(quality);
+                              setShowQualityMenu(false);
+                            }}
+                            className={`block w-full text-left px-3 py-2 rounded transition-colors text-sm ${
+                              quality === selectedQuality 
+                                ? 'bg-red-600 text-white font-semibold' 
+                                : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{quality === 'auto' ? 'Auto (recommended)' : quality}</span>
+                              {quality === selectedQuality && <span className="text-green-400">✓</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Download button - only show if user is logged in and video is ready */}
+                {user && video.status === 'ready' && (
+                  <button
+                    onClick={handleDownload}
+                    disabled={isDownloading}
+                    className="hover:text-gray-300 hover:scale-110 transition-transform text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={isDownloading ? 'Downloading...' : 'Download video'}
+                  >
+                    {isDownloading ? '⏳' : '⬇️'}
+                  </button>
+                )}
 
 
-              <button 
-                onClick={handleFullscreenToggle} 
-                className="hover:text-gray-300 hover:scale-110 transition-transform text-xl"
-                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              >
-                {isFullscreen ? '⤢' : '⤡'}
-              </button>
-
-              {onClose && (
                 <button 
-                  onClick={onClose} 
-                  className="hover:text-gray-300 hover:scale-110 transition-transform text-2xl"
-                  title="Close player"
+                  onClick={handleFullscreenToggle} 
+                  className="hover:text-gray-300 hover:scale-110 transition-transform text-xl"
+                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 >
-                  ✕
+                  {isFullscreen ? '⤢' : '⤡'}
                 </button>
-              )}
+
+                {onClose && (
+                  <button 
+                    onClick={onClose} 
+                    className="hover:text-gray-300 hover:scale-110 transition-transform text-2xl"
+                    title="Close player"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Likes Modal - visible only to admins */}
+      {isAdmin && (
+        <LikesModal
+          isOpen={likesModalOpen}
+          title={likesModalData.title}
+          totalLikes={likesModalData.totalLikes}
+          likedBy={likesModalData.likedBy}
+          contentType="video"
+          onClose={() => setLikesModalOpen(false)}
+        />
       )}
-    </div>
+    </>
   );
 });
 

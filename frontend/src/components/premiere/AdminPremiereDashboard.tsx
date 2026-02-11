@@ -8,6 +8,7 @@ import socketService from '../../services/socketService';
 import { useAuth } from '../../hooks';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
+import Pagination from '../common/Pagination';
 import { formatVideoDuration } from '../../utils/videoUtils';
 
 const AdminPremiereDashboard: React.FC = () => {
@@ -24,6 +25,8 @@ const AdminPremiereDashboard: React.FC = () => {
     isOpen: false,
     premiereId: null,
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const fetchData = useCallback(async () => {
     try {
@@ -45,11 +48,12 @@ const AdminPremiereDashboard: React.FC = () => {
       setVideos(readyVideos);
       
       const [premieresRes, activeRes] = await Promise.all([
-        premiereService.getAllPremieres(),
+        premiereService.getAllPremieres({ page: currentPage, limit: 10 }),
         premiereService.getActivePremiere()
       ]);
 
       setPremieres(premieresRes.data.premieres);
+      setPagination(premieresRes.data.pagination || { current: 1, pages: 1, total: premieresRes.data.premieres?.length || 0 });
       setActivePremiere(activeRes.data.premiere);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -57,7 +61,7 @@ const AdminPremiereDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage]);
 
   const setupSocketListeners = useCallback(() => {
     const handlePremiereStarted = (data: any) => {
@@ -122,7 +126,7 @@ const AdminPremiereDashboard: React.FC = () => {
       const cleanup = setupSocketListeners();
       return cleanup;
     }
-  }, [user, fetchData, setupSocketListeners]);
+  }, [user, fetchData, setupSocketListeners, currentPage]);
 
   const handleCreatePremiere = async (premiereData: CreatePremiereData) => {
     try {
@@ -167,15 +171,36 @@ const AdminPremiereDashboard: React.FC = () => {
 
   const confirmDeletePremiere = async () => {
     if (!deleteConfirm.premiereId) return;
-    
+
+    const premiereToDelete = premieres.find(p => p._id === deleteConfirm.premiereId);
+    const wasLive = premiereToDelete?.status === 'live';
+
     try {
+      // If premiere is currently live, end it first, then delete
+      if (wasLive) {
+        await premiereService.endPremiere(deleteConfirm.premiereId);
+      }
+
       await premiereService.deletePremiere(deleteConfirm.premiereId);
-      showSuccess('Premiere has been deleted');
+
+      if (wasLive) {
+        showSuccess('Premiere has been ended and deleted');
+      } else {
+        showSuccess('Premiere has been deleted');
+      }
+
       fetchData();
       setDeleteConfirm({ isOpen: false, premiereId: null });
     } catch (error) {
       console.error('Failed to delete premiere:', error);
-      showError('Failed to delete premiere: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (message === 'Cannot delete live premiere') {
+        showError('Cannot delete a live premiere directly. Please end it first, then delete.');
+      } else {
+        showError('Failed to delete premiere: ' + message);
+      }
+
       setDeleteConfirm({ isOpen: false, premiereId: null });
     }
   };
@@ -346,6 +371,13 @@ const AdminPremiereDashboard: React.FC = () => {
               ))}
             </div>
           )}
+          <Pagination
+            currentPage={pagination.current}
+            totalPages={pagination.pages}
+            total={pagination.total}
+            limit={10}
+            onPageChange={setCurrentPage}
+          />
         </div>
 
         {showCreateModal && (

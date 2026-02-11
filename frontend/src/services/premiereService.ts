@@ -77,8 +77,13 @@ class PremiereService {
     });
   }
 
-  async getAllPremieres(): Promise<PremieresResponse> {
-    return this.request<PremieresResponse>('/premieres');
+  async getAllPremieres(params?: { page?: number; limit?: number; status?: string }): Promise<PremieresResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    const queryString = queryParams.toString();
+    return this.request<PremieresResponse>(`/premieres${queryString ? `?${queryString}` : ''}`);
   }
 
   // Public method - no authentication required

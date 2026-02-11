@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Presentation, CreatePresentationData } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import PresentationVerificationModal from './PresentationVerificationModal';
+import Pagination from '../common/Pagination';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
@@ -21,22 +22,27 @@ const AdminPresentationDashboard: React.FC = () => {
     isOpen: false,
     presentationId: null,
   });
-
-  useEffect(() => {
-    fetchPresentations();
-  }, []);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const fetchPresentations = async () => {
     try {
       setLoading(true);
-      const response = await presentationService.getAdminPresentations();
+      // const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
+      const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 3 });
       setPresentations(response.presentations);
+      setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch presentations:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPresentations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const handleUpload = async (formData: FormData) => {
     try {
@@ -58,7 +64,8 @@ const AdminPresentationDashboard: React.FC = () => {
       const pollInterval = setInterval(async () => {
         try {
           pollCount++;
-          const updatedPresentations = await presentationService.getAdminPresentations();
+          // const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
+          const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 3 });
           const uploadedPresentation = updatedPresentations.presentations.find(
             p => p._id === presentationId
           );
@@ -355,6 +362,14 @@ const AdminPresentationDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
+              <Pagination
+                currentPage={pagination.current}
+                totalPages={pagination.pages}
+                total={pagination.total}
+                // limit={10} for testing
+                limit={3}
+                onPageChange={setCurrentPage}
+              />
 
               {/* Upload Modal */}
               {showUploadModal && (

@@ -70,6 +70,10 @@ class SocketHandler {
           // Join the premiere room
           socket.join(`premiere-${premiereId}`);
           
+          // Determine viewer role in this premiere
+          const isAdminUser = socket.userRole === 'admin' || 
+            (premiere.createdBy && socket.userId && premiere.createdBy._id?.toString?.() === socket.userId);
+
           // Get or create room data
           if (!this.premiereRooms.has(premiereId)) {
             // Calculate the actual start time based on when premiere started
@@ -83,7 +87,8 @@ class SocketHandler {
               isLive: premiere.status === 'live',
               startTime: premiereStartTime, // Track when premiere started playing
               isPlaying: false,
-              chat: []
+              chat: [],
+              totalViewers: 0
             });
           }
 
@@ -107,13 +112,20 @@ class SocketHandler {
           roomData.viewers.set(socket.id, {
             userId: socket.userId,
             joinedAt: new Date(),
-            lastKnownTime: currentPlaybackTime
+            lastKnownTime: currentPlaybackTime,
+            role: isAdminUser ? 'admin' : 'viewer'
           });
 
-          // Update premiere viewer count
-          await Premiere.findByIdAndUpdate(premiereId, {
-            $inc: { totalViewers: 1 }
-          });
+          // Update lifetime viewer count only once per unique user (best-effort)
+          if (socket.userId) {
+            const hasSeenKey = `seen-${socket.userId}`;
+            if (!roomData[hasSeenKey]) {
+              roomData[hasSeenKey] = true;
+              await Premiere.findByIdAndUpdate(premiereId, {
+                $inc: { totalViewers: 1 }
+              }).catch(console.error);
+            }
+          }
 
           // Send room data to the user with their resume position
           socket.emit('premiere-joined', {
@@ -143,11 +155,6 @@ class SocketHandler {
         if (this.premiereRooms.has(premiereId)) {
           const roomData = this.premiereRooms.get(premiereId);
           roomData.viewers.delete(socket.id);
-
-          // Update premiere viewer count
-          await Premiere.findByIdAndUpdate(premiereId, {
-            $inc: { totalViewers: -1 }
-          });
 
           // Notify other viewers
           socket.to(`premiere-${premiereId}`).emit('viewer-left', {
@@ -183,6 +190,12 @@ class SocketHandler {
 
           if (!premiere) {
             socket.emit('error', { message: 'Premiere not found' });
+            return;
+          }
+
+          // Only allow the premiere creator or admin to start
+          if (!socket.userId || (socket.userRole !== 'admin' && premiere.createdBy?._id?.toString?.() !== socket.userId)) {
+            socket.emit('error', { message: 'Not authorized to start premiere' });
             return;
           }
           
@@ -251,6 +264,12 @@ class SocketHandler {
             return;
           }
 
+          // Only allow the premiere creator or admin to end
+          if (!socket.userId || (socket.userRole !== 'admin' && premiere.createdBy?._id?.toString?.() !== socket.userId)) {
+            socket.emit('error', { message: 'Not authorized to end premiere' });
+            return;
+          }
+
           // Update room data
           if (this.premiereRooms.has(premiereId)) {
             const roomData = this.premiereRooms.get(premiereId);
@@ -270,37 +289,53 @@ class SocketHandler {
         }
       });
 
-      // Video playback controls
+      // Video playback controls - ONLY admin/creator is allowed to drive these
       socket.on('play-video', (premiereId) => {
-        if (this.premiereRooms.has(premiereId)) {
-          const roomData = this.premiereRooms.get(premiereId);
-          roomData.isPlaying = true;
-          
-          socket.to(`premiere-${premiereId}`).emit('video-play');
+        const roomData = this.premiereRooms.get(premiereId);
+        if (!roomData) return;
+
+        const viewer = roomData.viewers.get(socket.id);
+        const isAdminViewer = viewer?.role === 'admin';
+
+        if (!isAdminViewer) {
+          return;
         }
+
+        roomData.isPlaying = true;
+        this.io.to(`premiere-${premiereId}`).emit('video-play');
       });
 
       socket.on('pause-video', (premiereId) => {
-        if (this.premiereRooms.has(premiereId)) {
-          const roomData = this.premiereRooms.get(premiereId);
-          roomData.isPlaying = false;
-          
-          socket.to(`premiere-${premiereId}`).emit('video-pause');
+        const roomData = this.premiereRooms.get(premiereId);
+        if (!roomData) return;
+
+        const viewer = roomData.viewers.get(socket.id);
+        const isAdminViewer = viewer?.role === 'admin';
+
+        if (!isAdminViewer) {
+          return;
         }
+
+        roomData.isPlaying = false;
+        this.io.to(`premiere-${premiereId}`).emit('video-pause');
       });
 
       socket.on('seek-video', (premiereId, time) => {
-        if (this.premiereRooms.has(premiereId)) {
-          const roomData = this.premiereRooms.get(premiereId);
-          
-          // Update viewer's last known time for resume tracking
-          if (roomData.viewers.has(socket.id)) {
-            const viewerData = roomData.viewers.get(socket.id);
-            viewerData.lastKnownTime = time;
-          }
-          
-          socket.to(`premiere-${premiereId}`).emit('video-seek', { time });
+        const roomData = this.premiereRooms.get(premiereId);
+        if (!roomData) return;
+
+        const viewer = roomData.viewers.get(socket.id);
+        const isAdminViewer = viewer?.role === 'admin';
+
+        if (!isAdminViewer) {
+          return;
         }
+
+        // Update room-level "virtual clock" by shifting startTime based on seek
+        const now = new Date();
+        roomData.startTime = new Date(now.getTime() - time * 1000);
+
+        this.io.to(`premiere-${premiereId}`).emit('video-seek', { time });
       });
 
       // Chat functionality
@@ -345,12 +380,7 @@ class SocketHandler {
         for (const [premiereId, roomData] of this.premiereRooms.entries()) {
           if (roomData.viewers.has(socket.id)) {
             roomData.viewers.delete(socket.id);
-            
-            // Update premiere viewer count
-            Premiere.findByIdAndUpdate(premiereId, {
-              $inc: { totalViewers: -1 }
-            }).catch(console.error);
-            
+
             // Notify other viewers
             socket.to(`premiere-${premiereId}`).emit('viewer-left', {
               viewerCount: roomData.viewers.size

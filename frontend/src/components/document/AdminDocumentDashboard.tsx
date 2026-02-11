@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Document, DocumentUploadData } from '../../types/document';
 import documentService from '../../services/documentService';
 import DocumentVerificationModal from './DocumentVerificationModal';
+import Pagination from '../common/Pagination';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
@@ -21,22 +22,27 @@ const AdminDocumentDashboard: React.FC = () => {
     isOpen: false,
     documentId: null,
   });
-
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
 
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await documentService.getAdminDocuments();
+      // const response = await documentService.getAdminDocuments({ page: currentPage, limit: 10 }); for testing
+      const response = await documentService.getAdminDocuments({ page: currentPage, limit: 3 });
       setDocuments(response.documents);
+      setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch documents:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const handleUpload = async (file: File, uploadData: DocumentUploadData) => {
     try {
@@ -59,7 +65,8 @@ const AdminDocumentDashboard: React.FC = () => {
       const pollInterval = setInterval(async () => {
         try {
           pollCount++;
-          const updatedDocuments = await documentService.getAdminDocuments();
+          // const updatedDocuments = await documentService.getAdminDocuments({ page: currentPage, limit: 10 }); for testing
+          const updatedDocuments = await documentService.getAdminDocuments({ page: currentPage, limit: 3 });
           const uploadedDocument = updatedDocuments.documents.find(
             d => d._id === documentId
           );
@@ -278,6 +285,14 @@ const AdminDocumentDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                currentPage={pagination.current}
+                totalPages={pagination.pages}
+                total={pagination.total}
+                // limit={10} for testing
+                limit={3}
+                onPageChange={setCurrentPage}
+              />
 
               {/* Upload Modal */}
               {showUploadModal && (

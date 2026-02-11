@@ -63,6 +63,11 @@ export interface PremieresResponse {
   message: string;
   data: {
     premieres: Premiere[];
+    pagination?: {
+      current: number;
+      pages: number;
+      total: number;
+    };
   };
 }
 

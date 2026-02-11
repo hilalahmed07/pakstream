@@ -1,0 +1,822 @@
+{
+  "info": {
+    "name": "PakStream API",
+    "description": "API collection for PakStream backend. Set the `baseUrl` variable (default: http://localhost:5000) and run **Auth > Login** first, then use the saved `token` in the collection authorization for protected routes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "videoId", "value": "" },
+    { "key": "premiereId", "value": "" },
+    { "key": "presentationId", "value": "" },
+    { "key": "documentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"user\",\n  \"organization\": \"Org Name\",\n  \"contactNumber\": \"+1234567890\",\n  \"address\": \"123 Street\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Register Admin",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\",\n  \"adminKey\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register-admin"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.token) {",
+                  "  pm.collectionVariables.set('token', res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/profile"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"bio\": \"Optional bio\",\n  \"preferences\": {}\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/profile"
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"oldpass\",\n  \"newPassword\": \"newpass123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/change-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users (Admin)",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/users?page=1&limit=20&search=&role=&isActive=",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "users" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "" },
+                { "key": "role", "value": "" },
+                { "key": "isActive", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"newuser\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"user\",\n  \"organization\": \"Org\",\n  \"contactNumber\": \"+123\",\n  \"address\": \"Address\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users"
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"updateduser\",\n  \"email\": \"updated@example.com\",\n  \"role\": \"user\",\n  \"organization\": \"Org\",\n  \"contactNumber\": \"+123\",\n  \"address\": \"Address\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Reset User Password",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/{{userId}}/reset-password"
+          }
+        },
+        {
+          "name": "Toggle User Status",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/{{userId}}/toggle-status"
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Videos",
+      "item": [
+        {
+          "name": "Get All Videos",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/videos?page=1&limit=10&category=&search=&status=",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "videos" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "category", "value": "" },
+                { "key": "search", "value": "" },
+                { "key": "status", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Featured Videos",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/featured/list"
+          }
+        },
+        {
+          "name": "Get Queue Status",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/queue/status"
+          }
+        },
+        {
+          "name": "Get Video By ID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}"
+          }
+        },
+        {
+          "name": "Get Video Status",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}/status"
+          }
+        },
+        {
+          "name": "Get Video Hash",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}/hash"
+          }
+        },
+        {
+          "name": "Track Video View",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/videos/{{videoId}}/view?sessionId=optional-session-id",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "videos", "{{videoId}}", "view" ],
+              "query": [ { "key": "sessionId", "value": "optional-session-id" } ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Video Like",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"like\"\n}"
+            },
+            "url": "{{baseUrl}}/api/videos/{{videoId}}/like"
+          }
+        },
+        {
+          "name": "Verify Video Integrity",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}/verify",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Download Video",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}/download"
+          }
+        },
+        {
+          "name": "Upload Video",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/videos/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "video", "type": "file", "src": "" },
+                { "key": "title", "value": "My Video" },
+                { "key": "description", "value": "Description" },
+                { "key": "category", "value": "other" },
+                { "key": "tags", "value": "tag1,tag2" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Videos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/videos/user/my-videos?page=1&limit=10",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "videos", "user", "my-videos" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Video",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\",\n  \"category\": \"other\",\n  \"tags\": [\"tag1\"],\n  \"isPublic\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/videos/{{videoId}}"
+          }
+        },
+        {
+          "name": "Delete Video",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/videos/{{videoId}}"
+          }
+        },
+        {
+          "name": "Get All Videos (Admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/videos/admin/all?page=1&limit=25",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "videos", "admin", "all" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "25" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Premieres",
+      "item": [
+        {
+          "name": "Get Active Premiere",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/premieres/active"
+          }
+        },
+        {
+          "name": "Get Upcoming Premieres",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/premieres/upcoming"
+          }
+        },
+        {
+          "name": "Join Premiere",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/premieres/join"
+          }
+        },
+        {
+          "name": "Create Premiere",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"videoId\": \"{{videoId}}\",\n  \"title\": \"Premiere Title\",\n  \"description\": \"Description\",\n  \"startTime\": \"2025-02-10T18:00:00.000Z\",\n  \"duration\": 3600\n}"
+            },
+            "url": "{{baseUrl}}/api/premieres"
+          }
+        },
+        {
+          "name": "Get All Premieres",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/premieres?page=1&limit=10&status=",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "premieres" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Premiere By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/premieres/{{premiereId}}"
+          }
+        },
+        {
+          "name": "Update Premiere",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\",\n  \"startTime\": \"2025-02-10T19:00:00.000Z\",\n  \"duration\": 3600\n}"
+            },
+            "url": "{{baseUrl}}/api/premieres/{{premiereId}}"
+          }
+        },
+        {
+          "name": "End Premiere",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/premieres/{{premiereId}}/end"
+          }
+        },
+        {
+          "name": "Delete Premiere",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/premieres/{{premiereId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Presentations",
+      "item": [
+        {
+          "name": "Get All Presentations",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/presentations?page=1&limit=12&category=&search=",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "presentations" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "12" },
+                { "key": "category", "value": "" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Presentation By ID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}"
+          }
+        },
+        {
+          "name": "Get Presentation Slides",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/slides"
+          }
+        },
+        {
+          "name": "Get Presentation Image",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/image/1"
+          }
+        },
+        {
+          "name": "Get Presentation Thumbnail",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/thumbnail"
+          }
+        },
+        {
+          "name": "Get Presentation Hash",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/hash"
+          }
+        },
+        {
+          "name": "Get Presentation Liked By",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/likedby"
+          }
+        },
+        {
+          "name": "Verify Presentation",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/verify",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Track Presentation View",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/presentations/{{presentationId}}/view?sessionId=optional",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "presentations", "{{presentationId}}", "view" ],
+              "query": [ { "key": "sessionId", "value": "optional" } ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Presentation Like",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"like\"\n}"
+            },
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}/like"
+          }
+        },
+        {
+          "name": "Upload Presentation",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/presentations/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "presentation", "type": "file", "src": "" },
+                { "key": "title", "value": "My Presentation" },
+                { "key": "description", "value": "Description" },
+                { "key": "category", "value": "other" },
+                { "key": "tags", "value": "tag1,tag2" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Presentations (Admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/presentations/admin/all"
+          }
+        },
+        {
+          "name": "Update Presentation",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Description\",\n  \"category\": \"other\",\n  \"tags\": [\"tag1\"],\n  \"isPublic\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}"
+          }
+        },
+        {
+          "name": "Delete Presentation",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/presentations/{{presentationId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Get All Documents",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/documents?page=1&limit=12&category=&search=",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "documents" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "12" },
+                { "key": "category", "value": "" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Document By ID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}"
+          }
+        },
+        {
+          "name": "Get Document File",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentId}}/file?download=false",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "documents", "{{documentId}}", "file" ],
+              "query": [ { "key": "download", "value": "false" } ]
+            }
+          }
+        },
+        {
+          "name": "Get Document Thumbnail",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}/thumbnail"
+          }
+        },
+        {
+          "name": "Get Document Hash",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}/hash"
+          }
+        },
+        {
+          "name": "Get Document Liked By",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}/likedby"
+          }
+        },
+        {
+          "name": "Verify Document",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}/verify",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Track Document View",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentId}}/view?sessionId=optional",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "documents", "{{documentId}}", "view" ],
+              "query": [ { "key": "sessionId", "value": "optional" } ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Document Like",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"like\"\n}"
+            },
+            "url": "{{baseUrl}}/api/documents/{{documentId}}/like"
+          }
+        },
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/documents/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "document", "type": "file", "src": "" },
+                { "key": "title", "value": "My Document" },
+                { "key": "description", "value": "Description" },
+                { "key": "category", "value": "other" },
+                { "key": "tags", "value": "tag1,tag2" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Documents (Admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/documents/admin/all"
+          }
+        },
+        {
+          "name": "Update Document",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Description\",\n  \"category\": \"other\",\n  \"tags\": [\"tag1\"],\n  \"isPublic\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/documents/{{documentId}}"
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/documents/{{documentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Downloads (Admin)",
+      "item": [
+        {
+          "name": "Get Download Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/downloads/stats"
+          }
+        },
+        {
+          "name": "Get All Downloads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/downloads?page=1&limit=25",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "downloads" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "25" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Downloads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/downloads/user/{{userId}}?page=1&limit=25",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "downloads", "user", "{{userId}}" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "25" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Video Downloads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/downloads/video/{{videoId}}?page=1&limit=25",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "downloads", "video", "{{videoId}}" ],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "25" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

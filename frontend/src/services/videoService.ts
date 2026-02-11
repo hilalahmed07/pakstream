@@ -315,6 +315,50 @@ class VideoService {
   }
 
   /**
+   * Get users who liked a video
+   * @param videoId - Video ID
+   * @returns List of users who liked the video
+   */
+  async getLikedByUsers(videoId: string): Promise<{
+    videoId: string;
+    totalLikes: number;
+    likedBy: Array<{
+      _id: string;
+      username: string;
+      email: string;
+      profile?: {
+        firstName?: string;
+        lastName?: string;
+        avatar?: string;
+      };
+    }>;
+  }> {
+    try {
+      const response = await this.request<{
+        success: boolean;
+        data: {
+          videoId: string;
+          totalLikes: number;
+          likedBy: Array<{
+            _id: string;
+            username: string;
+            email: string;
+            profile?: {
+              firstName?: string;
+              lastName?: string;
+              avatar?: string;
+            };
+          }>;
+        };
+      }>(`/videos/${videoId}/likedby`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get video hash for manual verification
    * @param videoId - Video ID
    * @returns Video hash information

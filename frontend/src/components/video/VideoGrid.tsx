@@ -5,6 +5,7 @@ import downloadService from '../../services/downloadService';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../hooks';
 import { formatVideoDuration } from '../../utils/videoUtils';
+import LikesModal from '../common/LikesModal';
 
 interface VideoGridProps {
   videos: Video[];
@@ -12,6 +13,17 @@ interface VideoGridProps {
   onVideoClick: (video: Video) => void;
   onDeleteClick?: (video: Video) => void;
   showDeleteButton?: boolean;
+}
+
+interface LikeUser {
+  _id: string;
+  username: string;
+  email: string;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  };
 }
 
 const VideoGrid: React.FC<VideoGridProps> = ({ 
@@ -22,8 +34,39 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   showDeleteButton = false 
 }) => {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { showError } = useNotification();
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
+  const [localVideos, setLocalVideos] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{
+    title: string;
+    totalLikes: number;
+    likedBy: LikeUser[];
+  }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
+
+  // Initialize local state from videos when they change
+  React.useEffect(() => {
+    const newMap = new Map<string, { views: number; likes: number; isLiked: boolean }>();
+    videos.forEach(video => {
+      newMap.set(video._id, {
+        views: video.views,
+        likes: video.likes,
+        isLiked: video.isLiked ?? false
+      });
+    });
+    setLocalVideos(newMap);
+  }, [videos]);
+
+  const getLocalData = (id: string, defaultViews: number, defaultLikes: number, defaultIsLiked: boolean) => {
+    const local = localVideos.get(id);
+    return {
+      views: local?.views ?? defaultViews,
+      likes: local?.likes ?? defaultLikes,
+      isLiked: local?.isLiked ?? defaultIsLiked
+    };
+  };
 
   const handleDownload = async (e: React.MouseEvent, video: Video) => {
     e.stopPropagation();
@@ -40,6 +83,58 @@ const VideoGrid: React.FC<VideoGridProps> = ({
       showError(error instanceof Error ? error.message : 'Failed to download video');
     } finally {
       setDownloadingVideoId(null);
+    }
+  };
+
+  const handleLikeClick = async (e: React.MouseEvent, video: Video) => {
+    e.stopPropagation();
+
+    if (!user) {
+      showError('Please login to like videos');
+      return;
+    }
+
+    const local = getLocalData(video._id, video.views, video.likes, video.isLiked ?? false);
+    const action = local.isLiked ? 'unlike' : 'like';
+
+    try {
+      const result = await videoService.toggleLike(video._id, action);
+      setLocalVideos(prev => {
+        const newMap = new Map(prev);
+        newMap.set(video._id, {
+          ...local,
+          likes: result.likes,
+          isLiked: result.isLiked
+        });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      showError(error instanceof Error ? error.message : 'Failed to toggle like');
+    }
+  };
+
+  const handleLikesCountClick = async (e: React.MouseEvent, video: Video) => {
+    e.stopPropagation();
+
+    if (!isAdmin) {
+      return;
+    }
+
+    setLoadingLikes(true);
+    try {
+      const result = await videoService.getLikedByUsers(video._id);
+      setLikesModalData({
+        title: video.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      showError(error instanceof Error ? error.message : 'Failed to load likes');
+    } finally {
+      setLoadingLikes(false);
     }
   };
 
@@ -92,8 +187,11 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   }
 
   return (
+  <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {videos.map((video) => (
+      {videos.map((video) => {
+        const local = getLocalData(video._id, video.views, video.likes, video.isLiked ?? false);
+        return (
         <div key={video._id} className="bg-card rounded-lg overflow-hidden group hover:scale-105 hover:bg-card-hover transition-all">
           <div className="relative aspect-video bg-black">
             {video.processedFiles?.poster ? (
@@ -184,7 +282,52 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             
             <div className="flex items-center justify-between text-sm text-text-secondary">
               <span className="capitalize">{video.category}</span>
-              <span>{video.views} views</span>
+              <div className="flex items-center space-x-3">
+                <span>{local.views} views</span>
+
+                {/* Like button */}
+                <button
+                  onClick={(e) => handleLikeClick(e, video)}
+                  className={`flex items-center transition-colors ${
+                    local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-500'
+                  }`}
+                  title={
+                    !user
+                      ? 'Login to like this video'
+                      : local.isLiked
+                      ? 'Unlike'
+                      : 'Like'
+                  }
+                  disabled={loadingLikes}
+                >
+                  <svg
+                    className={`w-4 h-4 ${local.isLiked ? 'fill-current' : ''}`}
+                    fill={local.isLiked ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                  </svg>
+                </button>
+
+                {/* Likes count - admin can click to see who liked, users see number only */}
+                {isAdmin ? (
+                  <button
+                    onClick={(e) => handleLikesCountClick(e, video)}
+                    className={`text-sm transition-colors cursor-pointer hover:underline ${
+                      local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'
+                    }`}
+                    title="View who liked this video"
+                    disabled={loadingLikes}
+                  >
+                    {loadingLikes ? '...' : local.likes}
+                  </button>
+                ) : (
+                  <span className="text-sm">
+                    {local.likes}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mt-2 text-xs text-text-secondary opacity-70">
@@ -209,8 +352,21 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             )}
           </div>
         </div>
-      ))}
+      );})}
     </div>
+
+    {/* Likes Modal - visible only to admins */}
+    {isAdmin && (
+      <LikesModal
+        isOpen={likesModalOpen}
+        title={likesModalData.title}
+        totalLikes={likesModalData.totalLikes}
+        likedBy={likesModalData.likedBy}
+        contentType="video"
+        onClose={() => setLikesModalOpen(false)}
+      />
+    )}
+  </>
   );
 };
 

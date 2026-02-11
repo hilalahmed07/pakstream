@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '', role = '', isActive = '' } = req.query;
+    const { page = 1, limit = 10, search = '', role = '', isActive = '' } = req.query;
     
     // Build query
     const query = {};

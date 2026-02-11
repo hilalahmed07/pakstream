@@ -121,8 +121,14 @@ class PresentationService {
     });
   }
 
-  async getAdminPresentations(): Promise<{ presentations: Presentation[] }> {
-    return this.request<{ presentations: Presentation[] }>('/presentations/admin/all');
+  async getAdminPresentations(params?: { page?: number; limit?: number }): Promise<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    const queryString = queryParams.toString();
+    return this.request<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }>(
+      `/presentations/admin/all${queryString ? `?${queryString}` : ''}`
+    );
   }
 
   async updatePresentation(id: string, data: Partial<CreatePresentationData>): Promise<SinglePresentationResponse> {
