@@ -12,6 +12,7 @@ interface VideoGridProps {
   onVideoClick: (video: Video) => void;
   onDeleteClick?: (video: Video) => void;
   showDeleteButton?: boolean;
+  onLikesCountClick?: (video: Video) => void;
 }
 
 const VideoGrid: React.FC<VideoGridProps> = ({ 
@@ -19,7 +20,8 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   loading, 
   onVideoClick, 
   onDeleteClick,
-  showDeleteButton = false 
+  showDeleteButton = false,
+  onLikesCountClick
 }) => {
   const { user } = useAuth();
   const { showError } = useNotification();
@@ -265,9 +267,24 @@ const VideoGrid: React.FC<VideoGridProps> = ({
                   </svg>
                 </button>
 
-                <span className="text-sm">
-                  {local.likes}
-                </span>
+                {onLikesCountClick ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLikesCountClick(video);
+                    }}
+                    disabled={local.likes === 0}
+                    className={`text-sm transition-colors ${local.likes === 0 ? 'cursor-default opacity-70' : 'cursor-pointer hover:underline'} ${local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-400'}`}
+                    title="View who liked this video"
+                  >
+                    {local.likes}
+                  </button>
+                ) : (
+                  <span className="text-sm">
+                    {local.likes}
+                  </span>
+                )}
               </div>
             </div>
 

@@ -81,7 +81,7 @@ const uploadDocument = async (req, res) => {
 const getDocuments = async (req, res) => {
   try {
     // const { page = 1, limit = 10, category, search } = req.query; for testing
-    const { page = 1, limit = 3, category, search } = req.query;
+    const { page = 1, limit = 4, category, search } = req.query;
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
@@ -359,7 +359,7 @@ const getDocumentThumbnail = async (req, res) => {
 const getAdminDocuments = async (req, res) => {
   try {
     // const { page = 1, limit = 10 } = req.query; for testing
-    const { page = 1, limit = 3 } = req.query;
+    const { page = 1, limit = 4 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const documents = await Document.find()

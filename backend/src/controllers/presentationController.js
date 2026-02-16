@@ -82,7 +82,7 @@ const uploadPresentation = async (req, res) => {
 const getPresentations = async (req, res) => {
   try {
     // const { page = 1, limit = 12, category, search } = req.query;
-    const { page = 1, limit = 3, category, search } = req.query; // for testing 
+    const { page = 1, limit = 4, category, search } = req.query; // for testing 
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
@@ -135,6 +135,9 @@ const getPresentations = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch presentations', error: error.message });
   }
 };
+
+
+
 
 // Get presentation by ID
 const getPresentationById = async (req, res) => {
@@ -376,7 +379,7 @@ const getPresentationThumbnail = async (req, res) => {
 const getAdminPresentations = async (req, res) => {
   try {
     // const { page = 1, limit = 10 } = req.query;  for testing
-    const { page = 1, limit = 3 } = req.query;
+    const { page = 1, limit = 4 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const presentations = await Presentation.find()

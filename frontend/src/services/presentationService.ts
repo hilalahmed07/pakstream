@@ -30,6 +30,29 @@ class PresentationService {
     }
   }
 
+   downloadPresentation = async (id: string) => {
+  const response = await fetch(`/api/presentations/${id}/download`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+    }
+  });
+
+  if (!response.ok) throw new Error('Failed to download');
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `presentation-${id}.pptx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+
   async getPresentations(params: {
     page?: number;
     limit?: number;

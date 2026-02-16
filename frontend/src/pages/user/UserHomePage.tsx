@@ -84,7 +84,7 @@ const UserHomePage: React.FC = () => {
   const fetchVideos = async () => {
     try {
       // const response = await videoService.getVideos({ page: videoPage, limit: 10 }); 
-      const response = await videoService.getVideos({ page: videoPage, limit: 3 }); 
+      const response = await videoService.getVideos({ page: videoPage, limit: 4 }); 
       setVideos(response.data.videos);
       setVideoPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -121,7 +121,7 @@ const UserHomePage: React.FC = () => {
   const fetchPresentations = async () => {
     try {
       // const response = await presentationService.getPresentations({ page: presentationPage, limit: 10 }); for testing
-      const response = await presentationService.getPresentations({ page: presentationPage, limit: 3 });
+      const response = await presentationService.getPresentations({ page: presentationPage, limit: 4 });
       setPresentations(response.presentations);
       setPresentationPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -134,7 +134,7 @@ const UserHomePage: React.FC = () => {
   const fetchDocuments = async () => {
     try {
       // const response = await documentService.getDocuments({ page: documentPage, limit: 4 });  // for testing
-      const response = await documentService.getDocuments({ page: documentPage, limit: 3 });
+      const response = await documentService.getDocuments({ page: documentPage, limit: 4 });
       setDocuments(response.documents);
       setDocumentPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -454,7 +454,7 @@ const UserHomePage: React.FC = () => {
             totalPages={videoPagination.pages}
             total={videoPagination.total}
             // limit={10} for testing
-            limit={3}
+            limit={4}
             onPageChange={setVideoPage}
           />
         </div>
@@ -478,7 +478,7 @@ const UserHomePage: React.FC = () => {
             totalPages={presentationPagination.pages}
             total={presentationPagination.total}
             // limit={10} for testing
-            limit={3}
+            limit={4}
             onPageChange={setPresentationPage}
           />
         </div>
@@ -502,7 +502,7 @@ const UserHomePage: React.FC = () => {
             totalPages={documentPagination.pages}
             total={documentPagination.total}
             // limit={10} for testing
-            limit={3}
+            limit={4}
             onPageChange={setDocumentPage}
           />
         </div>

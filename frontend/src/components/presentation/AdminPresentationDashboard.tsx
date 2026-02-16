@@ -3,6 +3,7 @@ import { Presentation, CreatePresentationData } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import PresentationVerificationModal from './PresentationVerificationModal';
 import Pagination from '../common/Pagination';
+import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
@@ -24,12 +25,15 @@ const AdminPresentationDashboard: React.FC = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
 
   const fetchPresentations = async () => {
     try {
       setLoading(true);
       // const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
-      const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 3 });
+      const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 4 });
       setPresentations(response.presentations);
       setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -65,7 +69,7 @@ const AdminPresentationDashboard: React.FC = () => {
         try {
           pollCount++;
           // const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
-          const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 3 });
+          const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 4 });
           const uploadedPresentation = updatedPresentations.presentations.find(
             p => p._id === presentationId
           );
@@ -137,6 +141,25 @@ const AdminPresentationDashboard: React.FC = () => {
   const handleCloseVerification = () => {
     setShowVerificationModal(false);
     setPresentationToVerify(null);
+  };
+
+  const handleLikesClick = async (presentation: Presentation) => {
+    setLoadingLikes(true);
+    try {
+      const result = await presentationService.getLikedByUsers(presentation._id);
+      setLikesModalData({
+        title: presentation.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      showError(error instanceof Error ? error.message : 'Failed to load likes');
+      setLikesModalOpen(false);
+    } finally {
+      setLoadingLikes(false);
+    }
   };
 
   const filteredPresentationsForVerification = presentations.filter(presentation => {
@@ -329,12 +352,31 @@ const AdminPresentationDashboard: React.FC = () => {
                               {presentation.views}
                             </span>
                             
-                            <span className="flex items-center">
-                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                              </svg>
-                              {presentation.likes}
-                            </span>
+                            {presentation.likes > 0 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLikesClick(presentation);
+                                }}
+                                disabled={loadingLikes}
+                                className="flex items-center transition-colors hover:underline cursor-pointer disabled:opacity-50"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                                title="View who liked this"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                </svg>
+                                {presentation.likes}
+                              </button>
+                            ) : (
+                              <span className="flex items-center">
+                                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                </svg>
+                                {presentation.likes}
+                              </span>
+                            )}
                           </div>
                           
                           <span className="text-xs">
@@ -367,7 +409,7 @@ const AdminPresentationDashboard: React.FC = () => {
                 totalPages={pagination.pages}
                 total={pagination.total}
                 // limit={10} for testing
-                limit={3}
+                limit={4}
                 onPageChange={setCurrentPage}
               />
 
@@ -518,6 +560,16 @@ const AdminPresentationDashboard: React.FC = () => {
               presentation={presentationToVerify}
             />
           )}
+
+          {/* Likes Modal */}
+          <LikesModal
+            isOpen={likesModalOpen}
+            title={likesModalData.title}
+            totalLikes={likesModalData.totalLikes}
+            likedBy={likesModalData.likedBy}
+            contentType="presentation"
+            onClose={() => setLikesModalOpen(false)}
+          />
 
           {/* Confirmation Dialog */}
           <ConfirmationDialog

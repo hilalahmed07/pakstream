@@ -5,9 +5,12 @@ import VideoGrid from './VideoGrid';
 import VideoUploadModal from './VideoUploadModal';
 import VideoVerificationModal from './VideoVerificationModal';
 import Pagination from '../common/Pagination';
+import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
+import { useNotification } from '../../contexts/NotificationContext';
 
 const AdminVideoDashboard: React.FC = () => {
+  const { showError } = useNotification();
   const [activeTab, setActiveTab] = useState<'videos' | 'verification'>('videos');
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,9 @@ const AdminVideoDashboard: React.FC = () => {
   const [verificationSearch, setVerificationSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
 
   const fetchVideos = async () => {
     try {
@@ -36,7 +42,7 @@ const AdminVideoDashboard: React.FC = () => {
         ...filter,
         page: currentPage,
         // limit: 10 for testing
-        limit: 3
+        limit: 4
       });
       setVideos(response.data.videos);
       setPagination(response.data.pagination || { current: 1, pages: 1, total: 0 });
@@ -77,7 +83,7 @@ const AdminVideoDashboard: React.FC = () => {
           ...filter,
           page: currentPage,
           // limit: 10 for testing
-          limit: 3
+          limit: 4
         });
         const uploadedVideo = updatedVideos.data.videos.find(
           v => v._id === videoId
@@ -155,6 +161,25 @@ const AdminVideoDashboard: React.FC = () => {
   const handleDeleteCancel = () => {
     setShowDeleteModal(false);
     setVideoToDelete(null);
+  };
+
+  const handleLikesCountClick = async (video: Video) => {
+    setLoadingLikes(true);
+    try {
+      const result = await videoService.getLikedByUsers(video._id);
+      setLikesModalData({
+        title: video.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      showError(error instanceof Error ? error.message : 'Failed to load likes');
+      setLikesModalOpen(false);
+    } finally {
+      setLoadingLikes(false);
+    }
   };
 
   const handleFilterChange = (key: string, value: string) => {
@@ -377,13 +402,14 @@ const AdminVideoDashboard: React.FC = () => {
                 onVideoClick={handleVideoClick}
                 onDeleteClick={handleDeleteClick}
                 showDeleteButton={true}
+                onLikesCountClick={handleLikesCountClick}
               />
               <Pagination
                 currentPage={pagination.current}
                 totalPages={pagination.pages}
                 total={pagination.total}
                 // limit={10} for testing
-                limit={3}
+                limit={4}
                 onPageChange={setCurrentPage}
               />
 
@@ -501,6 +527,16 @@ const AdminVideoDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Likes Modal */}
+              <LikesModal
+                isOpen={likesModalOpen}
+                title={likesModalData.title}
+                totalLikes={likesModalData.totalLikes}
+                likedBy={likesModalData.likedBy}
+                contentType="video"
+                onClose={() => setLikesModalOpen(false)}
+              />
 
               {/* Upload Modal */}
               <VideoUploadModal

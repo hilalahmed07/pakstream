@@ -3,6 +3,7 @@ import { Document, DocumentUploadData } from '../../types/document';
 import documentService from '../../services/documentService';
 import DocumentVerificationModal from './DocumentVerificationModal';
 import Pagination from '../common/Pagination';
+import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
@@ -24,12 +25,15 @@ const AdminDocumentDashboard: React.FC = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
+  const [loadingLikes, setLoadingLikes] = useState(false);
 
   const fetchDocuments = async () => {
     try {
       setLoading(true);
       // const response = await documentService.getAdminDocuments({ page: currentPage, limit: 10 }); for testing
-      const response = await documentService.getAdminDocuments({ page: currentPage, limit: 3 });
+      const response = await documentService.getAdminDocuments({ page: currentPage, limit: 4 });
       setDocuments(response.documents);
       setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -140,6 +144,25 @@ const AdminDocumentDashboard: React.FC = () => {
     setDocumentToVerify(null);
   };
 
+  const handleLikesClick = async (document: Document) => {
+    setLoadingLikes(true);
+    try {
+      const result = await documentService.getLikedByUsers(document._id);
+      setLikesModalData({
+        title: document.title,
+        totalLikes: result.totalLikes,
+        likedBy: result.likedBy
+      });
+      setLikesModalOpen(true);
+    } catch (error) {
+      console.error('Failed to get liked by users:', error);
+      showError(error instanceof Error ? error.message : 'Failed to load likes');
+      setLikesModalOpen(false);
+    } finally {
+      setLoadingLikes(false);
+    }
+  };
+
   const filteredDocumentsForVerification = documents.filter(document => {
     const searchLower = verificationSearch.toLowerCase();
     return (
@@ -236,6 +259,7 @@ const AdminDocumentDashboard: React.FC = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Size</th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Views</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Likes</th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Uploaded By</th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
                     </tr>
@@ -269,6 +293,20 @@ const AdminDocumentDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                           {document.views}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span style={{ color: 'var(--color-text-secondary)' }}>{document.likes}</span>
+                          {document.likes > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleLikesClick(document)}
+                              disabled={loadingLikes}
+                              className="ml-2 text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
+                              title="View who liked this"
+                            >
+                              View
+                            </button>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                           {typeof document.uploadedBy === 'object' ? document.uploadedBy.username : 'Unknown'}
                         </td>
@@ -290,7 +328,7 @@ const AdminDocumentDashboard: React.FC = () => {
                 totalPages={pagination.pages}
                 total={pagination.total}
                 // limit={10} for testing
-                limit={3}
+                limit={4}
                 onPageChange={setCurrentPage}
               />
 
@@ -442,6 +480,16 @@ const AdminDocumentDashboard: React.FC = () => {
               document={documentToVerify}
             />
           )}
+
+          {/* Likes Modal */}
+          <LikesModal
+            isOpen={likesModalOpen}
+            title={likesModalData.title}
+            totalLikes={likesModalData.totalLikes}
+            likedBy={likesModalData.likedBy}
+            contentType="document"
+            onClose={() => setLikesModalOpen(false)}
+          />
 
           {/* Confirmation Dialog */}
           <ConfirmationDialog

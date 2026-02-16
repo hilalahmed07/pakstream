@@ -147,7 +147,7 @@ const getQueueStatus = async (req, res) => {
 const getVideos = async (req, res) => {
   try {
     // const { page = 1, limit = 10, category, search, status } = req.query; for testing
-    const { page = 1, limit = 3, category, search, status } = req.query;
+    const { page = 1, limit = 4, category, search, status } = req.query;
     const skip = (page - 1) * limit;
 
     let query = { isPublic: true };
@@ -254,7 +254,7 @@ const getVideos = async (req, res) => {
 const getFeaturedVideos = async (req, res) => {
   try {
     // const { limit = 10 } = req.query; for testing
-    const { limit = 3 } = req.query;
+    const { limit = 4 } = req.query;
 
     // Get featured videos that are ready for playback
     const allFeaturedVideos = await Video.find({
@@ -388,7 +388,7 @@ const getVideoById = async (req, res) => {
 const getUserVideos = async (req, res) => {
   try {
     // const { page = 1, limit = 10 } = req.query; for testing
-    const { page = 1, limit = 3 } = req.query;
+    const { page = 1, limit = 4 } = req.query;
     const skip = (page - 1) * limit;
 
     const videos = await Video.find({ uploadedBy: req.user.id })
