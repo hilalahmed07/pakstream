@@ -176,8 +176,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
 
             {/* Duration Badge */}
             <div className="absolute top-2 right-2">
-              <span className="px-2 py-1 rounded text-xs font-semibold text-text-primary bg-black bg-opacity-75">
-                {formatVideoDuration(video.duration)}
+            <span className="px-2 py-1 rounded text-xs font-semibold text-white bg-black/80">                {formatVideoDuration(video.duration)}
               </span>
             </div>
 
