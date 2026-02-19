@@ -1,183 +1,236 @@
-﻿# PakStream - Video Streaming App
+﻿PakStream - Video Streaming App
 
-A modern MERN stack video streaming application with Netflix-style dark theme UI and complete authentication system.
+A modern MERN stack video streaming application with a Netflix-style dark theme UI and a complete authentication system.
 
-## Project Structure
-
-```
+📁 Project Structure
 PakStream/
-Γö£ΓöÇΓöÇ backend/          # Express.js API server
-Γöé   Γö£ΓöÇΓöÇ src/
-Γöé   Γöé   Γö£ΓöÇΓöÇ controllers/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ authController.js
-Γöé   Γöé   Γö£ΓöÇΓöÇ models/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ User.js
-Γöé   Γöé   Γö£ΓöÇΓöÇ routes/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.js
-Γöé   Γöé   Γö£ΓöÇΓöÇ middleware/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.js
-Γöé   Γöé   Γö£ΓöÇΓöÇ config/
-Γöé   Γöé   ΓööΓöÇΓöÇ server.js
-Γöé   Γö£ΓöÇΓöÇ package.json
-Γöé   ΓööΓöÇΓöÇ .env
-Γö£ΓöÇΓöÇ frontend/         # React TypeScript application
-Γöé   Γö£ΓöÇΓöÇ src/
-Γöé   Γöé   Γö£ΓöÇΓöÇ components/
-Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ auth/
-Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ LoginModal.tsx
-Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ RegisterModal.tsx
-Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ AdminRegisterModal.tsx
-Γöé   Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ UserProfile.tsx
-Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ Navbar.tsx
-Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ HeroSection.tsx
-Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ VideoGrid.tsx
-Γöé   Γöé   Γöé   Γö£ΓöÇΓöÇ ProtectedRoute.tsx
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ AdminDashboard.tsx
-Γöé   Γöé   Γö£ΓöÇΓöÇ hooks/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ useAuth.ts
-Γöé   Γöé   Γö£ΓöÇΓöÇ services/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ authService.ts
-Γöé   Γöé   Γö£ΓöÇΓöÇ types/
-Γöé   Γöé   Γöé   ΓööΓöÇΓöÇ auth.ts
-Γöé   Γöé   ΓööΓöÇΓöÇ pages/
-Γöé   Γö£ΓöÇΓöÇ package.json
-Γöé   Γö£ΓöÇΓöÇ tailwind.config.js
-Γöé   ΓööΓöÇΓöÇ .env
-ΓööΓöÇΓöÇ README.md
-```
+│
+├── backend/                  # Express.js API server
+│   ├── src/
+│   │   ├── controllers/
+│   │   │   └── authController.js
+│   │   ├── models/
+│   │   │   └── User.js
+│   │   ├── routes/
+│   │   │   └── auth.js
+│   │   ├── middleware/
+│   │   │   └── auth.js
+│   │   ├── config/
+│   │   └── server.js
+│   ├── package.json
+│   └── .env
+│
+├── frontend/                 # React TypeScript application
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── auth/
+│   │   │   │   ├── LoginModal.tsx
+│   │   │   │   ├── RegisterModal.tsx
+│   │   │   │   ├── AdminRegisterModal.tsx
+│   │   │   │   └── UserProfile.tsx
+│   │   │   ├── Navbar.tsx
+│   │   │   ├── HeroSection.tsx
+│   │   │   ├── VideoGrid.tsx
+│   │   │   ├── ProtectedRoute.tsx
+│   │   │   └── AdminDashboard.tsx
+│   │   ├── hooks/
+│   │   │   └── useAuth.ts
+│   │   ├── services/
+│   │   │   └── authService.ts
+│   │   ├── types/
+│   │   │   └── auth.ts
+│   │   └── pages/
+│   ├── package.json
+│   ├── tailwind.config.js
+│   └── .env
+│
+└── README.md
 
-## Features
+🚀 Features
+🔐 Complete Authentication System
 
-### ≡ƒöÉ **Complete Authentication System**
-- **User Registration**: Regular user signup with email/password
-- **Admin Registration**: Special admin registration with admin key
-- **Login/Logout**: Secure JWT-based authentication
-- **User Profiles**: Editable user profiles with bio, name, etc.
-- **Role-based Access**: Different permissions for users and admins
-- **Protected Routes**: Components that require authentication or admin access
+User Registration (Email & Password)
 
-### ≡ƒÄ¿ **UI/UX Features**
-- **Dark Theme**: Netflix-inspired UI design
-- **Responsive Design**: Mobile-first responsive design
-- **Modal System**: Clean modal dialogs for auth forms
-- **Loading States**: Proper loading indicators
-- **Error Handling**: User-friendly error messages
+Admin Registration (With Admin Key)
 
-### ≡ƒÅù∩╕Å **Technical Features**
-- **Backend**: Express.js with MongoDB, JWT authentication, bcrypt password hashing
-- **Frontend**: React with TypeScript and Tailwind CSS
-- **State Management**: React Context for authentication state
-- **API Integration**: Axios-like fetch service with token management
-- **Type Safety**: Full TypeScript implementation
+Secure Login / Logout (JWT Based)
 
-## Getting Started
+Editable User Profiles
 
-### Prerequisites
-- Node.js (v14 or higher)
-- MongoDB (local or cloud)
-- npm or yarn
+Role-Based Access Control (User / Admin)
 
-### Backend Setup
+Protected Routes (Auth + Admin Only)
 
-```bash
+🎨 UI / UX Features
+
+Netflix-inspired Dark Theme
+
+Fully Responsive (Mobile First)
+
+Clean Modal-based Authentication Forms
+
+Loading Indicators
+
+User-friendly Error Handling
+
+⚙️ Technical Features
+Backend
+
+Express.js
+
+MongoDB
+
+JWT Authentication
+
+bcrypt Password Hashing
+
+Role-based Middleware Protection
+
+Frontend
+
+React + TypeScript
+
+Tailwind CSS
+
+Context API for Authentication State
+
+API Service Layer with Token Handling
+
+Full Type Safety
+
+🛠 Getting Started
+Prerequisites
+
+Node.js (v14 or higher)
+
+MongoDB (Local or Cloud)
+
+npm or yarn
+
+🔧 Backend Setup
 cd backend
 npm install
 npm run dev
-```
 
-The backend will run on `http://localhost:5000`
 
-### Frontend Setup
+Backend runs at:
 
-```bash
+http://localhost:5000
+
+💻 Frontend Setup
 cd frontend
 npm install
 npm start
-```
 
-The frontend will run on `http://localhost:3000`
 
-## API Endpoints
+Frontend runs at:
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/register-admin` - Register admin (requires admin key)
-- `POST /api/auth/login` - User login
-- `GET /api/auth/profile` - Get user profile (protected)
-- `PUT /api/auth/profile` - Update user profile (protected)
-- `PUT /api/auth/change-password` - Change password (protected)
+http://localhost:3000
 
-### Health Check
-- `GET /api/health` - API health status
+📡 API Endpoints
+Authentication
+Method	Endpoint	Description
+POST	/api/auth/register	Register new user
+POST	/api/auth/register-admin	Register admin (requires admin key)
+POST	/api/auth/login	Login user
+GET	/api/auth/profile	Get user profile (Protected)
+PUT	/api/auth/profile	Update profile (Protected)
+PUT	/api/auth/change-password	Change password (Protected)
+Health Check
+GET /api/health
 
-## Environment Variables
-
-### Backend (.env)
-```
+🌍 Environment Variables
+Backend (.env)
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/pakstream
 JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
 ADMIN_REGISTRATION_KEY=admin123
 NODE_ENV=development
-```
 
-### Frontend (.env)
-```
+Frontend (.env)
 REACT_APP_API_URL=http://localhost:5000/api
-```
 
-## Usage Examples
+📌 Usage Guide
+Register as Regular User
 
-### Register as Regular User
-1. Click "Sign Up" in the navbar
-2. Fill in username, email, and password
-3. Click "Sign Up"
+Click Sign Up
 
-### Register as Admin
-1. Click "Sign Up" in the navbar
-2. Click "Register as Admin"
-3. Fill in details and admin key (default: "admin123")
-4. Click "Register as Admin"
+Enter username, email, and password
 
-### Login
-1. Click "Login" in the navbar
-2. Enter email and password
-3. Click "Login"
+Click Sign Up
 
-### Access Admin Features
-- Admin users will see an "ADMIN" badge in the navbar
-- Admin users can access admin-only features
-- Use the `ProtectedRoute` component with `requireAdmin={true}`
+Register as Admin
 
-## Development Status
+Click Sign Up
 
-Γ£à **Complete Authentication System**
-- Γ£à User registration and login
-- Γ£à Admin registration with special key
-- Γ£à JWT token-based authentication
-- Γ£à Password hashing with bcrypt
-- Γ£à User profile management
-- Γ£à Role-based access control
-- Γ£à Protected routes
-- Γ£à Modal-based UI for auth forms
-- Γ£à Error handling and validation
-- Γ£à TypeScript type safety
+Click Register as Admin
 
-## Next Steps
+Enter details + Admin Key
+Default key: admin123
 
-Ready for additional features like:
-- Video upload and streaming
-- User playlists and favorites
-- Search and filtering
-- Payment integration
-- Real-time notifications
-- And more as guided by requirements!
+Click Register
 
-## Security Notes
+Login
 
-- Change the JWT_SECRET in production
-- Change the ADMIN_REGISTRATION_KEY in production
-- Use HTTPS in production
-- Implement rate limiting
-- Add input validation and sanitization
-- Consider implementing refresh tokens for better security
+Click Login
+
+Enter email and password
+
+Click Login
+
+Admin Features
+
+Admin badge appears in navbar
+
+Access admin-only routes
+
+Use:
+
+<ProtectedRoute requireAdmin={true}>
+  <AdminDashboard />
+</ProtectedRoute>
+
+✅ Development Status
+
+✔ User Registration & Login
+✔ Admin Registration
+✔ JWT Authentication
+✔ Password Hashing (bcrypt)
+✔ Profile Management
+✔ Role-Based Access Control
+✔ Protected Routes
+✔ Modal-based UI
+✔ Error Handling
+✔ TypeScript Support
+
+🔮 Next Planned Features
+
+Video Upload & Streaming
+
+User Playlists & Favorites
+
+Search & Filtering
+
+Payment Integration
+
+Real-time Notifications
+
+Video Categories
+
+Watch History
+
+Comments & Ratings
+
+🔒 Security Notes
+
+Change JWT_SECRET in production
+
+Change ADMIN_REGISTRATION_KEY in production
+
+Use HTTPS in production
+
+Implement Rate Limiting
+
+Add Input Validation & Sanitization
+
+Consider Refresh Tokens for better security

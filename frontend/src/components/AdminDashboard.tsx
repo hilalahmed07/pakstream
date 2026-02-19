@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks';
 import ProtectedRoute from './ProtectedRoute';
 
@@ -27,7 +28,9 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-netflix-gray p-6 rounded-lg">
               <h3 className="text-xl font-semibold text-white mb-4">Analytics</h3>
               <p className="text-gray-400 mb-4">View platform statistics</p>
-              <button className="btn-primary">View Analytics</button>
+              <Link to="/admin/analytics" className="btn-primary inline-block">
+                View Analytics
+              </Link>
             </div>
 
             <div className="bg-netflix-gray p-6 rounded-lg">

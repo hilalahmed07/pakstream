@@ -16,6 +16,7 @@ import DocumentManagementPage from './pages/admin/DocumentManagementPage';
 import PremiereManagementPage from './pages/admin/PremiereManagementPage';
 import LivePremiereControlPage from './pages/admin/LivePremiereControlPage';
 import DownloadManagementPage from './pages/admin/DownloadManagementPage';
+import AnalyticsManagementPage from './pages/admin/AnalyticsManagementPage';
 import socketService from './services/socketService';
 import './index.css';
 
@@ -112,6 +113,14 @@ const AppContent: React.FC = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <DownloadManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AnalyticsManagementPage />
               </ProtectedRoute>
             }
           />

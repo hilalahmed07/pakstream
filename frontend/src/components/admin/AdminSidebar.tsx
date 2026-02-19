@@ -19,6 +19,7 @@ const AdminSidebar: React.FC = () => {
 
   const menuItems = [
     { path: '/admin/users', label: 'User Management', icon: '👥' },
+    { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
     { path: '/admin/videos', label: 'Video Management', icon: '🎬' },
     { path: '/admin/presentations', label: 'Presentation Management', icon: '📊' },
     { path: '/admin/documents', label: 'Document Management', icon: '📄' },

@@ -204,6 +204,7 @@ app.use('/uploads/documents', (req, res, next) => {
 
 // API routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/users', require('./routes/user'));
 app.use('/api/videos', require('./routes/video'));
 app.use('/api/premieres', require('./routes/premiere'));

@@ -225,9 +225,10 @@ const login = async (req, res) => {
       });
     }
 
-    // Success: clear lockout and return token
+    // Success: clear lockout, update lastLogin, and return token
     user.loginAttempts = 0;
     user.lockUntil = null;
+    user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
     const token = generateToken(user._id);
