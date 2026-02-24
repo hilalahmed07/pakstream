@@ -34,7 +34,7 @@ router.post('/:id/view', trackPresentationView); // Track presentation view
 router.post('/:id/like', authenticateToken, togglePresentationLike); // Toggle presentation like (requires auth)
 
 // Admin routes
-router.post('/upload', authenticateToken, requireAdmin, upload.single('presentation'), uploadPresentation);
+router.post('/upload', authenticateToken, requireAdmin, upload.single('presentation'), handleUploadError, uploadPresentation);
 router.get('/admin/all', authenticateToken, requireAdmin, getAdminPresentations);
 router.put('/:id', authenticateToken, requireAdmin, updatePresentation);
 router.delete('/:id', authenticateToken, requireAdmin, deletePresentation);
@@ -43,7 +43,7 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
   try {
     const { getPresentationById } = require('../controllers/presentationController');
     const presentation = await getPresentationById(req, res, true); // pass extra param to return data without sending JSON
-    
+
     if (!presentation) return res.status(404).json({ message: 'Presentation not found' });
 
     // File path stored in presentation document

@@ -8,7 +8,6 @@ import AdminSidebar from './components/admin/AdminSidebar';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import UserHomePage from './pages/user/UserHomePage';
-import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import VideoManagementPage from './pages/admin/VideoManagementPage';
 import PresentationManagementPage from './pages/admin/PresentationManagementPage';
@@ -17,6 +16,7 @@ import PremiereManagementPage from './pages/admin/PremiereManagementPage';
 import LivePremiereControlPage from './pages/admin/LivePremiereControlPage';
 import DownloadManagementPage from './pages/admin/DownloadManagementPage';
 import AnalyticsManagementPage from './pages/admin/AnalyticsManagementPage';
+import PatchManagementPage from './pages/admin/PatchManagementPage';
 import socketService from './services/socketService';
 import './index.css';
 
@@ -54,11 +54,7 @@ const AppContent: React.FC = () => {
           {/* Admin Routes */}
           <Route
             path="/admin"
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/admin/users" replace />}
           />
           <Route
             path="/admin/users"
@@ -89,6 +85,14 @@ const AppContent: React.FC = () => {
             element={
               <ProtectedRoute requireAdmin>
                 <DocumentManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/patches"
+            element={
+              <ProtectedRoute requireAdmin>
+                <PatchManagementPage />
               </ProtectedRoute>
             }
           />

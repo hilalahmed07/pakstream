@@ -1,7 +1,14 @@
-import { Presentation, CreatePresentationData, PresentationResponse, SinglePresentationResponse, SlidesResponse } from '../types/presentation';
+import {
+  Patch,
+  PatchUploadData,
+  PatchesResponse,
+  PatchResponse,
+  PatchVerificationData,
+  PatchHashData
+} from '../types/patch';
 import { API_BASE_URL, getBaseUrl } from '../config/api';
 
-class PresentationService {
+class PatchService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('token');
@@ -25,68 +32,63 @@ class PresentationService {
 
       return data;
     } catch (error) {
-      console.error('PresentationService API request failed:', error);
+      console.error('PatchService API request failed:', error);
       throw error;
     }
   }
 
-  downloadPresentation = async (id: string) => {
-    const response = await fetch(`/api/presentations/${id}/download`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-      }
-    });
-
-    if (!response.ok) throw new Error('Failed to download');
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `presentation-${id}.pptx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  };
-
-
-  async getPresentations(params: {
+  async getPatches(params: {
     page?: number;
     limit?: number;
     category?: string;
     search?: string;
-  } = {}): Promise<PresentationResponse> {
+    fileType?: string;
+    patchType?: string;
+    targetOs?: string;
+    architecture?: string;
+  } = {}): Promise<PatchesResponse> {
     const queryParams = new URLSearchParams();
 
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
     if (params.search) queryParams.append('search', params.search);
+    if (params.fileType) queryParams.append('fileType', params.fileType);
+    if (params.patchType) queryParams.append('patchType', params.patchType);
+    if (params.targetOs) queryParams.append('targetOs', params.targetOs);
+    if (params.architecture) queryParams.append('architecture', params.architecture);
 
     const queryString = queryParams.toString();
-    const endpoint = `/presentations${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `/patches${queryString ? `?${queryString}` : ''}`;
 
-    return this.request<PresentationResponse>(endpoint);
+    return this.request<PatchesResponse>(endpoint);
   }
 
-  async getPresentationById(id: string): Promise<SinglePresentationResponse> {
-    return this.request<SinglePresentationResponse>(`/presentations/${id}`);
+  async getPatchById(id: string): Promise<PatchResponse> {
+    return this.request<PatchResponse>(`/patches/${id}`);
   }
 
-  async getPresentationSlides(id: string): Promise<SlidesResponse> {
-    return this.request<SlidesResponse>(`/presentations/${id}/slides`);
-  }
-
-  async uploadPresentation(
-    formData: FormData,
+  async uploadPatch(
+    file: File,
+    uploadData: PatchUploadData,
     onProgress?: (progress: number) => void
-  ): Promise<{ message: string; presentation: any }> {
+  ): Promise<{ message: string; patch: any }> {
     return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('patch', file);
+      formData.append('title', uploadData.title);
+      formData.append('description', uploadData.description);
+      formData.append('category', uploadData.category);
+      formData.append('tags', uploadData.tags);
+      formData.append('patchType', uploadData.patchType);
+      if (uploadData.version) {
+        formData.append('version', uploadData.version);
+      }
+      formData.append('targetOs', uploadData.targetOs.join(','));
+      formData.append('architecture', uploadData.architecture);
+
       const xhr = new XMLHttpRequest();
-      const url = `${API_BASE_URL}/presentations/upload`;
+      const url = `${API_BASE_URL}/patches/upload`;
       const token = localStorage.getItem('token');
 
       // Track upload progress
@@ -102,10 +104,8 @@ class PresentationService {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
-            // Don't set to 100% here - let the component handle the transition
-            // Upload phase is 0-90%, processing will be 90-100%
             if (onProgress) {
-              onProgress(90); // Set to 90% when upload completes, processing will take it to 100%
+              onProgress(100);
             }
             resolve(data);
           } catch (error) {
@@ -144,99 +144,76 @@ class PresentationService {
     });
   }
 
-  async getAdminPresentations(params?: { page?: number; limit?: number }): Promise<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }> {
+  async getAdminPatches(params?: { page?: number; limit?: number }): Promise<{ patches: Patch[]; pagination: { current: number; pages: number; total: number } }> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     const queryString = queryParams.toString();
-    return this.request<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }>(
-      `/presentations/admin/all${queryString ? `?${queryString}` : ''}`
+    return this.request<{ patches: Patch[]; pagination: { current: number; pages: number; total: number } }>(
+      `/patches/admin/all${queryString ? `?${queryString}` : ''}`
     );
   }
 
-  async updatePresentation(id: string, data: Partial<CreatePresentationData>): Promise<SinglePresentationResponse> {
-    return this.request<SinglePresentationResponse>(`/presentations/${id}`, {
+  async updatePatch(id: string, data: Partial<PatchUploadData>): Promise<PatchResponse> {
+    return this.request<PatchResponse>(`/patches/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  async deletePresentation(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/presentations/${id}`, {
+  async deletePatch(id: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/patches/${id}`, {
       method: 'DELETE',
     });
   }
 
-  getImageUrl(presentationId: string, slideNumber: number): string {
+  getPatchFileUrl(id: string): string {
     const baseUrl = getBaseUrl();
-    return `${baseUrl}/uploads/presentations/processed/${presentationId}/slides/slide_${slideNumber}.jpg`;
+    return `${baseUrl}/api/patches/${id}/file`;
   }
 
-  getThumbnailUrl(presentationId: string): string {
+  getPatchDownloadUrl(id: string): string {
     const baseUrl = getBaseUrl();
-    return `${baseUrl}/uploads/presentations/processed/${presentationId}/thumbnail.jpg`;
-  }
-
-  getSlideThumbnailUrl(presentationId: string, slideNumber: number): string {
-    const baseUrl = getBaseUrl();
-    return `${baseUrl}/uploads/presentations/processed/${presentationId}/thumbnails/thumb_slide_${slideNumber}.jpg`;
+    return `${baseUrl}/api/patches/${id}/file?download=true`;
   }
 
   /**
-   * Get presentation hash for manual verification
-   * @param presentationId - Presentation ID
-   * @returns Presentation hash information
+   * Get patch hash for manual verification
+   * @param patchId - Patch ID
+   * @returns Patch hash information
    */
-  async getPresentationHash(presentationId: string): Promise<{
+  async getPatchHash(patchId: string): Promise<{
     success: boolean;
-    data: {
-      presentationId: string;
-      title: string;
-      sha256Hash: string;
-      uploadedAt: string;
-    };
+    data: PatchHashData;
   }> {
     return this.request<{
       success: boolean;
-      data: {
-        presentationId: string;
-        title: string;
-        sha256Hash: string;
-        uploadedAt: string;
-      };
-    }>(`/presentations/${presentationId}/hash`);
+      data: PatchHashData;
+    }>(`/patches/${patchId}/hash`);
   }
 
   /**
-   * Verify presentation integrity by providing a hash or file
-   * @param presentationId - Presentation ID
+   * Verify patch integrity by providing a hash or file
+   * @param patchId - Patch ID
    * @param hash - Hash string to verify (optional if file is provided)
    * @param file - File to verify (optional if hash is provided)
    * @returns Verification result
    */
-  async verifyPresentationIntegrity(
-    presentationId: string,
+  async verifyPatchIntegrity(
+    patchId: string,
     hash?: string,
     file?: File
   ): Promise<{
     success: boolean;
-    data: {
-      presentationId: string;
-      title: string;
-      verified: boolean;
-      providedHash: string;
-      storedHash: string;
-      message: string;
-      verifiedAt: string;
-    };
+    data: PatchVerificationData;
   }> {
-    const url = `${API_BASE_URL}/presentations/${presentationId}/verify`;
+    const url = `${API_BASE_URL}/patches/${patchId}/verify`;
     const token = localStorage.getItem('token');
 
     if (file) {
       // Upload file for server-side hash calculation
       const formData = new FormData();
-      formData.append('presentation', file);
+      formData.append('patch', file);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -257,16 +234,8 @@ class PresentationService {
       // Send hash string for verification
       return this.request<{
         success: boolean;
-        data: {
-          presentationId: string;
-          title: string;
-          verified: boolean;
-          providedHash: string;
-          storedHash: string;
-          message: string;
-          verifiedAt: string;
-        };
-      }>(`/presentations/${presentationId}/verify`, {
+        data: PatchVerificationData;
+      }>(`/patches/${patchId}/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,37 +248,59 @@ class PresentationService {
   }
 
   /**
-   * Track presentation view
-   * @param presentationId - Presentation ID
+   * Track patch download
+   * @param patchId - Patch ID
    */
-  async trackView(presentationId: string): Promise<void> {
+  async trackDownload(patchId: string): Promise<void> {
     try {
-      await fetch(`${API_BASE_URL}/presentations/${presentationId}/view`, {
+      await fetch(`${API_BASE_URL}/patches/${patchId}/download`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
       }).catch(err => {
-        console.warn('Failed to track presentation view:', err);
+        console.warn('Failed to track patch download:', err);
       });
     } catch (error) {
-      console.warn('Failed to track presentation view:', error);
+      console.warn('Failed to track patch download:', error);
     }
   }
 
   /**
-   * Toggle presentation like
-   * @param presentationId - Presentation ID
+   * Track patch view
+   * @param patchId - Patch ID
+   */
+  async trackView(patchId: string): Promise<void> {
+    try {
+      await fetch(`${API_BASE_URL}/patches/${patchId}/view`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(err => {
+        console.warn('Failed to track patch view:', err);
+      });
+    } catch (error) {
+      console.warn('Failed to track patch view:', error);
+    }
+  }
+
+  /**
+   * Toggle patch like
+   * @param patchId - Patch ID
    * @param action - 'like' or 'unlike'
    * @returns Updated likes count and isLiked status
    */
-  async toggleLike(presentationId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
+  async toggleLike(patchId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
     try {
       const response = await this.request<{
         success: boolean;
-        data: { presentationId: string; likes: number; isLiked: boolean };
-      }>(`/presentations/${presentationId}/like`, {
+        data: { patchId: string; likes: number; isLiked: boolean };
+      }>(`/patches/${patchId}/like`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ action }),
       });
       return {
@@ -323,12 +314,12 @@ class PresentationService {
   }
 
   /**
-   * Get users who liked a presentation
-   * @param presentationId - Presentation ID
-   * @returns List of users who liked the presentation
+   * Get users who liked a patch
+   * @param patchId - Patch ID
+   * @returns List of users who liked the patch
    */
-  async getLikedByUsers(presentationId: string): Promise<{
-    presentationId: string;
+  async getLikedByUsers(patchId: string): Promise<{
+    patchId: string;
     totalLikes: number;
     likedBy: Array<{
       _id: string;
@@ -345,7 +336,7 @@ class PresentationService {
       const response = await this.request<{
         success: boolean;
         data: {
-          presentationId: string;
+          patchId: string;
           totalLikes: number;
           likedBy: Array<{
             _id: string;
@@ -358,14 +349,42 @@ class PresentationService {
             };
           }>;
         };
-      }>(`/presentations/${presentationId}/likedby`);
+      }>(`/patches/${patchId}/likedby`);
       return response.data;
     } catch (error) {
       console.error('Failed to get liked by users:', error);
       throw error;
     }
   }
+
+  /**
+   * Download patch file
+   * @param patchId - Patch ID
+   * @returns Promise that resolves when download starts
+   */
+  async downloadPatch(patchId: string): Promise<void> {
+    try {
+      // Track download first
+      await this.trackDownload(patchId);
+
+      // Get patch details for filename
+      const patchResponse = await this.getPatchById(patchId);
+      const patch = patchResponse.patch;
+
+      // Create download link
+      const downloadUrl = this.getPatchDownloadUrl(patchId);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = patch.originalFile.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Failed to download patch:', error);
+      throw error;
+    }
+  }
 }
 
-const presentationService = new PresentationService();
-export default presentationService;
+const patchService = new PatchService();
+export default patchService;

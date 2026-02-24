@@ -32,7 +32,7 @@ router.post('/:id/view', trackDocumentView); // Track document view
 router.post('/:id/like', authenticateToken, toggleDocumentLike); // Toggle document like (requires auth)
 
 // Admin routes
-router.post('/upload', authenticateToken, requireAdmin, upload.single('document'), uploadDocument);
+router.post('/upload', authenticateToken, requireAdmin, upload.single('document'), handleUploadError, uploadDocument);
 router.get('/admin/all', authenticateToken, requireAdmin, getAdminDocuments);
 router.put('/:id', authenticateToken, requireAdmin, updateDocument);
 router.delete('/:id', authenticateToken, requireAdmin, deleteDocument);

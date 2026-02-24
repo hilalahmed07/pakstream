@@ -7,12 +7,12 @@ class DocumentService {
     const token = localStorage.getItem('token');
 
     const config: RequestInit = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
-      ...options,
     };
 
     try {

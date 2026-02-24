@@ -3,21 +3,21 @@ import { API_BASE_URL, getBaseUrl } from '../config/api';
 
 class PremiereService {
   private async request<T>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('token');
-    
+
     console.log('PremiereService request:', { url, token: token ? 'Present' : 'Missing' });
-    
+
     const config: RequestInit = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
-      ...options,
     };
 
     try {
@@ -38,19 +38,19 @@ class PremiereService {
 
   // Public method for getting active premiere (no auth required)
   private async publicRequest<T>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
     console.log('PremiereService public request:', { url });
-    
+
     const config: RequestInit = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
     };
 
     try {
@@ -129,14 +129,14 @@ class PremiereService {
     const now = new Date();
     const startTime = new Date(premiere.startTime);
     const endTime = new Date(premiere.endTime);
-    
+
     return now >= startTime && now <= endTime && premiere.status === 'live';
   }
 
   isPremiereScheduled(premiere: Premiere): boolean {
     const now = new Date();
     const startTime = new Date(premiere.startTime);
-    
+
     return now < startTime && premiere.status === 'scheduled';
   }
 

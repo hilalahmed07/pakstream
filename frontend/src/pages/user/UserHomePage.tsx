@@ -3,7 +3,8 @@ import HeroSection from '../../components/HeroSection';
 import VideoGrid from '../../components/video/VideoGrid';
 import PresentationGrid from '../../components/presentation/PresentationGrid';
 import DocumentGrid from '../../components/document/DocumentGrid';
-import VideoPlayer from '../../components/video/VideoPlayer';
+import PatchGrid from '../../components/patch/PatchGrid';
+import VideoPlayer from '../../components/video/VideoPlayer'; 
 import PresentationViewer from '../../components/presentation/PresentationViewer';
 import DocumentViewer from '../../components/document/DocumentViewer';
 import LivePremiere from '../../components/premiere/LivePremiere';
@@ -14,11 +15,13 @@ import Pagination from '../../components/common/Pagination';
 import videoService from '../../services/videoService';
 import presentationService from '../../services/presentationService';
 import documentService from '../../services/documentService';
+import patchService from '../../services/patchService';
 import premiereService from '../../services/premiereService';
 import { useAuth } from '../../hooks';
 import { Video } from '../../types/video';
 import { Presentation } from '../../types/presentation';
 import { Document } from '../../types/document';
+import { Patch } from '../../types/patch';
 import { Premiere } from '../../types/premiere';
 
 const UserHomePage: React.FC = () => {
@@ -26,16 +29,20 @@ const UserHomePage: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [patches, setPatches] = useState<Patch[]>([]);
   const [videoPage, setVideoPage] = useState(1);
   const [documentPage, setDocumentPage] = useState(1);
   const [presentationPage, setPresentationPage] = useState(1);
+  const [patchPage, setPatchPage] = useState(1);
   const [videoPagination, setVideoPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [documentPagination, setDocumentPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [presentationPagination, setPresentationPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [patchPagination, setPatchPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [hasFetchedVideos, setHasFetchedVideos] = useState(false);
   const [hasFetchedDocuments, setHasFetchedDocuments] = useState(false);
   const [hasFetchedPresentations, setHasFetchedPresentations] = useState(false);
+  const [hasFetchedPatches, setHasFetchedPatches] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -144,6 +151,18 @@ const UserHomePage: React.FC = () => {
     }
   };
 
+  const fetchPatches = async () => {
+    try {
+      const response = await patchService.getPatches({ page: patchPage, limit: 4 });
+      setPatches(response.patches);
+      setPatchPagination(response.pagination || { current: 1, pages: 1, total: 0 });
+    } catch (error) {
+      console.error('Failed to fetch patches:', error);
+    } finally {
+      setHasFetchedPatches(true);
+    }
+  };
+
   useEffect(() => {
     fetchPresentations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,10 +174,15 @@ const UserHomePage: React.FC = () => {
   }, [documentPage]);
 
   useEffect(() => {
-    if (hasFetchedVideos && hasFetchedDocuments && hasFetchedPresentations) {
+    fetchPatches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patchPage]);
+
+  useEffect(() => {
+    if (hasFetchedVideos && hasFetchedDocuments && hasFetchedPresentations && hasFetchedPatches) {
       setLoading(false);
     }
-  }, [hasFetchedVideos, hasFetchedDocuments, hasFetchedPresentations]);
+  }, [hasFetchedVideos, hasFetchedDocuments, hasFetchedPresentations, hasFetchedPatches]);
 
   const checkActivePremiere = async () => {
     try {
@@ -317,6 +341,11 @@ const UserHomePage: React.FC = () => {
   const handleDocumentClick = (document: Document) => {
     setSelectedDocument(document);
     setShowDocumentViewer(true);
+  };
+
+  const handlePatchClick = (patch: Patch) => {
+    // For patches, we'll trigger download directly instead of opening a viewer
+    patchService.downloadPatch(patch._id);
   };
 
   const handleCloseVideoPlayer = () => {
@@ -504,6 +533,29 @@ const UserHomePage: React.FC = () => {
             // limit={10} for testing
             limit={4}
             onPageChange={setDocumentPage}
+          />
+        </div>
+      </section>
+
+      {/* Patches Section */}
+      <section id="patches" className="py-10">
+        <div className="container mx-auto px-6">
+          <div className="mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 tracking-tight">
+              Windows Patches
+            </h2>
+            <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
+          </div>
+          <PatchGrid 
+            patches={patches} 
+            onPatchClick={handlePatchClick}
+          />
+          <Pagination
+            currentPage={patchPagination.current}
+            totalPages={patchPagination.pages}
+            total={patchPagination.total}
+            limit={4}
+            onPageChange={setPatchPage}
           />
         </div>
       </section>

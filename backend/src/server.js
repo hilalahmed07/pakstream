@@ -210,6 +210,7 @@ app.use('/api/videos', require('./routes/video'));
 app.use('/api/premieres', require('./routes/premiere'));
 app.use('/api/presentations', require('./routes/presentation'));
 app.use('/api/documents', require('./routes/document'));
+app.use('/api/patches', require('./routes/patch'));
 app.use('/api/downloads', require('./routes/download'));
 
 // 404 handler

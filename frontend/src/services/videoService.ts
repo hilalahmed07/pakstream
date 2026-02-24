@@ -3,18 +3,19 @@ import { API_BASE_URL, getBaseUrl } from '../config/api';
 
 class VideoService {
   private async request<T>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = localStorage.getItem('token');
-    
+
     const config: RequestInit = {
+      ...options,
       headers: {
+        'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
-      ...options,
     };
 
     try {
@@ -33,7 +34,7 @@ class VideoService {
   }
 
   async uploadVideo(
-    videoFile: File, 
+    videoFile: File,
     uploadData: VideoUploadData,
     onProgress?: (progress: number) => void
   ): Promise<VideoResponse> {
@@ -83,7 +84,7 @@ class VideoService {
         if (progressInterval) {
           clearInterval(progressInterval);
         }
-        
+
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
@@ -124,7 +125,7 @@ class VideoService {
 
       // Open and send request
       xhr.open('POST', url);
-      
+
       // Set authorization header if token exists
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -144,7 +145,7 @@ class VideoService {
     sortOrder?: 'asc' | 'desc';
   } = {}): Promise<VideosResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
@@ -154,14 +155,14 @@ class VideoService {
 
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/videos?${queryString}` : '/videos';
-    
+
     return this.request<VideosResponse>(endpoint);
   }
 
   async getFeaturedVideos(limit: number = 1): Promise<VideosResponse> {
     const queryParams = new URLSearchParams();
     queryParams.append('limit', limit.toString());
-    
+
     return this.request<VideosResponse>(`/videos/featured/list?${queryParams.toString()}`);
   }
 
@@ -197,7 +198,7 @@ class VideoService {
     status?: string;
   } = {}): Promise<VideosResponse> {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.category) queryParams.append('category', params.category);
@@ -206,7 +207,7 @@ class VideoService {
 
     const queryString = queryParams.toString();
     const endpoint = `/videos/admin/all${queryString ? `?${queryString}` : ''}`;
-    
+
     return this.request<VideosResponse>(endpoint);
   }
 
@@ -288,29 +289,17 @@ class VideoService {
    * @returns Updated likes count and isLiked status
    */
   async toggleLike(videoId: string, action: 'like' | 'unlike'): Promise<{ likes: number; isLiked: boolean }> {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Authentication required');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/videos/${videoId}/like`, {
+    const response = await this.request<{
+      success: boolean;
+      data: { videoId: string; likes: number; isLiked: boolean };
+    }>(`/videos/${videoId}/like`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
       body: JSON.stringify({ action }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to toggle like');
-    }
-
-    const result = await response.json();
     return {
-      likes: result.data.likes,
-      isLiked: result.data.isLiked
+      likes: response.data.likes,
+      isLiked: response.data.isLiked
     };
   }
 

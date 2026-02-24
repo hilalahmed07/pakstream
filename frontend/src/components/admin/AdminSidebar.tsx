@@ -23,6 +23,7 @@ const AdminSidebar: React.FC = () => {
     { path: '/admin/videos', label: 'Video Management', icon: '🎬' },
     { path: '/admin/presentations', label: 'Presentation Management', icon: '📊' },
     { path: '/admin/documents', label: 'Document Management', icon: '📄' },
+    { path: '/admin/patches', label: 'Patch Management', icon: '🔧' },
     { path: '/admin/premieres', label: 'Premiere Management', icon: '🎭' },
     { path: '/admin/downloads', label: 'Download Management', icon: '⬇️' },
   ];
