@@ -77,14 +77,26 @@ async function ensureBucketExists(bucketName) {
   try {
     const exists = await minioClient.bucketExists(bucketName);
     if (!exists) {
-      await minioClient.makeBucket(bucketName, 'us-east-1');
-      console.log(`Created MinIO bucket: ${bucketName}`);
+      try {
+        await minioClient.makeBucket(bucketName, 'us-east-1');
+        console.log(`Created MinIO bucket: ${bucketName}`);
+      } catch (makeError) {
+        // If multiple processes try to create the bucket at once, one might fail with 'BucketAlreadyOwnedByYou'
+        if (makeError.code !== 'BucketAlreadyOwnedByYou' && makeError.code !== 'BucketAlreadyExists') {
+          throw makeError;
+        }
+        console.log(`MinIO bucket already exists: ${bucketName}`);
+      }
     }
   } catch (error) {
     console.error(`Error ensuring bucket exists: ${bucketName}`, error);
-    throw error;
+    // Log but don't necessarily throw if the error is just about existence
+    if (error.code !== 'BucketAlreadyOwnedByYou' && error.code !== 'BucketAlreadyExists') {
+      throw error;
+    }
   }
 }
+
 
 class StorageService {
   /**
@@ -179,7 +191,7 @@ class StorageService {
   async getFileStreamFromLocal(objectName) {
     const config = getStorageConfig();
     const filePath = path.join(config.local.videosPath, objectName);
-    
+
     // Check if file exists
     try {
       await fs.access(filePath);
@@ -375,7 +387,39 @@ class StorageService {
       lastModified: stat.mtime
     };
   }
+
+  /**
+   * Upload all files from a directory to storage
+   * @param {string} localDirPath - Local directory path
+   * @param {string} remoteBaseDir - Remote base directory (e.g., 'processed/videoId/hls')
+   * @returns {Promise<void>}
+   */
+  async uploadDirectory(localDirPath, remoteBaseDir) {
+    try {
+      const files = await fs.readdir(localDirPath);
+
+      for (const file of files) {
+        const filePath = path.join(localDirPath, file);
+        const stat = await fs.stat(filePath);
+
+        if (stat.isFile()) {
+          const objectName = `${remoteBaseDir}/${file}`;
+          let contentType = 'application/octet-stream';
+
+          if (file.endsWith('.m3u8')) contentType = 'application/vnd.apple.mpegurl';
+          else if (file.endsWith('.ts')) contentType = 'video/mp2t';
+          else if (file.endsWith('.jpg') || file.endsWith('.jpeg')) contentType = 'image/jpeg';
+
+          await this.uploadFile(filePath, objectName, contentType);
+        }
+      }
+    } catch (error) {
+      console.error(`Error uploading directory ${localDirPath}:`, error);
+      throw error;
+    }
+  }
 }
+
 
 // Export singleton instance
 const storageService = new StorageService();

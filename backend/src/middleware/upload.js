@@ -10,7 +10,7 @@ const ensureUploadDirs = async () => {
     'uploads/videos/temp',
     'public/videos'
   ];
-  
+
   for (const dir of dirs) {
     try {
       await fs.mkdir(dir, { recursive: true });
@@ -48,7 +48,7 @@ const fileFilter = (req, file, cb) => {
     mimetype: file.mimetype,
     size: file.size
   });
-  
+
   const allowedMimes = [
     'video/mp4',
     'video/avi',
@@ -60,10 +60,10 @@ const fileFilter = (req, file, cb) => {
     'video/3gp',
     'application/octet-stream'
   ];
-  
+
   const allowedExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.3gp'];
   const fileExtension = path.extname(file.originalname).toLowerCase();
-  
+
   // Check by MIME type or file extension
   if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
     console.log('File accepted:', file.originalname, 'MIME type:', file.mimetype, 'Extension:', fileExtension);
@@ -78,7 +78,7 @@ const fileFilter = (req, file, cb) => {
 // Error handling middleware
 const handleUploadError = (error, req, res, next) => {
   console.error('Upload error:', error);
-  
+
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
@@ -93,14 +93,14 @@ const handleUploadError = (error, req, res, next) => {
       });
     }
   }
-  
+
   if (error.message === 'Invalid file type. Only video files are allowed.') {
     return res.status(400).json({
       success: false,
       message: error.message
     });
   }
-  
+
   next(error);
 };
 

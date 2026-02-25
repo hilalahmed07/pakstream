@@ -34,17 +34,17 @@ const getCachedVideo = async (videoId) => {
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
-  
+
   const Video = require('../models/Video');
   const video = await Video.findById(videoId).lean();
-  
+
   if (video) {
     videoCache.set(videoId, {
       data: video,
       timestamp: Date.now()
     });
   }
-  
+
   return video;
 };
 
@@ -56,12 +56,12 @@ const clearVideoCache = (videoId) => {
 // Helper function to check if origin matches allowed origins
 function isOriginAllowed(origin, allowedOrigins) {
   if (!origin) return false;
-  
+
   // Allow all origins if configured as '*'
   if (allowedOrigins === '*') {
     return true;
   }
-  
+
   // Handle array of origins
   if (Array.isArray(allowedOrigins)) {
     for (const allowed of allowedOrigins) {
@@ -72,7 +72,7 @@ function isOriginAllowed(origin, allowedOrigins) {
       }
     }
   }
-  
+
   return false;
 }
 
@@ -98,7 +98,7 @@ router.get('/:id/original', async (req, res) => {
     const Video = require('../models/Video');
     const Premiere = require('../models/Premiere');
     const video = await Video.findById(req.params.id);
-    
+
     if (!video || !video.originalFile) {
       return res.status(404).json({ message: 'Video not found' });
     }
@@ -113,12 +113,12 @@ router.get('/:id/original', async (req, res) => {
     if (premiere) {
       // Admins can always access
       const isAdmin = req.user && req.user.role === 'admin';
-      
+
       if (!isAdmin) {
         // If premiere is scheduled and hasn't started, deny access
         if (premiere.status === 'scheduled' && premiere.startTime > new Date()) {
-          return res.status(403).json({ 
-            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.' 
+          return res.status(403).json({
+            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.'
           });
         }
       }
@@ -126,7 +126,7 @@ router.get('/:id/original', async (req, res) => {
 
     // Determine object name in storage
     const objectName = `original/${video.originalFile.filename}`;
-    
+
     // Check if file exists
     const exists = await storageService.fileExists(objectName);
     if (!exists) {
@@ -150,7 +150,7 @@ router.get('/:id/original', async (req, res) => {
     const { appConfig } = require('../config/appConfig');
     const origin = req.headers.origin;
     const corsOrigin = appConfig.cors.origin;
-    
+
     if (corsOrigin === '*') {
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -158,7 +158,7 @@ router.get('/:id/original', async (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
-    
+
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Origin, X-Requested-With, Content-Type, Accept');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
@@ -262,7 +262,7 @@ router.get('/:id/hls/*', async (req, res) => {
   try {
     // Use cached video metadata instead of hitting DB every time
     const video = await getCachedVideo(req.params.id);
-    
+
     if (!video) {
       return res.status(404).json({ message: 'Video not found' });
     }
@@ -279,135 +279,111 @@ router.get('/:id/hls/*', async (req, res) => {
     if (premiere) {
       // Admins can always access
       const isAdmin = req.user && req.user.role === 'admin';
-      
+
       if (!isAdmin) {
         // If premiere is scheduled and hasn't started, deny access
         if (premiere.status === 'scheduled' && premiere.startTime > new Date()) {
-          return res.status(403).json({ 
-            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.' 
+          return res.status(403).json({
+            message: 'This video is part of a scheduled premiere and is not yet available. Please wait for the premiere to start.'
           });
         }
       }
     }
 
     const requestedFile = req.params[0]; // The * part of the route
-    const filePath = path.join(__dirname, '../../uploads/videos/processed', video._id.toString(), 'hls', requestedFile);
-    
-    // Check if file exists and get stats
-    let stat;
-    try {
-      stat = await fs.stat(filePath);
-    } catch (error) {
-      console.error('File not found:', filePath, error);
-      return res.status(404).json({ message: 'File not found' });
+    const videoId = video._id.toString();
+    const objectName = `processed/${videoId}/hls/${requestedFile}`;
+
+    // --- START MINIO CONVERSION ---
+    // This block handles both MinIO and local storage via storageService
+
+    // Check if file exists in storage
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback for local filesystem if not in MinIO/StorageService path
+      const localPath = path.join(__dirname, '../../uploads/videos/processed', videoId, 'hls', requestedFile);
+      try {
+        await fs.access(localPath);
+        // If it exists locally but not in storage service, serve it locally
+        return serveLocalHLSFile(localPath, requestedFile, res);
+      } catch (err) {
+        console.error('File not found in storage or local:', objectName);
+        return res.status(404).json({ message: 'File not found' });
+      }
     }
 
+    // Get file stats from storage service
+    const stat = await storageService.getFileStats(objectName);
     const fileSize = stat.size;
-    const range = req.headers.range;
 
-    // Enable CORS for HLS streaming using configured origins
+    // Set CORS headers
     const { appConfig } = require('../config/appConfig');
-    
     const origin = req.headers.origin;
     const corsOrigin = appConfig.cors.origin;
-    
-    // Set CORS headers BEFORE any other headers
+
     if (corsOrigin === '*') {
-      // Allow all origins
-      if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-      } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-      }
+      res.setHeader('Access-Control-Allow-Origin', origin || '*');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     } else if (origin && isOriginAllowed(origin, corsOrigin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-    } else if (Array.isArray(corsOrigin) && corsOrigin.length > 0) {
-      // Find first string origin (not regex) as fallback
-      const stringOrigin = corsOrigin.find(o => typeof o === 'string');
-      if (stringOrigin) {
-        res.setHeader('Access-Control-Allow-Origin', stringOrigin);
-      }
     }
-    
-    // Set CORS headers for range requests
+
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Origin, X-Requested-With, Content-Type, Accept');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
 
-    // Set appropriate content type and caching headers
+    // Handle different file types
     if (requestedFile.endsWith('.m3u8')) {
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); // Playlists should not be cached
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      
-      // For playlists, send entire file (no range support needed)
-      res.setHeader('Content-Length', fileSize);
-      res.setHeader('Accept-Ranges', 'bytes');
-      
-      const fsSync = require('fs');
-      const file = fsSync.createReadStream(filePath);
-      file.pipe(res);
-      return;
     } else if (requestedFile.endsWith('.ts')) {
       res.setHeader('Content-Type', 'video/mp2t');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // Segments can be cached forever
-      
-      // Handle range requests for segments (important for seeking)
-      if (range) {
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = (end - start) + 1;
-
-        // Create read stream for the requested range
-        const fsSync = require('fs');
-        const file = fsSync.createReadStream(filePath, { start, end });
-
-        // Set headers for partial content
-        res.writeHead(206, {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunksize,
-          'Content-Type': 'video/mp2t',
-          'Cache-Control': 'public, max-age=31536000, immutable'
-        });
-
-        file.pipe(res);
-        return;
-      } else {
-        // No range requested, send entire segment
-        res.setHeader('Content-Length', fileSize);
-        res.setHeader('Accept-Ranges', 'bytes');
-        
-        const fsSync = require('fs');
-        const file = fsSync.createReadStream(filePath);
-        file.pipe(res);
-        return;
-      }
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else if (requestedFile.endsWith('.jpg') || requestedFile.endsWith('.jpeg')) {
       res.setHeader('Content-Type', 'image/jpeg');
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache thumbnails for 1 day
-      res.setHeader('Content-Length', fileSize);
-      res.setHeader('Accept-Ranges', 'bytes');
-      
-      const fsSync = require('fs');
-      const file = fsSync.createReadStream(filePath);
-      file.pipe(res);
-      return;
+      res.setHeader('Cache-Control', 'public, max-age=86400');
     }
 
-    // Fallback: send file as-is
+    // If MinIO public URL is available and it's a segment or thumbnail, we could redirect
+    // but for consistency we'll stream it through the server for now 
+    // unless you want to use redirects for better performance:
+    /*
+    if (isMinIOEnabled() && (requestedFile.endsWith('.ts') || requestedFile.endsWith('.jpg'))) {
+      const presignedUrl = await storageService.getPresignedUrl(objectName, 3600);
+      return res.redirect(presignedUrl);
+    }
+    */
+
+    const fileStream = await storageService.getFileStream(objectName);
     res.setHeader('Content-Length', fileSize);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.sendFile(filePath);
+    fileStream.pipe(res);
+
+    // --- END MINIO CONVERSION ---
+
   } catch (error) {
     console.error('Error serving HLS file:', error);
     res.status(500).json({ message: 'Error serving file', error: error.message });
   }
 });
+
+// Helper for local HLS serving (fallback)
+function serveLocalHLSFile(filePath, requestedFile, res) {
+  if (requestedFile.endsWith('.m3u8')) {
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+  } else if (requestedFile.endsWith('.ts')) {
+    res.setHeader('Content-Type', 'video/mp2t');
+  } else if (requestedFile.endsWith('.jpg') || requestedFile.endsWith('.jpeg')) {
+    res.setHeader('Content-Type', 'image/jpeg');
+  }
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.sendFile(path.resolve(filePath));
+
+}
 
 // Protected routes
 router.post('/upload', authenticateToken, upload, handleUploadError, uploadVideo);

@@ -53,7 +53,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 500 * 1024 * 1024 // 500MB limit for patch files
+    fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit for patch files
   }
 });
 
@@ -74,7 +74,7 @@ const verificationUpload = multer({
   storage: verificationStorage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 500 * 1024 * 1024 // 500MB limit
+    fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit
   }
 });
 

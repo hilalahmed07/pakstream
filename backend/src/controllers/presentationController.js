@@ -4,6 +4,8 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const storageService = require('../services/storageService');
+const { isMinIOEnabled } = require('../config/storage');
 
 const presentationProcessor = new PresentationProcessor();
 
@@ -54,6 +56,38 @@ const uploadPresentation = async (req, res) => {
         presentation.status = 'ready';
         presentation.processingProgress = 100;
         await presentation.save();
+
+        // --- START MINIO CONVERSION ---
+        // Upload presentation files to storage service
+        try {
+          // 1. Upload original file
+          const objectName = `presentations/original/${presentation.originalFile.filename}`;
+          await storageService.uploadFile(req.file.path, objectName, presentation.originalFile.mimetype);
+
+          // 2. Upload processed slides and thumbnail
+          if (presentation.slides && presentation.slides.length > 0) {
+            const presentationId = presentation._id.toString();
+
+            // Upload slides
+            for (const slide of presentation.slides) {
+              const slidePath = path.join(__dirname, '../../uploads', slide.imagePath);
+              const slideObjectName = `presentations/processed/${presentationId}/slides/${slide.imagePath.split('/').pop()}`;
+              await storageService.uploadFile(slidePath, slideObjectName, 'image/jpeg');
+            }
+
+            // Upload thumbnail
+            if (presentation.thumbnail) {
+              const thumbPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
+              const thumbObjectName = `presentations/thumbnails/${presentation.thumbnail.split('/').pop()}`;
+              await storageService.uploadFile(thumbPath, thumbObjectName, 'image/jpeg');
+            }
+          }
+          console.log(`Presentation ${presentation._id} files uploaded to storage service`);
+        } catch (uploadError) {
+          console.error(`Failed to upload presentation ${presentation._id} to storage:`, uploadError);
+        }
+        // --- END MINIO CONVERSION ---
+
         console.log(`Presentation ${presentation._id} processed successfully`);
       })
       .catch(async (error) => {
@@ -61,6 +95,7 @@ const uploadPresentation = async (req, res) => {
         presentation.status = 'error';
         await presentation.save();
       });
+
 
     res.status(201).json({
       message: 'Presentation uploaded successfully',
@@ -319,7 +354,6 @@ const getPresentationSlides = async (req, res) => {
 const getPresentationImage = async (req, res) => {
   try {
     const { id, slideNumber } = req.params;
-
     const presentation = await Presentation.findById(id);
 
     if (!presentation) {
@@ -332,13 +366,28 @@ const getPresentationImage = async (req, res) => {
       return res.status(404).json({ message: 'Slide not found' });
     }
 
-    const imagePath = path.join(__dirname, '../../uploads', slide.imagePath);
+    const presentationId = id.toString();
+    const objectName = `presentations/processed/${presentationId}/slides/${slide.imagePath.split('/').pop()}`;
 
-    if (!fs.existsSync(imagePath)) {
-      return res.status(404).json({ message: 'Image file not found' });
+    // --- START MINIO CONVERSION ---
+    // Handle presentation slide serving
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path
+      const imagePath = path.join(__dirname, '../../uploads', slide.imagePath);
+      if (!fsSync.existsSync(imagePath)) {
+        return res.status(404).json({ message: 'Image file not found' });
+      }
+      return res.sendFile(path.resolve(imagePath));
     }
 
-    res.sendFile(path.resolve(imagePath));
+    const fileStream = await storageService.getFileStream(objectName);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get image error:', error);
@@ -350,7 +399,6 @@ const getPresentationImage = async (req, res) => {
 const getPresentationThumbnail = async (req, res) => {
   try {
     const { id } = req.params;
-
     const presentation = await Presentation.findById(id);
 
     if (!presentation) {
@@ -361,19 +409,34 @@ const getPresentationThumbnail = async (req, res) => {
       return res.status(404).json({ message: 'Thumbnail not found' });
     }
 
-    const thumbnailPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
+    const objectName = `presentations/thumbnails/${presentation.thumbnail.split('/').pop()}`;
 
-    if (!fs.existsSync(thumbnailPath)) {
-      return res.status(404).json({ message: 'Thumbnail file not found' });
+    // --- START MINIO CONVERSION ---
+    // Handle presentation thumbnail serving
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path
+      const thumbnailPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
+      if (!fsSync.existsSync(thumbnailPath)) {
+        return res.status(404).json({ message: 'Thumbnail file not found' });
+      }
+      return res.sendFile(path.resolve(thumbnailPath));
     }
 
-    res.sendFile(path.resolve(thumbnailPath));
+    const fileStream = await storageService.getFileStream(objectName);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get thumbnail error:', error);
     res.status(500).json({ message: 'Failed to fetch thumbnail', error: error.message });
   }
 };
+
 
 // Get admin presentations
 const getAdminPresentations = async (req, res) => {

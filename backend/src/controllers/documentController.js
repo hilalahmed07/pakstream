@@ -4,6 +4,8 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const storageService = require('../services/storageService');
+const { isMinIOEnabled } = require('../config/storage');
 
 const documentProcessor = new DocumentProcessor();
 
@@ -53,6 +55,26 @@ const uploadDocument = async (req, res) => {
         document.status = 'ready';
         document.processingProgress = 100;
         await document.save();
+
+        // --- START MINIO CONVERSION ---
+        // Upload document to storage service after processing
+        try {
+          // Upload original document
+          const objectName = `documents/original/${document.originalFile.filename}`;
+          await storageService.uploadFile(req.file.path, objectName, document.originalFile.mimetype);
+
+          // Upload thumbnail if available
+          if (document.thumbnail) {
+            const thumbnailPath = path.join(__dirname, '../../uploads', document.thumbnail);
+            const thumbObjectName = `documents/thumbnails/${document.thumbnail.split('/').pop()}`;
+            await storageService.uploadFile(thumbnailPath, thumbObjectName, 'image/jpeg');
+          }
+          console.log(`Document ${document._id} and files uploaded to storage service`);
+        } catch (uploadError) {
+          console.error(`Failed to upload document ${document._id} to storage service:`, uploadError);
+        }
+        // --- END MINIO CONVERSION ---
+
         console.log(`Document ${document._id} processed successfully`);
       })
       .catch(async (error) => {
@@ -60,6 +82,7 @@ const uploadDocument = async (req, res) => {
         document.status = 'error';
         await document.save();
       });
+
 
     res.status(201).json({
       message: 'Document uploaded successfully',
@@ -85,11 +108,11 @@ const getDocuments = async (req, res) => {
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
-    
+
     if (category && category !== 'all') {
       query.category = category;
     }
-    
+
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -139,7 +162,7 @@ const getDocuments = async (req, res) => {
 const getDocumentById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const document = await Document.findById(id)
       .populate('uploadedBy', 'username email');
 
@@ -171,7 +194,7 @@ const trackDocumentView = async (req, res) => {
   try {
     const { id } = req.params;
     const { sessionId } = req.query; // Session ID to prevent duplicate tracking
-    
+
     const document = await Document.findById(id);
     if (!document) {
       return res.status(404).json({ success: false, message: 'Document not found' });
@@ -180,7 +203,7 @@ const trackDocumentView = async (req, res) => {
     // Check if view was already tracked in this session (prevent duplicate on refresh)
     // Note: This is a simple check. For production, consider using Redis or a ViewTracking collection
     // For now, we rely on frontend sessionStorage to prevent duplicate calls
-    
+
     // Increment view count atomically
     const updated = await Document.findByIdAndUpdate(
       id,
@@ -213,11 +236,11 @@ const toggleDocumentLike = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
-    
+
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    
+
     const document = await Document.findById(id);
     if (!document) {
       return res.status(404).json({ success: false, message: 'Document not found' });
@@ -256,8 +279,8 @@ const toggleDocumentLike = async (req, res) => {
 
     await Document.findByIdAndUpdate(
       id,
-      { 
-        $set: { 
+      {
+        $set: {
           likes: newLikes,
           likedBy: document.likedBy
         }
@@ -289,36 +312,58 @@ const getDocumentFile = async (req, res) => {
   try {
     const { id } = req.params;
     const { download } = req.query;
-    
+
     const document = await Document.findById(id);
-    
+
     if (!document) {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    if (!document.originalFile || !document.originalFile.path) {
+    if (!document.originalFile || !document.originalFile.filename) {
       return res.status(404).json({ message: 'Document file not found' });
     }
 
-    const filePath = path.resolve(document.originalFile.path);
-    
-    if (!fsSync.existsSync(filePath)) {
-      return res.status(404).json({ message: 'File not found' });
+    const objectName = `documents/original/${document.originalFile.filename}`;
+
+    // --- START MINIO CONVERSION ---
+    // Handle document file serving via MinIO or local storage
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path (for documents already uploaded)
+      const filePath = document.originalFile.path ? path.resolve(document.originalFile.path) : null;
+
+      if (!filePath || !fsSync.existsSync(filePath)) {
+        return res.status(404).json({ message: 'Document file not found' });
+      }
+
+      // Serve local file
+      res.setHeader('Content-Type', 'application/pdf');
+      if (download === 'true') {
+        res.setHeader('Content-Disposition', `attachment; filename="${document.originalFile.filename}"`);
+      } else {
+        res.setHeader('Content-Disposition', `inline; filename="${document.originalFile.filename}"`);
+      }
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(filePath);
     }
 
-    // Set headers for PDF viewing or downloading
+    // Serving from storage service (MinIO/Local abstraction)
+    const stats = await storageService.getFileStats(objectName);
+    const fileStream = await storageService.getFileStream(objectName);
+
     res.setHeader('Content-Type', 'application/pdf');
-    
-    // If download=true, force download; otherwise display inline (for iframe)
     if (download === 'true') {
       res.setHeader('Content-Disposition', `attachment; filename="${document.originalFile.filename}"`);
     } else {
       res.setHeader('Content-Disposition', `inline; filename="${document.originalFile.filename}"`);
     }
-    
+    res.setHeader('Content-Length', stats.size);
     res.setHeader('Cache-Control', 'public, max-age=86400');
 
-    res.sendFile(filePath);
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get document file error:', error);
@@ -326,13 +371,14 @@ const getDocumentFile = async (req, res) => {
   }
 };
 
+
 // Serve document thumbnail
 const getDocumentThumbnail = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const document = await Document.findById(id);
-    
+
     if (!document) {
       return res.status(404).json({ message: 'Document not found' });
     }
@@ -341,19 +387,34 @@ const getDocumentThumbnail = async (req, res) => {
       return res.status(404).json({ message: 'Thumbnail not found' });
     }
 
-    const thumbnailPath = path.join(__dirname, '../../uploads', document.thumbnail);
-    
-    if (!fsSync.existsSync(thumbnailPath)) {
-      return res.status(404).json({ message: 'Thumbnail file not found' });
+    const objectName = `documents/thumbnails/${document.thumbnail.split('/').pop()}`;
+
+    // --- START MINIO CONVERSION ---
+    // Handle document thumbnail serving
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path
+      const thumbnailPath = path.join(__dirname, '../../uploads', document.thumbnail);
+      if (!fsSync.existsSync(thumbnailPath)) {
+        return res.status(404).json({ message: 'Thumbnail file not found' });
+      }
+      return res.sendFile(path.resolve(thumbnailPath));
     }
 
-    res.sendFile(path.resolve(thumbnailPath));
+    const fileStream = await storageService.getFileStream(objectName);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get thumbnail error:', error);
     res.status(500).json({ message: 'Failed to fetch thumbnail', error: error.message });
   }
 };
+
 
 // Get admin documents
 const getAdminDocuments = async (req, res) => {
@@ -389,9 +450,9 @@ const getAdminDocuments = async (req, res) => {
 const deleteDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const document = await Document.findById(id);
-    
+
     if (!document) {
       return res.status(404).json({ message: 'Document not found' });
     }
@@ -421,13 +482,13 @@ const updateDocument = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, tags, isPublic } = req.body;
-    
+
     const document = await Document.findByIdAndUpdate(
       id,
-      { 
-        title, 
-        description, 
-        category, 
+      {
+        title,
+        description,
+        category,
         tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
         isPublic,
         updatedAt: new Date()
@@ -511,7 +572,7 @@ const verifyDocumentIntegrity = async (req, res) => {
 
     // Check if file was uploaded or hash string was provided
     let providedHash = null;
-    
+
     if (req.file) {
       // File was uploaded, calculate its hash
       try {
@@ -553,8 +614,8 @@ const verifyDocumentIntegrity = async (req, res) => {
         verified: matches,
         providedHash: providedHash,
         storedHash: storedHash,
-        message: matches 
-          ? 'Document integrity verified. The file matches the original.' 
+        message: matches
+          ? 'Document integrity verified. The file matches the original.'
           : 'Document integrity check failed. The file does not match the original and may have been tampered with.',
         verifiedAt: new Date().toISOString()
       }
@@ -575,14 +636,14 @@ const getDocumentLikedByUsers = async (req, res) => {
     // Only admins are allowed to see who liked a document
     const user = req.user;
     if (!user || user.role !== 'admin') {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Admin access required to view like details' 
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required to view like details'
       });
     }
 
     const { id } = req.params;
-    
+
     const document = await Document.findById(id)
       .populate({
         path: 'likedBy',
@@ -591,9 +652,9 @@ const getDocumentLikedByUsers = async (req, res) => {
       });
 
     if (!document) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Document not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
       });
     }
 
@@ -618,10 +679,10 @@ const getDocumentLikedByUsers = async (req, res) => {
 
   } catch (error) {
     console.error('Get liked by users error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch liked by users', 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch liked by users',
+      error: error.message
     });
   }
 };
