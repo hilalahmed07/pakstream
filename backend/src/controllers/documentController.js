@@ -346,6 +346,20 @@ const getDocumentFile = async (req, res) => {
         res.setHeader('Content-Disposition', `inline; filename="${document.originalFile.filename}"`);
       }
       res.setHeader('Cache-Control', 'public, max-age=86400');
+      // Track download only when explicitly requested
+      if (download === 'true' && req.user) {
+        const Download = require('../models/Download');
+        Download.create({
+          user: req.user.id || req.user._id,
+          assetType: 'document',
+          assetId: document._id,
+          ipAddress: req.ip || req.connection?.remoteAddress,
+          userAgent: req.get('user-agent'),
+        }).catch(err => {
+          console.error('Failed to track document download:', err);
+        });
+      }
+
       return res.sendFile(filePath);
     }
 
@@ -361,6 +375,20 @@ const getDocumentFile = async (req, res) => {
     }
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    // Track download only when explicitly requested
+    if (download === 'true' && req.user) {
+      const Download = require('../models/Download');
+      Download.create({
+        user: req.user.id || req.user._id,
+        assetType: 'document',
+        assetId: document._id,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('user-agent'),
+      }).catch(err => {
+        console.error('Failed to track document download:', err);
+      });
+    }
 
     fileStream.pipe(res);
     // --- END MINIO CONVERSION ---

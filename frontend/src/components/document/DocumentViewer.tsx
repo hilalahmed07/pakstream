@@ -21,14 +21,13 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onClose }) =>
     }
   }, [document._id]);
 
-  const handleDownload = () => {
-    const fileUrl = documentService.getDocumentDownloadUrl(document._id);
-    const link = window.document.createElement('a');
-    link.href = fileUrl;
-    link.download = document.originalFile.filename || `${document.title}.pdf`;
-    window.document.body.appendChild(link);
-    link.click();
-    window.document.body.removeChild(link);
+  const handleDownload = async () => {
+    try {
+      await documentService.downloadDocument(document._id);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert(error instanceof Error ? error.message : 'Failed to download document');
+    }
   };
 
   const formatFileSize = (bytes: number): string => {

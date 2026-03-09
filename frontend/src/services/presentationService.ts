@@ -31,7 +31,7 @@ class PresentationService {
   }
 
   downloadPresentation = async (id: string) => {
-    const response = await fetch(`/api/presentations/${id}/download`, {
+    const response = await fetch(`${API_BASE_URL}/presentations/${id}/download`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token') || ''}`

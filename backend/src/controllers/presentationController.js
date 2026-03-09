@@ -4,6 +4,7 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const Download = require('../models/Download');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
 
@@ -709,6 +710,49 @@ const getPresentationLikedByUsers = async (req, res) => {
   }
 };
 
+
+// Download presentation file
+const downloadPresentation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const presentation = await Presentation.findById(id);
+
+    if (!presentation) {
+      return res.status(404).json({ message: 'Presentation not found' });
+    }
+
+    // Create download record
+    await Download.create({
+      user: req.user.id,
+      assetType: 'presentation',
+      assetId: id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    // Check if file is in MinIO or local
+    const objectName = `presentations/original/${presentation.originalFile.filename}`;
+    const exists = await storageService.fileExists(objectName);
+
+    if (exists) {
+      const fileStream = await storageService.getFileStream(objectName);
+      res.setHeader('Content-Disposition', `attachment; filename="${presentation.originalFile.filename}"`);
+      res.setHeader('Content-Type', presentation.originalFile.mimetype);
+      return fileStream.pipe(res);
+    } else {
+      // Fallback to local
+      const filePath = path.resolve(presentation.originalFile.path);
+      if (!fsSync.existsSync(filePath)) {
+        return res.status(404).json({ message: 'File not found on server' });
+      }
+      return res.download(filePath, presentation.originalFile.filename);
+    }
+  } catch (error) {
+    console.error('Download presentation error:', error);
+    res.status(500).json({ message: 'Download failed', error: error.message });
+  }
+};
+
 module.exports = {
   uploadPresentation,
   getPresentations,
@@ -723,5 +767,6 @@ module.exports = {
   verifyPresentationIntegrity,
   trackPresentationView,
   togglePresentationLike,
-  getPresentationLikedByUsers
+  getPresentationLikedByUsers,
+  downloadPresentation
 };

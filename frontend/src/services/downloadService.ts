@@ -92,7 +92,8 @@ class DownloadService {
     page?: number;
     limit?: number;
     userId?: string;
-    videoId?: string;
+    assetType?: 'video' | 'document' | 'presentation' | 'patch';
+    assetId?: string;
     startDate?: string;
     endDate?: string;
     sortBy?: string;
@@ -107,7 +108,8 @@ class DownloadService {
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.userId) queryParams.append('userId', params.userId);
-    if (params.videoId) queryParams.append('videoId', params.videoId);
+    if (params.assetType) queryParams.append('assetType', params.assetType);
+    if (params.assetId) queryParams.append('assetId', params.assetId);
     if (params.startDate) queryParams.append('startDate', params.startDate);
     if (params.endDate) queryParams.append('endDate', params.endDate);
     if (params.sortBy) queryParams.append('sortBy', params.sortBy);

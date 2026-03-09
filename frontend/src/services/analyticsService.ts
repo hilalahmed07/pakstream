@@ -5,6 +5,7 @@ export interface AnalyticsPlatform {
   totalVideos: number;
   totalDocuments: number;
   totalPresentations: number;
+  totalPatches: number;
   totalContent: number;
   totalViews: number;
 }
@@ -38,6 +39,7 @@ export interface AnalyticsSummary {
   topVideos: TopContentItem[];
   topDocuments: TopContentItem[];
   topPresentations: TopContentItem[];
+  topPatches: TopContentItem[];
   topUsers: TopUserItem[];
 }
 

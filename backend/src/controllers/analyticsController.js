@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const Document = require('../models/Document');
 const Presentation = require('../models/Presentation');
+const Patch = require('../models/Patch');
 
 /**
  * Get analytics summary - platform totals, active users, top content, top users.
@@ -14,11 +15,12 @@ const getSummary = async (req, res) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Platform totals
-    const [totalUsers, totalVideos, totalDocuments, totalPresentations] = await Promise.all([
+    const [totalUsers, totalVideos, totalDocuments, totalPresentations, totalPatches] = await Promise.all([
       User.countDocuments({ isActive: true }),
       Video.countDocuments(),
       Document.countDocuments(),
-      Presentation.countDocuments()
+      Presentation.countDocuments(),
+      Patch.countDocuments()
     ]);
 
     // Active users: users with lastLogin in period
@@ -28,16 +30,18 @@ const getSummary = async (req, res) => {
     ]);
 
     // Total views across content types
-    const [videoViews, documentViews, presentationViews] = await Promise.all([
+    const [videoViews, documentViews, presentationViews, patchViews] = await Promise.all([
       Video.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
       Document.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
-      Presentation.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }])
+      Presentation.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
+      Patch.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }])
     ]);
 
     const totalViews =
       (videoViews[0]?.total || 0) +
       (documentViews[0]?.total || 0) +
-      (presentationViews[0]?.total || 0);
+      (presentationViews[0]?.total || 0) +
+      (patchViews[0]?.total || 0);
 
     // Top videos by views (limit 10)
     const topVideos = await Video.find({ status: 'ready' })
@@ -63,6 +67,14 @@ const getSummary = async (req, res) => {
       .limit(10)
       .lean();
 
+    // Top patches by views (limit 10)
+    const topPatches = await Patch.find({ status: 'ready' })
+      .select('title views likes uploadedBy createdAt')
+      .populate('uploadedBy', 'username')
+      .sort({ views: -1 })
+      .limit(10)
+      .lean();
+
     // Top users by content engagement (upload count + total views on their content)
     const topUsersByVideos = await Video.aggregate([
       { $match: { status: 'ready' } },
@@ -75,6 +87,10 @@ const getSummary = async (req, res) => {
     const topUsersByPres = await Presentation.aggregate([
       { $match: { status: 'ready' } },
       { $group: { _id: '$uploadedBy', presCount: { $sum: 1 }, presViews: { $sum: '$views' }, presLikes: { $sum: '$likes' } } }
+    ]);
+    const topUsersByPatches = await Patch.aggregate([
+      { $match: { status: 'ready' } },
+      { $group: { _id: '$uploadedBy', patchCount: { $sum: 1 }, patchViews: { $sum: '$views' }, patchLikes: { $sum: '$likes' } } }
     ]);
 
     // Merge user stats by _id
@@ -104,6 +120,15 @@ const getSummary = async (req, res) => {
       existing.uploadCount += row.presCount || 0;
       existing.totalViews += row.presViews || 0;
       existing.totalLikes += row.presLikes || 0;
+      userStatsMap.set(id, existing);
+    }
+    for (const row of topUsersByPatches) {
+      const id = row._id?.toString();
+      if (!id) continue;
+      const existing = userStatsMap.get(id) || { uploadCount: 0, totalViews: 0, totalLikes: 0 };
+      existing.uploadCount += row.patchCount || 0;
+      existing.totalViews += row.patchViews || 0;
+      existing.totalLikes += row.patchLikes || 0;
       userStatsMap.set(id, existing);
     }
 
@@ -137,7 +162,8 @@ const getSummary = async (req, res) => {
           totalVideos,
           totalDocuments,
           totalPresentations,
-          totalContent: totalVideos + totalDocuments + totalPresentations,
+          totalPatches,
+          totalContent: totalVideos + totalDocuments + totalPresentations + totalPatches,
           totalViews
         },
         activeUsers: {
@@ -147,6 +173,7 @@ const getSummary = async (req, res) => {
         topVideos,
         topDocuments,
         topPresentations,
+        topPatches,
         topUsers
       }
     });

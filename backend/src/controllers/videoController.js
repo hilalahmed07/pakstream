@@ -1,6 +1,6 @@
 const Video = require('../models/Video');
 const Premiere = require('../models/Premiere');
-const VideoDownload = require('../models/VideoDownload');
+const Download = require('../models/Download');
 const videoQueue = require('../services/videoQueue');
 const { addCdnUrlsToVideos, addCdnUrlsToVideo } = require('../utils/cdnUtils');
 const { calculateFileHash, calculateBufferHash } = require('../services/hashService');
@@ -646,11 +646,12 @@ const downloadVideo = async (req, res) => {
     }
 
     // Track download (async, don't wait for it)
-    VideoDownload.create({
+    Download.create({
       user: userId,
-      video: videoId,
+      assetType: 'video',
+      assetId: videoId,
       ipAddress: req.ip || req.connection.remoteAddress,
-      userAgent: req.get('user-agent')
+      userAgent: req.get('user-agent'),
     }).catch(err => {
       console.error('Failed to track download:', err);
       // Don't fail the download if tracking fails

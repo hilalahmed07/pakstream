@@ -135,6 +135,39 @@ class DocumentService {
     );
   }
 
+  /**
+   * Download document file with authentication so downloads can be tracked
+   */
+  async downloadDocument(id: string): Promise<void> {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required to download documents');
+    }
+
+    const url = `${API_BASE_URL}/documents/${id}/file?download=true`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to download document');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `document-${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  }
+
   async updateDocument(id: string, data: Partial<DocumentUploadData>): Promise<DocumentResponse> {
     return this.request<DocumentResponse>(`/documents/${id}`, {
       method: 'PUT',

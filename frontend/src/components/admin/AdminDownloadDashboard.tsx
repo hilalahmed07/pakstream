@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import downloadService from '../../services/downloadService';
-import { VideoDownload, DownloadStats } from '../../types/download';
+import { Download, DownloadStats, DownloadAssetType } from '../../types/download';
 
 const AdminDownloadDashboard: React.FC = () => {
-  const [downloads, setDownloads] = useState<VideoDownload[]>([]);
+  const [downloads, setDownloads] = useState<Download[]>([]);
   const [stats, setStats] = useState<DownloadStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,15 +15,16 @@ const AdminDownloadDashboard: React.FC = () => {
   // Filters
   const [userIdFilter, setUserIdFilter] = useState('');
   const [debouncedUserIdFilter, setDebouncedUserIdFilter] = useState('');
-  const [videoIdFilter, setVideoIdFilter] = useState('');
-  const [debouncedVideoIdFilter, setDebouncedVideoIdFilter] = useState('');
+  const [assetTypeFilter, setAssetTypeFilter] = useState<DownloadAssetType | 'all'>('all');
+  const [assetIdFilter, setAssetIdFilter] = useState('');
+  const [debouncedAssetIdFilter, setDebouncedAssetIdFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('downloadedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const userIdDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const videoIdDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const assetIdDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debounce userId filter
   useEffect(() => {
@@ -43,23 +44,23 @@ const AdminDownloadDashboard: React.FC = () => {
     };
   }, [userIdFilter]);
 
-  // Debounce videoId filter
+  // Debounce assetId filter
   useEffect(() => {
-    if (videoIdDebounceRef.current) {
-      clearTimeout(videoIdDebounceRef.current);
+    if (assetIdDebounceRef.current) {
+      clearTimeout(assetIdDebounceRef.current);
     }
     
-    videoIdDebounceRef.current = setTimeout(() => {
-      setDebouncedVideoIdFilter(videoIdFilter);
+    assetIdDebounceRef.current = setTimeout(() => {
+      setDebouncedAssetIdFilter(assetIdFilter);
       setCurrentPage(1);
     }, 500);
 
     return () => {
-      if (videoIdDebounceRef.current) {
-        clearTimeout(videoIdDebounceRef.current);
+      if (assetIdDebounceRef.current) {
+        clearTimeout(assetIdDebounceRef.current);
       }
     };
-  }, [videoIdFilter]);
+  }, [assetIdFilter]);
 
   const fetchStats = async () => {
     try {
@@ -77,7 +78,8 @@ const AdminDownloadDashboard: React.FC = () => {
         page: currentPage,
         limit,
         userId: debouncedUserIdFilter || undefined,
-        videoId: debouncedVideoIdFilter || undefined,
+        assetType: assetTypeFilter === 'all' ? undefined : assetTypeFilter,
+        assetId: debouncedAssetIdFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         sortBy,
@@ -97,7 +99,7 @@ const AdminDownloadDashboard: React.FC = () => {
     fetchStats();
     fetchDownloads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, limit, debouncedUserIdFilter, debouncedVideoIdFilter, startDate, endDate, sortBy, sortOrder]);
+  }, [currentPage, limit, debouncedUserIdFilter, debouncedAssetIdFilter, assetTypeFilter, startDate, endDate, sortBy, sortOrder]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -114,7 +116,8 @@ const AdminDownloadDashboard: React.FC = () => {
 
   const clearFilters = () => {
     setUserIdFilter('');
-    setVideoIdFilter('');
+    setAssetTypeFilter('all');
+    setAssetIdFilter('');
     setStartDate('');
     setEndDate('');
     setCurrentPage(1);
@@ -181,14 +184,37 @@ const AdminDownloadDashboard: React.FC = () => {
           </div>
           
           <div>
-            <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Video ID</label>
+            <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Asset Type</label>
+            <select
+              value={assetTypeFilter}
+              onChange={(e) => {
+                setAssetTypeFilter(e.target.value as DownloadAssetType | 'all');
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 rounded text-sm focus:outline-none"
+              style={{
+                backgroundColor: 'var(--color-primary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <option value="all">All</option>
+              <option value="video">Video</option>
+              <option value="document">Document</option>
+              <option value="presentation">Presentation</option>
+              <option value="patch">Patch</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Asset ID</label>
             <input
               type="text"
-              value={videoIdFilter}
+              value={assetIdFilter}
               onChange={(e) => {
-                setVideoIdFilter(e.target.value);
+                setAssetIdFilter(e.target.value);
               }}
-              placeholder="Filter by video ID"
+              placeholder="Filter by asset ID"
               className="w-full px-3 py-2 rounded text-sm focus:outline-none"
               style={{ 
                 backgroundColor: 'var(--color-primary)', 
@@ -330,7 +356,7 @@ const AdminDownloadDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                   {downloads
-                    .filter((download) => download.user && download.video)
+                    .filter((download) => download.user && download.asset)
                     .map((download) => {
                     const fullName = download.user.profile?.firstName && download.user.profile?.lastName
                       ? `${download.user.profile.firstName} ${download.user.profile.lastName}`
@@ -358,13 +384,22 @@ const AdminDownloadDashboard: React.FC = () => {
                           {download.user.contactNumber || <span style={{ opacity: 0.5 }}>-</span>}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          {download.video ? (
+                          {download.asset ? (
                             <>
-                              <div className="font-medium" style={{ color: 'var(--color-text)' }}>{download.video.title}</div>
-                              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>ID: {download.video._id}</div>
+                              <div className="font-medium" style={{ color: 'var(--color-text)' }}>
+                                {download.asset.title}
+                              </div>
+                              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                                Type: {download.assetType.charAt(0).toUpperCase() + download.assetType.slice(1)}
+                              </div>
+                              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                                ID: {download.assetId}
+                              </div>
                             </>
                           ) : (
-                            <div className="italic" style={{ color: 'var(--color-text-secondary)' }}>Video deleted</div>
+                            <div className="italic" style={{ color: 'var(--color-text-secondary)' }}>
+                              Asset deleted
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>

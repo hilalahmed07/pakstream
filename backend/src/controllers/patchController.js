@@ -231,6 +231,20 @@ const trackPatchDownload = async (req, res) => {
       return null;
     });
 
+    // Track per-user download in unified Download collection if user is authenticated
+    if (req.user) {
+      const Download = require('../models/Download');
+      Download.create({
+        user: req.user.id || req.user._id,
+        assetType: 'patch',
+        assetId: patch._id,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('user-agent'),
+      }).catch(err => {
+        console.error('Failed to track patch download:', err);
+      });
+    }
+
     res.json({
       success: true,
       message: 'Download tracked',

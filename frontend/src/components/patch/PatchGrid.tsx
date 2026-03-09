@@ -172,13 +172,13 @@ const PatchGrid: React.FC<PatchGridProps> = ({ patches: initialPatches, onPatchC
 
               {/* Metadata Tags */}
               <div className="flex flex-wrap gap-2 mt-auto">
-                <span className="px-2 py-0.5 rounded text-[10px] bg-blue-900/30 text-blue-300 border border-blue-800">
+                <span className="px-2 py-1 rounded text-[10px] bg-blue-900/30 text-blue-600 border border-blue-800">
                   {patch.architecture}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] bg-purple-900/30 text-purple-300 border border-purple-800">
+                <span className="px-2 py-1 rounded text-[10px] bg-purple-900/30 text-purple-600 border border-purple-800">
                   {patch.version || 'v1.0'}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] bg-green-900/30 text-green-300 border border-green-800">
+                <span className="px-2 py-1 rounded text-[10px] bg-green-900/30 text-green-600 border border-green-800">
                   {formatFileSize(patch.originalFile.size)}
                 </span>
               </div>

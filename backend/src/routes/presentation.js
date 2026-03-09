@@ -50,6 +50,19 @@ router.get('/:id/download', optionalAuth, async (req, res) => {
     const filePath = presentation.filePath; // e.g., uploads/presentations/abc123.pptx
     const fileName = `${presentation.title.replace(/\s/g, '_')}.pptx`;
 
+    const Download = require('../models/Download');
+    if (req.user) {
+      Download.create({
+        user: req.user.id || req.user._id,
+        assetType: 'presentation',
+        assetId: presentation._id,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('user-agent'),
+      }).catch((err) => {
+        console.error('Failed to track presentation download:', err);
+      });
+    }
+
     res.download(filePath, fileName, (err) => {
       if (err) {
         console.error('Error downloading file:', err);

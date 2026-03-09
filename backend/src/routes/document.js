@@ -22,7 +22,7 @@ const { verificationUpload, handleUploadError } = require('../middleware/documen
 // Public routes (with optional auth to get user like status)
 router.get('/', optionalAuth, getDocuments);
 router.get('/:id', optionalAuth, getDocumentById);
-router.get('/:id/file', getDocumentFile);
+router.get('/:id/file', optionalAuth, getDocumentFile);
 router.get('/:id/thumbnail', getDocumentThumbnail);
 router.get('/:id/hash', getDocumentHash); // Get document hash for manual verification
 // Only admins can see who liked a document

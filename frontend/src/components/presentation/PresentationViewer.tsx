@@ -270,13 +270,22 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, o
             Slide {currentSlide + 1} of {slides.length}
           </span>
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-300 hover:text-white text-2xl font-bold px-3 py-1 hover:bg-gray-800 rounded transition-colors"
-          title="Close (Esc)"
-        >
-          ✕
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => presentationService.downloadPresentation(presentation._id)}
+            className="bg-netflix-red hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            title="Download presentation file"
+          >
+            ⬇️ Download
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-300 hover:text-white text-2xl font-bold px-3 py-1 hover:bg-gray-800 rounded transition-colors"
+            title="Close (Esc)"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}

@@ -173,8 +173,7 @@ class PatchService {
   }
 
   getPatchDownloadUrl(id: string): string {
-    const baseUrl = getBaseUrl();
-    return `${baseUrl}/api/patches/${id}/file?download=true`;
+    return `${API_BASE_URL}/patches/${id}/file?download=true`;
   }
 
   /**

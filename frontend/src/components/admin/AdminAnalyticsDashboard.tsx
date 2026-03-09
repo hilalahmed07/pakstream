@@ -1,15 +1,29 @@
 import React, { useEffect, useState } from 'react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import ProtectedRoute from '../ProtectedRoute';
 import analyticsService, {
   AnalyticsSummary,
-  TopContentItem,
   TopUserItem,
 } from '../../services/analyticsService';
+import UserDetailDialog from './UserDetailDialog';
 
 const AdminAnalyticsDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyticsSummary | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -52,7 +66,7 @@ const AdminAnalyticsDashboard: React.FC = () => {
     return null;
   }
 
-  const { platform, activeUsers, topVideos, topDocuments, topPresentations, topUsers } = data;
+  const { platform, activeUsers, topUsers } = data;
 
   const StatCard: React.FC<{
     label: string;
@@ -75,86 +89,15 @@ const AdminAnalyticsDashboard: React.FC = () => {
     </div>
   );
 
-  const TopContentTable: React.FC<{
-    title: string;
-    items: TopContentItem[];
-    type: string;
-  }> = ({ title, items, type }) => (
-    <div
-      className="rounded-lg overflow-hidden mb-8"
-      style={{ backgroundColor: 'var(--color-secondary)' }}
-    >
-      <h3 className="text-lg font-semibold p-4" style={{ color: 'var(--color-text)' }}>
-        {title}
-      </h3>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)' }}>
-          <thead>
-            <tr>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium uppercase"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Title
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium uppercase"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Uploader
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium uppercase"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Views
-              </th>
-              <th
-                className="px-6 py-3 text-left text-xs font-medium uppercase"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Likes
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-            {items.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-6 py-4 text-center text-sm"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  No {type} yet
-                </td>
-              </tr>
-            ) : (
-              items.map((item) => (
-                <tr key={item._id}>
-                  <td className="px-6 py-4 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {item.title}
-                  </td>
-                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                    {typeof item.uploadedBy === 'object' && item.uploadedBy?.username
-                      ? item.uploadedBy.username
-                      : '—'}
-                  </td>
-                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--color-text)' }}>
-                    {item.views}
-                  </td>
-                  <td className="px-6 py-4 text-sm" style={{ color: 'var(--color-text)' }}>
-                    {item.likes}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const openUserDialog = (userId: string) => {
+    setSelectedUserId(userId);
+    setUserDialogOpen(true);
+  };
 
-  const TopUsersTable: React.FC<{ items: TopUserItem[] }> = ({ items }) => (
+  const TopUsersTable: React.FC<{
+    items: TopUserItem[];
+    onUserClick?: (userId: string) => void;
+  }> = ({ items, onUserClick }) => (
     <div
       className="rounded-lg overflow-hidden mb-8"
       style={{ backgroundColor: 'var(--color-secondary)' }}
@@ -207,7 +150,18 @@ const AdminAnalyticsDashboard: React.FC = () => {
               items.map((item) => (
                 <tr key={item._id}>
                   <td className="px-6 py-4 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {item.username}
+                    {onUserClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onUserClick(item._id)}
+                        className="text-left font-medium underline hover:no-underline focus:outline-none focus:ring-2 focus:ring-offset-1 rounded"
+                        style={{ color: 'var(--color-accent, #60a5fa)' }}
+                      >
+                        {item.username.toUpperCase()}
+                      </button>
+                    ) : (
+                      item.username
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm" style={{ color: 'var(--color-text)' }}>
                     {item.uploadCount}
@@ -230,27 +184,122 @@ const AdminAnalyticsDashboard: React.FC = () => {
   return (
     <ProtectedRoute requireAdmin>
       <div className="space-y-8">
-        {/* Platform totals & Active users */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* First row: Total users, Total views, DAU, MAU */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Users" value={platform.totalUsers} />
-          <StatCard label="Total Content" value={platform.totalContent} />
-          <StatCard label="Total Views" value={platform.totalViews} accentColor="#60a5fa" />
           <StatCard label="Daily Active Users" value={activeUsers.dau} accentColor="#4ade80" />
           <StatCard label="Monthly Active Users" value={activeUsers.mau} accentColor="#a78bfa" />
+          <StatCard label="Total Views" value={platform.totalViews} accentColor="#60a5fa" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Second row: Total contents, Videos, Documents, Presentations, Patches */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      
           <StatCard label="Videos" value={platform.totalVideos} />
+           <StatCard label="Presentations" value={platform.totalPresentations} />
           <StatCard label="Documents" value={platform.totalDocuments} />
-          <StatCard label="Presentations" value={platform.totalPresentations} />
+          <StatCard label="Patches" value={platform.totalPatches ?? 0} />
+              <StatCard label="Total Contents" value={platform.totalContent} />
         </div>
 
-        {/* Top content tables */}
-        <TopContentTable title="Top Videos by Views" items={topVideos} type="videos" />
-        <TopContentTable title="Top Documents by Views" items={topDocuments} type="documents" />
-        <TopContentTable title="Top Presentations by Views" items={topPresentations} type="presentations" />
+        {/* Content breakdown chart */}
+        {(() => {
+          const contentData = [
+            { name: 'Videos', value: platform.totalVideos, color: '#60a5fa' },
+            { name: 'Documents', value: platform.totalDocuments, color: '#4ade80' },
+            { name: 'Presentations', value: platform.totalPresentations, color: '#a78bfa' },
+            { name: 'Patches', value: platform.totalPatches ?? 0, color: '#f59e0b' },
+          ].filter((d) => d.value > 0);
+          if (contentData.length === 0) return null;
+          return (
+            <div
+              className="rounded-lg p-4 mb-8"
+              style={{ backgroundColor: 'var(--color-secondary)' }}
+            >
+              <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>
+                Content Breakdown
+              </h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={contentData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                    label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {contentData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => [value, 'Count']}
+                    contentStyle={{
+                      backgroundColor: 'var(--color-secondary)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '8px',
+                      color: 'var(--color-text)',
+                    }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
+
+        {/* Top users bar chart */}
+        {topUsers.length > 0 && (
+          <div
+            className="rounded-lg p-4 mb-8"
+            style={{ backgroundColor: 'var(--color-secondary)' }}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>
+              Top Users by Views
+            </h3>
+            <ResponsiveContainer width="100%" height={Math.min(400, 56 * topUsers.length)}>
+              <BarChart
+                layout="vertical"
+                data={topUsers.map((u) => ({ name: u.username, views: u.totalViews, userId: u._id }))}
+                margin={{ top: 8, right: 24, left: 80, bottom: 8 }}
+              >
+                <XAxis type="number" stroke="var(--color-text-secondary)" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={72}
+                  stroke="var(--color-text-secondary)"
+                  tick={{ fill: 'var(--color-text)' }}
+                />
+                <Tooltip
+                  formatter={(value: number) => [value, 'Total views']}
+                  contentStyle={{
+                    backgroundColor: 'var(--color-secondary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                    color: 'var(--color-text)',
+                  }}
+                  labelStyle={{ color: 'var(--color-text)' }}
+                />
+                <Bar dataKey="views" fill="#60a5fa" radius={[0, 4, 4, 0]} name="Total views" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Top users */}
-        <TopUsersTable items={topUsers} />
+        <TopUsersTable items={topUsers} onUserClick={openUserDialog} />
+
+        <UserDetailDialog
+          userId={selectedUserId}
+          open={userDialogOpen}
+          onClose={() => {
+            setUserDialogOpen(false);
+            setSelectedUserId(null);
+          }}
+        />
       </div>
     </ProtectedRoute>
   );
