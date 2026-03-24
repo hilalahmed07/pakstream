@@ -7,6 +7,7 @@ import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
+import VerificationTabLayout from '../common/VerificationTabLayout';
 
 const AdminPatchDashboard: React.FC = () => {
   const { showError, showSuccess } = useNotification();
@@ -227,7 +228,7 @@ const AdminPatchDashboard: React.FC = () => {
       className="rounded-lg overflow-hidden"
       style={{ backgroundColor: 'var(--color-secondary)' }}
     >
-      <table className="w-full table-auto">
+      <table className="w-full table-auto" style={{ margin: '-10px' }}>
         <thead style={{ backgroundColor: 'var(--color-hover)' }}>
           <tr>
             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Title</th>
@@ -373,65 +374,35 @@ const AdminPatchDashboard: React.FC = () => {
 
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
-            <div className="space-y-6">
-              {/* Verification Header Box */}
-              <div 
-                className="rounded-lg p-6 mb-6 shadow-lg border-l-4" 
-                style={{ 
-                  backgroundColor: 'rgba(57, 57, 57, 0.4)', 
-                  borderLeftColor: 'var(--color-accent)',
-                  border: '1px solid var(--color-border)',
-                  borderLeftWidth: '4px' 
-                }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-lg bg-black/30 text-3xl">🔒</div>
-                  <div>
-                    <h3 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Data Integrity Dashboard</h3>
-                    <p className="text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
-                      Ensure system security by auditing SHA-256 hashes for all deployed software patches.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Search Section */}
-              <div className="p-6 rounded-lg mb-6 shadow-md" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                <label className="block text-[10px] font-black uppercase tracking-widest mb-3 opacity-60" style={{ color: 'var(--color-text)' }}>
-                  QUICK SEARCH
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={verificationSearch}
-                    onChange={(e) => setVerificationSearch(e.target.value)}
-                    placeholder="Filter by Patch ID, Title, or Description..."
-                    className="w-full px-4 py-3 rounded-lg outline-none border transition-all focus:ring-2"
-                    style={{ 
-                      backgroundColor: 'var(--color-primary)', 
-                      borderColor: 'var(--color-border)',
-                      color: 'var(--color-text)',
-                      '--tw-ring-color': 'var(--color-accent)'
-                    } as any}
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
-                </div>
-              </div>
-
-              {/* Verification Table */}
-              <div className="rounded-lg overflow-hidden border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+            <VerificationTabLayout
+              header={{
+                icon: '🔒',
+                title: 'Data Integrity Dashboard',
+                description: 'Ensure system security by auditing SHA-256 hashes for all deployed software patches.',
+              }}
+              search={{
+                label: 'Quick Search',
+                placeholder: 'Filter by Patch ID, Title, or Description...',
+                value: verificationSearch,
+                onChange: setVerificationSearch,
+              }}
+              table={
                 <table className="w-full text-left">
                   <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest opacity-60">Patch Details</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest opacity-60">Type / OS Support</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest opacity-60">Integrity Status</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest opacity-60">Compliance Action</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Patch Details</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Type / OS Support</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Integrity Status</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Compliance Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                     {filteredPatchesForVerification.length === 0 ? (
-                      <tr><td colSpan={4} className="px-6 py-10 text-center opacity-40">No records match search query</td></tr>
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
+                          No records match search query
+                        </td>
+                      </tr>
                     ) : (
                       filteredPatchesForVerification.map((patch) => (
                         <tr key={patch._id} className="hover:bg-black/5 transition-colors">
@@ -452,7 +423,10 @@ const AdminPatchDashboard: React.FC = () => {
                                 <span className="text-[10px] text-green-500 font-black flex items-center gap-1">
                                   ● HASH IDENTIFIED
                                 </span>
-                                <code className="text-[10px] bg-black/20 p-1.5 rounded font-mono truncate max-w-[150px] opacity-70">
+                                <code
+                                  className="text-[10px] bg-black/20 p-1.5 rounded font-mono truncate max-w-[220px] opacity-70"
+                                  title={patch.sha256Hash}
+                                >
                                   {patch.sha256Hash}
                                 </code>
                               </div>
@@ -468,7 +442,7 @@ const AdminPatchDashboard: React.FC = () => {
                                 setPatchToVerify(patch);
                                 setShowVerificationModal(true);
                               }}
-                              className="px-4 py-2 rounded font-black text-[10px] tracking-widest uppercase transition-all hover:scale-105 active:scale-95"
+                              className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:opacity-90"
                               style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
                             >
                               Run Audit
@@ -479,8 +453,8 @@ const AdminPatchDashboard: React.FC = () => {
                     )}
                   </tbody>
                 </table>
-              </div>
-            </div>
+              }
+            />
           )}
         </div>
 

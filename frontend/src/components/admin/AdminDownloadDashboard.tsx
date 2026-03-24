@@ -340,7 +340,7 @@ const AdminDownloadDashboard: React.FC = () => {
                       style={{ color: 'var(--color-text-secondary)' }}
                       onClick={() => handleSort('video')}
                     >
-                      Video {sortBy === 'video' && (sortOrder === 'asc' ? '↑' : '↓')}
+                      Type {sortBy === 'video' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
                     <th
                       className="px-4 py-3 text-left text-xs font-medium uppercase cursor-pointer hover:opacity-80"
@@ -392,9 +392,7 @@ const AdminDownloadDashboard: React.FC = () => {
                               <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                 Type: {download.assetType.charAt(0).toUpperCase() + download.assetType.slice(1)}
                               </div>
-                              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                                ID: {download.assetId}
-                              </div>
+                            
                             </>
                           ) : (
                             <div className="italic" style={{ color: 'var(--color-text-secondary)' }}>

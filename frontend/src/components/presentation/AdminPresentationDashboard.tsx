@@ -7,6 +7,7 @@ import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
+import VerificationTabLayout from '../common/VerificationTabLayout';
 
 const AdminPresentationDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
@@ -426,130 +427,108 @@ const AdminPresentationDashboard: React.FC = () => {
 
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
-            <div>
-              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgb(59, 130, 246)' }}>
-                <div className="flex items-center">
-                  <div className="text-blue-400 text-xl mr-3">🔒</div>
-                  <div>
-                    <h3 className="text-blue-400 font-semibold">Presentation Integrity Verification</h3>
-                    <p className="text-blue-200 text-sm">
-                      Verify that downloaded presentation files match the original by comparing SHA-256 hashes.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Verification Search */}
-              <div className="p-4 rounded-lg mb-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                  Search Presentations for Verification
-                </label>
-                <input
-                  type="text"
-                  value={verificationSearch}
-                  onChange={(e) => setVerificationSearch(e.target.value)}
-                  placeholder="Search by title, description, or presentation ID..."
-                  className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2"
-                  style={{ 
-                    backgroundColor: 'var(--color-hover)', 
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text)'
-                  }}
-                />
-              </div>
-
-              {/* Presentations List for Verification */}
-              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead style={{ backgroundColor: 'var(--color-hover)' }}>
+            <VerificationTabLayout
+              header={{
+                icon: '🔒',
+                title: 'Presentation Integrity Verification',
+                description: 'Verify that downloaded presentation files match the original by comparing SHA-256 hashes.',
+              }}
+              search={{
+                label: 'Search Presentations for Verification',
+                placeholder: 'Search by title, description, or presentation ID...',
+                value: verificationSearch,
+                onChange: setVerificationSearch,
+              }}
+              table={
+                <table className="w-full">
+                  <thead style={{ backgroundColor: 'var(--color-hover)' }}>
+                    <tr>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Presentation</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                    {loading ? (
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Presentation</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
+                        <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
+                          Loading presentations...
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                      {loading ? (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
-                            Loading presentations...
+                    ) : filteredPresentationsForVerification.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
+                          No presentations found
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPresentationsForVerification.map((presentation) => (
+                        <tr key={presentation._id} className="hover:bg-black/5 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{presentation.title}</div>
+                            <div className="text-xs max-w-md truncate" style={{ color: 'var(--color-text-secondary)' }}>{presentation.description}</div>
                           </td>
-                        </tr>
-                      ) : filteredPresentationsForVerification.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-4 text-center" style={{ color: 'var(--color-text-secondary)' }}>
-                            No presentations found
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              presentation.status === 'ready' ? 'bg-green-900 text-green-200' :
+                              presentation.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
+                              'bg-red-900 text-red-200'
+                            }`}>
+                              {presentation.status}
+                            </span>
                           </td>
-                        </tr>
-                      ) : (
-                        filteredPresentationsForVerification.map((presentation) => (
-                          <tr key={presentation._id} className="transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{presentation.title}</div>
-                              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{presentation.description.substring(0, 60)}...</div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                presentation.status === 'ready' ? 'bg-green-900 text-green-200' :
-                                presentation.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                                'bg-red-900 text-red-200'
-                              }`}>
-                                {presentation.status}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {presentation.sha256Hash ? (
+                              <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={presentation.sha256Hash}>
+                                {presentation.sha256Hash.substring(0, 16)}...
+                              </div>
+                            ) : (
+                              <span className="text-xs opacity-70" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {presentation.status === 'ready' && presentation.sha256Hash ? (
+                              <button
+                                onClick={() => handleVerifyClick(presentation)}
+                                className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:opacity-90"
+                                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                              >
+                                Verify
+                              </button>
+                            ) : (
+                              <span className="text-xs opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
+                                {presentation.status !== 'ready' ? 'Not ready' : 'No hash'}
                               </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {presentation.sha256Hash ? (
-                                <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={presentation.sha256Hash}>
-                                  {presentation.sha256Hash.substring(0, 16)}...
-                                </div>
-                              ) : (
-                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              {presentation.status === 'ready' && presentation.sha256Hash ? (
-                                <button
-                                  onClick={() => handleVerifyClick(presentation)}
-                                  className="text-blue-400 hover:text-blue-300 transition-colors"
-                                >
-                                  Verify
-                                </button>
-                              ) : (
-                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                                  {presentation.status !== 'ready' ? 'Not ready' : 'No hash'}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Verification Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                  <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredPresentationsForVerification.length}</div>
-                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Presentations</div>
-                </div>
-                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                  <div className="text-2xl font-bold text-green-400">
-                    {filteredPresentationsForVerification.filter(p => p.sha256Hash).length}
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              }
+              stats={
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredPresentationsForVerification.length}</div>
+                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Presentations</div>
                   </div>
-                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
-                </div>
-                <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                  <div className="text-2xl font-bold text-blue-400">
-                    {filteredPresentationsForVerification.filter(p => p.status === 'ready' && p.sha256Hash).length}
+                  <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+                    <div className="text-2xl font-bold text-green-400">
+                      {filteredPresentationsForVerification.filter(p => p.sha256Hash).length}
+                    </div>
+                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
                   </div>
-                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
+                  <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {filteredPresentationsForVerification.filter(p => p.status === 'ready' && p.sha256Hash).length}
+                    </div>
+                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              }
+            />
           )}
 
           {/* Verification Modal */}
@@ -689,7 +668,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               <input
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -708,7 +687,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               </label>
               <textarea
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
                 rows={3}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
@@ -755,7 +734,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 <input
                   type="text"
                   value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
+                  onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   placeholder="Add a tag"
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
