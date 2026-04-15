@@ -721,14 +721,17 @@ const downloadPresentation = async (req, res) => {
       return res.status(404).json({ message: 'Presentation not found' });
     }
 
-    // Create download record
-    await Download.create({
-      user: req.user.id,
-      assetType: 'presentation',
-      assetId: id,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
-    });
+    if (req.user) {
+      Download.create({
+        user: req.user.id || req.user._id,
+        assetType: 'presentation',
+        assetId: presentation._id,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('user-agent'),
+      }).catch((err) => {
+        console.error('Failed to track presentation download:', err);
+      });
+    }
 
     // Check if file is in MinIO or local
     const objectName = `presentations/original/${presentation.originalFile.filename}`;

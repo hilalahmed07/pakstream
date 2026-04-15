@@ -4,6 +4,9 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const Download = require('../models/Download');
+const storageService = require('../services/storageService');
+const { isMinIOEnabled } = require('../config/storage');
 
 const presentationProcessor = new PresentationProcessor();
 
@@ -54,6 +57,38 @@ const uploadPresentation = async (req, res) => {
         presentation.status = 'ready';
         presentation.processingProgress = 100;
         await presentation.save();
+
+        // --- START MINIO CONVERSION ---
+        // Upload presentation files to storage service
+        try {
+          // 1. Upload original file
+          const objectName = `presentations/original/${presentation.originalFile.filename}`;
+          await storageService.uploadFile(req.file.path, objectName, presentation.originalFile.mimetype);
+
+          // 2. Upload processed slides and thumbnail
+          if (presentation.slides && presentation.slides.length > 0) {
+            const presentationId = presentation._id.toString();
+
+            // Upload slides
+            for (const slide of presentation.slides) {
+              const slidePath = path.join(__dirname, '../../uploads', slide.imagePath);
+              const slideObjectName = `presentations/processed/${presentationId}/slides/${slide.imagePath.split('/').pop()}`;
+              await storageService.uploadFile(slidePath, slideObjectName, 'image/jpeg');
+            }
+
+            // Upload thumbnail
+            if (presentation.thumbnail) {
+              const thumbPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
+              const thumbObjectName = `presentations/thumbnails/${presentation.thumbnail.split('/').pop()}`;
+              await storageService.uploadFile(thumbPath, thumbObjectName, 'image/jpeg');
+            }
+          }
+          console.log(`Presentation ${presentation._id} files uploaded to storage service`);
+        } catch (uploadError) {
+          console.error(`Failed to upload presentation ${presentation._id} to storage:`, uploadError);
+        }
+        // --- END MINIO CONVERSION ---
+
         console.log(`Presentation ${presentation._id} processed successfully`);
       })
       .catch(async (error) => {
@@ -61,6 +96,7 @@ const uploadPresentation = async (req, res) => {
         presentation.status = 'error';
         await presentation.save();
       });
+
 
     res.status(201).json({
       message: 'Presentation uploaded successfully',
@@ -81,15 +117,16 @@ const uploadPresentation = async (req, res) => {
 // Get all presentations
 const getPresentations = async (req, res) => {
   try {
-    const { page = 1, limit = 12, category, search } = req.query;
+    // const { page = 1, limit = 12, category, search } = req.query;
+    const { page = 1, limit = 4, category, search } = req.query; // for testing 
     const skip = (page - 1) * limit;
 
     let query = { status: 'ready', isPublic: true };
-    
+
     if (category && category !== 'all') {
       query.category = category;
     }
-    
+
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -106,8 +143,22 @@ const getPresentations = async (req, res) => {
 
     const total = await Presentation.countDocuments(query);
 
+    // Add isLiked status for each presentation if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const presentationsWithLikeStatus = presentations.map(presentation => {
+      const presentationObj = presentation.toObject();
+      if (userId && presentation.likedBy && Array.isArray(presentation.likedBy)) {
+        presentationObj.isLiked = presentation.likedBy.some(
+          likeId => likeId && likeId.toString() === userId.toString()
+        );
+      } else {
+        presentationObj.isLiked = false;
+      }
+      return presentationObj;
+    });
+
     res.json({
-      presentations,
+      presentations: presentationsWithLikeStatus,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -121,11 +172,14 @@ const getPresentations = async (req, res) => {
   }
 };
 
+
+
+
 // Get presentation by ID
 const getPresentationById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id)
       .populate('uploadedBy', 'username email');
 
@@ -133,7 +187,18 @@ const getPresentationById = async (req, res) => {
       return res.status(404).json({ message: 'Presentation not found' });
     }
 
-    res.json({ presentation });
+    // Add isLiked status if user is authenticated
+    const userId = req.user?._id || req.user?.id;
+    const presentationObj = presentation.toObject();
+    if (userId && presentation.likedBy && Array.isArray(presentation.likedBy)) {
+      presentationObj.isLiked = presentation.likedBy.some(
+        likeId => likeId && likeId.toString() === userId.toString()
+      );
+    } else {
+      presentationObj.isLiked = false;
+    }
+
+    res.json({ presentation: presentationObj });
 
   } catch (error) {
     console.error('Get presentation error:', error);
@@ -145,19 +210,25 @@ const getPresentationById = async (req, res) => {
 const trackPresentationView = async (req, res) => {
   try {
     const { id } = req.params;
-    
+    const { sessionId } = req.query; // Session ID to prevent duplicate tracking
+
     const presentation = await Presentation.findById(id);
     if (!presentation) {
       return res.status(404).json({ success: false, message: 'Presentation not found' });
     }
 
+    // Check if view was already tracked in this session (prevent duplicate on refresh)
+    // Note: This is a simple check. For production, consider using Redis or a ViewTracking collection
+    // For now, we rely on frontend sessionStorage to prevent duplicate calls
+
     // Increment view count atomically
-    await Presentation.findByIdAndUpdate(
+    const updated = await Presentation.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: false }
+      { new: true }
     ).catch(err => {
       console.error('Failed to update view count:', err);
+      return null;
     });
 
     res.json({
@@ -165,7 +236,7 @@ const trackPresentationView = async (req, res) => {
       message: 'View tracked',
       data: {
         presentationId: id,
-        views: presentation.views + 1
+        views: updated ? updated.views : presentation.views + 1
       }
     });
   } catch (error) {
@@ -181,19 +252,60 @@ const trackPresentationView = async (req, res) => {
 const togglePresentationLike = async (req, res) => {
   try {
     const { id } = req.params;
-    
+    const userId = req.user?._id || req.user?.id; // Get user ID from auth middleware
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
     const presentation = await Presentation.findById(id);
     if (!presentation) {
       return res.status(404).json({ success: false, message: 'Presentation not found' });
     }
 
-    // For now, just increment/decrement likes (can be enhanced with user-specific likes later)
-    const increment = req.body.action === 'unlike' ? -1 : 1;
-    const newLikes = Math.max(0, presentation.likes + increment);
+    // Initialize likedBy array if it doesn't exist
+    if (!presentation.likedBy) {
+      presentation.likedBy = [];
+    }
+
+    const isLiked = presentation.likedBy.some(
+      likeId => likeId && likeId.toString() === userId.toString()
+    );
+
+    let newLikes;
+    let isLikedAfter;
+
+    if (req.body.action === 'unlike') {
+      // Remove user from likedBy array if user is authenticated
+      if (userId) {
+        presentation.likedBy = presentation.likedBy.filter(
+          likeId => likeId.toString() !== userId.toString()
+        );
+      }
+      newLikes = Math.max(0, presentation.likes - 1);
+      isLikedAfter = false;
+    } else {
+      // Add user to likedBy array if not already liked and user is authenticated
+      if (userId && !isLiked) {
+        presentation.likedBy.push(userId);
+      }
+      // Only increment if user wasn't already in the list (prevent duplicate likes)
+      if (!isLiked) {
+        newLikes = presentation.likes + 1;
+      } else {
+        newLikes = presentation.likes; // Already liked, don't increment
+      }
+      isLikedAfter = true;
+    }
 
     await Presentation.findByIdAndUpdate(
       id,
-      { $set: { likes: newLikes } },
+      {
+        $set: {
+          likes: newLikes,
+          likedBy: presentation.likedBy
+        }
+      },
       { new: true }
     );
 
@@ -202,7 +314,8 @@ const togglePresentationLike = async (req, res) => {
       message: req.body.action === 'unlike' ? 'Unliked' : 'Liked',
       data: {
         presentationId: id,
-        likes: newLikes
+        likes: newLikes,
+        isLiked: isLikedAfter
       }
     });
   } catch (error) {
@@ -219,9 +332,9 @@ const togglePresentationLike = async (req, res) => {
 const getPresentationSlides = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -242,26 +355,40 @@ const getPresentationSlides = async (req, res) => {
 const getPresentationImage = async (req, res) => {
   try {
     const { id, slideNumber } = req.params;
-    
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
 
     const slide = presentation.slides.find(s => s.slideNumber === parseInt(slideNumber));
-    
+
     if (!slide) {
       return res.status(404).json({ message: 'Slide not found' });
     }
 
-    const imagePath = path.join(__dirname, '../../uploads', slide.imagePath);
-    
-    if (!fs.existsSync(imagePath)) {
-      return res.status(404).json({ message: 'Image file not found' });
+    const presentationId = id.toString();
+    const objectName = `presentations/processed/${presentationId}/slides/${slide.imagePath.split('/').pop()}`;
+
+    // --- START MINIO CONVERSION ---
+    // Handle presentation slide serving
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path
+      const imagePath = path.join(__dirname, '../../uploads', slide.imagePath);
+      if (!fsSync.existsSync(imagePath)) {
+        return res.status(404).json({ message: 'Image file not found' });
+      }
+      return res.sendFile(path.resolve(imagePath));
     }
 
-    res.sendFile(path.resolve(imagePath));
+    const fileStream = await storageService.getFileStream(objectName);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get image error:', error);
@@ -273,9 +400,8 @@ const getPresentationImage = async (req, res) => {
 const getPresentationThumbnail = async (req, res) => {
   try {
     const { id } = req.params;
-    
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -284,13 +410,27 @@ const getPresentationThumbnail = async (req, res) => {
       return res.status(404).json({ message: 'Thumbnail not found' });
     }
 
-    const thumbnailPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
-    
-    if (!fs.existsSync(thumbnailPath)) {
-      return res.status(404).json({ message: 'Thumbnail file not found' });
+    const objectName = `presentations/thumbnails/${presentation.thumbnail.split('/').pop()}`;
+
+    // --- START MINIO CONVERSION ---
+    // Handle presentation thumbnail serving
+
+    const exists = await storageService.fileExists(objectName);
+
+    if (!exists) {
+      // Fallback to local path
+      const thumbnailPath = path.join(__dirname, '../../uploads', presentation.thumbnail);
+      if (!fsSync.existsSync(thumbnailPath)) {
+        return res.status(404).json({ message: 'Thumbnail file not found' });
+      }
+      return res.sendFile(path.resolve(thumbnailPath));
     }
 
-    res.sendFile(path.resolve(thumbnailPath));
+    const fileStream = await storageService.getFileStream(objectName);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fileStream.pipe(res);
+    // --- END MINIO CONVERSION ---
 
   } catch (error) {
     console.error('Get thumbnail error:', error);
@@ -298,14 +438,30 @@ const getPresentationThumbnail = async (req, res) => {
   }
 };
 
+
 // Get admin presentations
 const getAdminPresentations = async (req, res) => {
   try {
+    // const { page = 1, limit = 10 } = req.query;  for testing
+    const { page = 1, limit = 4 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const presentations = await Presentation.find()
       .populate('uploadedBy', 'username email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    res.json({ presentations });
+    const total = await Presentation.countDocuments();
+
+    res.json({
+      presentations,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total
+      }
+    });
 
   } catch (error) {
     console.error('Get admin presentations error:', error);
@@ -317,9 +473,9 @@ const getAdminPresentations = async (req, res) => {
 const deletePresentation = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const presentation = await Presentation.findById(id);
-    
+
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });
     }
@@ -349,13 +505,13 @@ const updatePresentation = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, tags, isPublic } = req.body;
-    
+
     const presentation = await Presentation.findByIdAndUpdate(
       id,
-      { 
-        title, 
-        description, 
-        category, 
+      {
+        title,
+        description,
+        category,
         tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
         isPublic,
         updatedAt: new Date()
@@ -439,7 +595,7 @@ const verifyPresentationIntegrity = async (req, res) => {
 
     // Check if file was uploaded or hash string was provided
     let providedHash = null;
-    
+
     if (req.file) {
       // File was uploaded, calculate its hash
       try {
@@ -481,8 +637,8 @@ const verifyPresentationIntegrity = async (req, res) => {
         verified: matches,
         providedHash: providedHash,
         storedHash: storedHash,
-        message: matches 
-          ? 'Presentation integrity verified. The file matches the original.' 
+        message: matches
+          ? 'Presentation integrity verified. The file matches the original.'
           : 'Presentation integrity check failed. The file does not match the original and may have been tampered with.',
         verifiedAt: new Date().toISOString()
       }
@@ -494,6 +650,109 @@ const verifyPresentationIntegrity = async (req, res) => {
       message: 'Failed to verify presentation integrity',
       error: error.message
     });
+  }
+};
+
+// Get users who liked a presentation
+const getPresentationLikedByUsers = async (req, res) => {
+  try {
+    // Only admins are allowed to see who liked a presentation
+    const user = req.user;
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required to view like details'
+      });
+    }
+
+    const { id } = req.params;
+
+    const presentation = await Presentation.findById(id)
+      .populate({
+        path: 'likedBy',
+        select: 'username email profile',
+        model: 'User'
+      });
+
+    if (!presentation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Presentation not found'
+      });
+    }
+
+    // Filter out any null entries and format the response
+    const likedByUsers = (presentation.likedBy || [])
+      .filter(user => user !== null)
+      .map(user => ({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        profile: user.profile || {}
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        presentationId: id,
+        totalLikes: presentation.likes || likedByUsers.length,
+        likedBy: likedByUsers
+      }
+    });
+
+  } catch (error) {
+    console.error('Get liked by users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch liked by users',
+      error: error.message
+    });
+  }
+};
+
+
+// Download presentation file
+const downloadPresentation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const presentation = await Presentation.findById(id);
+
+    if (!presentation) {
+      return res.status(404).json({ message: 'Presentation not found' });
+    }
+
+    if (req.user) {
+      Download.create({
+        user: req.user.id || req.user._id,
+        assetType: 'presentation',
+        assetId: presentation._id,
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('user-agent'),
+      }).catch((err) => {
+        console.error('Failed to track presentation download:', err);
+      });
+    }
+
+    // Check if file is in MinIO or local
+    const objectName = `presentations/original/${presentation.originalFile.filename}`;
+    const exists = await storageService.fileExists(objectName);
+
+    if (exists) {
+      const fileStream = await storageService.getFileStream(objectName);
+      res.setHeader('Content-Disposition', `attachment; filename="${presentation.originalFile.filename}"`);
+      res.setHeader('Content-Type', presentation.originalFile.mimetype);
+      return fileStream.pipe(res);
+    } else {
+      // Fallback to local
+      const filePath = path.resolve(presentation.originalFile.path);
+      if (!fsSync.existsSync(filePath)) {
+        return res.status(404).json({ message: 'File not found on server' });
+      }
+      return res.download(filePath, presentation.originalFile.filename);
+    }
+  } catch (error) {
+    console.error('Download presentation error:', error);
+    res.status(500).json({ message: 'Download failed', error: error.message });
   }
 };
 
@@ -510,5 +769,7 @@ module.exports = {
   getPresentationHash,
   verifyPresentationIntegrity,
   trackPresentationView,
-  togglePresentationLike
+  togglePresentationLike,
+  getPresentationLikedByUsers,
+  downloadPresentation
 };

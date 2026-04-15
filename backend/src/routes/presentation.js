@@ -14,7 +14,8 @@ const {
   verifyPresentationIntegrity,
   trackPresentationView,
   togglePresentationLike,
-  getPresentationLikedByUsers
+  getPresentationLikedByUsers,
+  downloadPresentation
 } = require('../controllers/presentationController');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/presentationUpload');
@@ -38,42 +39,6 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('presentat
 router.get('/admin/all', authenticateToken, requireAdmin, getAdminPresentations);
 router.put('/:id', authenticateToken, requireAdmin, updatePresentation);
 router.delete('/:id', authenticateToken, requireAdmin, deletePresentation);
-// Download presentation file
-router.get('/:id/download', optionalAuth, async (req, res) => {
-  try {
-    const { getPresentationById } = require('../controllers/presentationController');
-    const presentation = await getPresentationById(req, res, true); // pass extra param to return data without sending JSON
-
-    if (!presentation) return res.status(404).json({ message: 'Presentation not found' });
-
-    // File path stored in presentation document
-    const filePath = presentation.filePath; // e.g., uploads/presentations/abc123.pptx
-    const fileName = `${presentation.title.replace(/\s/g, '_')}.pptx`;
-
-    const Download = require('../models/Download');
-    if (req.user) {
-      Download.create({
-        user: req.user.id || req.user._id,
-        assetType: 'presentation',
-        assetId: presentation._id,
-        ipAddress: req.ip || req.connection?.remoteAddress,
-        userAgent: req.get('user-agent'),
-      }).catch((err) => {
-        console.error('Failed to track presentation download:', err);
-      });
-    }
-
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Error downloading file:', err);
-        res.status(500).send('Error downloading file');
-      }
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
-  }
-});
-
+router.get('/:id/download', optionalAuth, downloadPresentation);
 
 module.exports = router;
