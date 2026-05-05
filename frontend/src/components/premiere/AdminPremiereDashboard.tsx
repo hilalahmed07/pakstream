@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
 import { Premiere, CreatePremiereData } from '../../types/premiere';
 import { Video } from '../../types/video';
 import premiereService from '../../services/premiereService';
@@ -10,6 +11,11 @@ import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
 import Pagination from '../common/Pagination';
 import { formatVideoDuration } from '../../utils/videoUtils';
+import { MAX_ASSET_TITLE_LENGTH, MAX_ASSET_DESCRIPTION_LENGTH, sanitizeAssetText } from '../../utils/assetValidation';
+import 'react-datepicker/dist/react-datepicker.css';
+import './premiere-datepicker.css';
+
+const requiredLabelClass = 'ml-1';
 
 const AdminPremiereDashboard: React.FC = () => {
   const { user, token } = useAuth();
@@ -107,15 +113,25 @@ const AdminPremiereDashboard: React.FC = () => {
       setError(error.message || 'Socket connection error');
     };
 
+    // Live sync deletes across admin sessions: when another admin deletes
+    // a premiere, the backend broadcasts 'premiere-deleted' globally and
+    // we drop it from our local list.
+    const handlePremiereDeleted = (data: { premiereId: string }) => {
+      setPremieres(prev => prev.filter(p => p._id !== data.premiereId));
+      setActivePremiere(prev => (prev?._id === data.premiereId ? null : prev));
+    };
+
     socketService.onPremiereStarted(handlePremiereStarted);
     socketService.onPremiereEnded(handlePremiereEnded);
     socketService.on('premiere-status-updated', handleStatusUpdated);
+    socketService.onPremiereDeleted(handlePremiereDeleted);
     socketService.onError(handleError);
 
     return () => {
       socketService.removeListener('premiere-started', handlePremiereStarted);
       socketService.removeListener('premiere-ended', handlePremiereEnded);
       socketService.removeListener('premiere-status-updated', handleStatusUpdated);
+      socketService.removeListener('premiere-deleted', handlePremiereDeleted);
       socketService.removeListener('error', handleError);
     };
   }, []);
@@ -134,14 +150,18 @@ const AdminPremiereDashboard: React.FC = () => {
         showWarning('You must be logged in as an admin to create premieres');
         return;
       }
-      
+
       await premiereService.createPremiere(premiereData);
       setShowCreateModal(false);
       fetchData();
       showSuccess('Premiere created successfully');
     } catch (error) {
       console.error('Failed to create premiere:', error);
-      showError('Failed to create premiere: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      // Surface the backend message directly — 409 ("active premiere exists")
+      // and 400 ("Start time must be in the future") come through as-is and
+      // are already user-friendly.
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      showError(message);
     }
   };
 
@@ -172,26 +192,33 @@ const AdminPremiereDashboard: React.FC = () => {
   const confirmDeletePremiere = async () => {
     if (!deleteConfirm.premiereId) return;
 
-    const premiereToDelete = premieres.find(p => p._id === deleteConfirm.premiereId);
+    const premiereId = deleteConfirm.premiereId;
+    const premiereToDelete = premieres.find(p => p._id === premiereId);
     const wasLive = premiereToDelete?.status === 'live';
 
+    // Snapshot for rollback, then optimistically remove the row so the UI
+    // updates instantly. The backend DELETE + socket broadcast will confirm.
+    const snapshot = premieres;
+    setPremieres(prev => prev.filter(p => p._id !== premiereId));
+    setDeleteConfirm({ isOpen: false, premiereId: null });
+
     try {
-      // If premiere is currently live, end it first, then delete
       if (wasLive) {
-        await premiereService.endPremiere(deleteConfirm.premiereId);
+        await premiereService.endPremiere(premiereId);
       }
 
-      await premiereService.deletePremiere(deleteConfirm.premiereId);
+      await premiereService.deletePremiere(premiereId);
 
       if (wasLive) {
+        setActivePremiere(prev => (prev?._id === premiereId ? null : prev));
         showSuccess('Premiere has been ended and deleted');
       } else {
         showSuccess('Premiere has been deleted');
       }
-
-      fetchData();
-      setDeleteConfirm({ isOpen: false, premiereId: null });
     } catch (error) {
+      // Roll back so the user doesn't think the delete succeeded.
+      setPremieres(snapshot);
+
       console.error('Failed to delete premiere:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
 
@@ -200,8 +227,6 @@ const AdminPremiereDashboard: React.FC = () => {
       } else {
         showError('Failed to delete premiere: ' + message);
       }
-
-      setDeleteConfirm({ isOpen: false, premiereId: null });
     }
   };
 
@@ -231,8 +256,7 @@ const AdminPremiereDashboard: React.FC = () => {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}>
       <div className="container mx-auto px-6 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold" style={{ color: 'var(--color-text)' }}>Premiere Dashboard</h1>
+        <div className="flex justify-end mb-6">
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-6 py-3 rounded-lg font-medium transition-colors hover:opacity-90"
@@ -416,11 +440,19 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 }) => {
   const { showWarning, showError } = useNotification();
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{ title: string; description: string; startTime: Date | null }>({
     title: '',
     description: '',
-    startTime: ''
+    startTime: null,
   });
+  const now = new Date();
+  const isStartTimeToday = formData.startTime
+    ? formData.startTime.toDateString() === now.toDateString()
+    : true;
+  const minSelectableTime = isStartTimeToday
+    ? now
+    : new Date(new Date().setHours(0, 0, 0, 0));
+  const maxSelectableTime = new Date(new Date().setHours(23, 59, 59, 999));
 
   const handleVideoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const videoId = e.target.value;
@@ -440,7 +472,7 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedVideoId) {
       showWarning('Please select a video');
       return;
@@ -448,6 +480,14 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
     if (!formData.startTime) {
       showWarning('Please select a start time');
+      return;
+    }
+
+    // Reject past dates client-side with a 1-minute grace for clock skew.
+    // Backend enforces the same rule for defence in depth.
+    const now = Date.now();
+    if (formData.startTime.getTime() <= now - 60 * 1000) {
+      showWarning('Start time must be in the future');
       return;
     }
 
@@ -461,7 +501,9 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
       videoId: selectedVideoId,
       title: formData.title || selectedVideo.title,
       description: formData.description || selectedVideo.description,
-      startTime: formData.startTime
+      // Always send UTC ISO so timezone drift between admin machine and
+      // the (possibly UTC) server doesn't shift the scheduled time.
+      startTime: formData.startTime.toISOString(),
     };
 
     onSubmit(premiereData);
@@ -485,7 +527,7 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
           {/* Video Selection - Dropdown */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-              Select Video for Premiere
+              Select Video for Premiere<span className={requiredLabelClass}>*</span>
             </label>
             <select
               value={selectedVideoId}
@@ -520,12 +562,12 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
           {/* Title */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-              Premiere Title
+              Premiere Title<span className={requiredLabelClass}>*</span>
             </label>
             <input
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, title: sanitizeAssetText(e.target.value) })}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
               style={{ 
                 backgroundColor: 'var(--color-hover)', 
@@ -534,17 +576,18 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               }}
               placeholder="Enter premiere title"
               required
+              maxLength={MAX_ASSET_TITLE_LENGTH}
             />
           </div>
 
           {/* Description */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-              Premiere Description
+              Premiere Description<span className={requiredLabelClass}>*</span>
             </label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, description: sanitizeAssetText(e.target.value) })}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 h-24 resize-none"
               style={{ 
                 backgroundColor: 'var(--color-hover)', 
@@ -553,24 +596,32 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               }}
               placeholder="Enter premiere description"
               required
+              maxLength={MAX_ASSET_DESCRIPTION_LENGTH}
             />
           </div>
 
-          {/* Start Time */}
+          {/* Start Time — uses react-datepicker so the calendar/clock popup
+              works on locked-down browsers (Firefox ESR on the air-gapped
+              Ubuntu target) where native <input type="datetime-local"> has
+              no widget. Also supports manual typing: YYYY-MM-DD HH:MM. */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-              Start Time
+              Start Time<span className={requiredLabelClass}>*</span>
             </label>
-            <input
-              type="datetime-local"
-              value={formData.startTime}
-              onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+            <DatePicker
+              selected={formData.startTime}
+              onChange={(date: Date | null) => setFormData({ ...formData, startTime: date })}
+              showTimeSelect
+              timeIntervals={15}
+              dateFormat="yyyy-MM-dd HH:mm"
+              timeFormat="HH:mm"
+              minDate={new Date()}
+              minTime={minSelectableTime}
+              maxTime={maxSelectableTime}
+              placeholderText="YYYY-MM-DD HH:MM"
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-              style={{ 
-                backgroundColor: 'var(--color-hover)', 
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text)'
-              }}
+              wrapperClassName="w-full"
+              popperClassName="premiere-datepicker-popper"
               required
             />
           </div>

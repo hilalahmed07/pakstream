@@ -15,6 +15,10 @@ const app = express();
 const server = http.createServer(app);
 const socketHandler = new SocketHandler(server);
 
+// Expose the Socket.IO instance on `app` so REST controllers can emit events
+// (e.g. broadcasting 'premiere-deleted' to connected admin sessions).
+app.set('io', socketHandler.io);
+
 // Initialize video queue with socket.io
 const videoQueue = require('./services/videoQueue');
 videoQueue.setSocketIO(socketHandler.io);

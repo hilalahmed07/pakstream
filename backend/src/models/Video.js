@@ -1,17 +1,20 @@
 const mongoose = require('mongoose');
 
+const VIDEO_TITLE_MAX_LENGTH = 90;
+const VIDEO_DESCRIPTION_MAX_LENGTH = 180;
+
 const videoSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
     trim: true,
-    maxlength: 200
+    maxlength: VIDEO_TITLE_MAX_LENGTH
   },
   description: {
     type: String,
     required: true,
     trim: true,
-    maxlength: 1000
+    maxlength: VIDEO_DESCRIPTION_MAX_LENGTH
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,

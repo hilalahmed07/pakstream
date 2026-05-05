@@ -38,7 +38,6 @@ const UserTable: React.FC<UserTableProps> = React.memo(({
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Organization</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Date of Enrollment</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Contact</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Location</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
@@ -73,9 +72,6 @@ const UserTable: React.FC<UserTableProps> = React.memo(({
                       ? new Date(user.dateOfEnrollment).toLocaleDateString() 
                       : <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
-                    {user.contactNumber || <span style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }}>-</span>}
-                  </td>
                   <td className="px-6 py-4 max-w-xs" style={{ color: 'var(--color-text-secondary)' }}>
                     {user.address ? (
                       <div className="truncate" title={user.address}>
@@ -107,34 +103,38 @@ const UserTable: React.FC<UserTableProps> = React.memo(({
                     {new Date(user.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
+                    <div className="flex justify-end items-center gap-2">
                       <button
                         onClick={() => onEdit(user)}
-                        className="text-blue-400 hover:text-blue-300"
-                        title="Edit"
+                        className="px-3 py-1 rounded border text-blue-400 border-blue-400 hover:bg-blue-400/10 transition-colors"
+                        title="Edit User"
                       >
-                        ✏️
+                        Edit
                       </button>
                       <button
                         onClick={() => onResetPassword(user)}
-                        className="text-yellow-400 hover:text-yellow-300"
+                        className="px-3 py-1 rounded border text-yellow-400 border-yellow-400 hover:bg-yellow-400/10 transition-colors"
                         title="Reset Password"
                       >
-                        🔑
+                        Reset Password
                       </button>
                       <button
                         onClick={() => onToggleStatus(user._id)}
-                        className={user.isActive ? 'text-orange-400 hover:text-orange-300' : 'text-green-400 hover:text-green-300'}
+                        className={`px-3 py-1 rounded border transition-colors ${
+                          user.isActive
+                            ? 'text-orange-400 border-orange-400 hover:bg-orange-400/10'
+                            : 'text-green-400 border-green-400 hover:bg-green-400/10'
+                        }`}
                         title={user.isActive ? 'Block' : 'Activate'}
                       >
-                        {user.isActive ? '🚫' : '✅'}
+                        {user.isActive ? 'Block' : 'Activate'}
                       </button>
                       <button
                         onClick={() => onDelete(user._id)}
-                        className="text-red-400 hover:text-red-300"
-                        title="Delete"
+                        className="px-3 py-1 rounded border text-red-400 border-red-400 hover:bg-red-400/10 transition-colors"
+                        title="Delete User"
                       >
-                        🗑️
+                        Delete
                       </button>
                     </div>
                   </td>

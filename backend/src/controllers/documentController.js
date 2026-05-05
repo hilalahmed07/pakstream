@@ -6,8 +6,47 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
+const { ensureUniqueTitle } = require('../utils/uniqueTitle');
 
 const documentProcessor = new DocumentProcessor();
+const DOCUMENT_TITLE_MAX = 90;
+const DOCUMENT_DESCRIPTION_MAX = 180;
+const DOCUMENT_MAX_TAGS = 3;
+
+const parseDocumentTags = (tags) => {
+  const rawTags = Array.isArray(tags) ? tags : String(tags || '').split(',');
+  return rawTags
+    .map((tag) => String(tag).trim())
+    .filter(Boolean);
+};
+
+const validateDocumentPayload = ({ title, description, tags }) => {
+  const trimmedTitle = String(title || '').trim();
+  const trimmedDescription = String(description || '').trim();
+  const normalizedTags = parseDocumentTags(tags);
+
+  if (!trimmedTitle || !trimmedDescription) {
+    return { message: 'Title and description are required' };
+  }
+
+  if (trimmedTitle.length > DOCUMENT_TITLE_MAX) {
+    return { message: `Title must be ${DOCUMENT_TITLE_MAX} characters or fewer` };
+  }
+
+  if (trimmedDescription.length > DOCUMENT_DESCRIPTION_MAX) {
+    return { message: `Description must be ${DOCUMENT_DESCRIPTION_MAX} characters or fewer` };
+  }
+
+  if (normalizedTags.length > DOCUMENT_MAX_TAGS) {
+    return { message: `You can add up to ${DOCUMENT_MAX_TAGS} tags only` };
+  }
+
+  return {
+    title: trimmedTitle,
+    description: trimmedDescription,
+    tags: normalizedTags,
+  };
+};
 
 // Upload document
 const uploadDocument = async (req, res) => {
@@ -18,6 +57,15 @@ const uploadDocument = async (req, res) => {
 
     const { title, description, category = 'other', tags = [] } = req.body;
     const userId = req.user.id;
+    const validatedPayload = validateDocumentPayload({ title, description, tags });
+
+    if (validatedPayload.message) {
+      return res.status(400).json({ message: validatedPayload.message });
+    }
+
+    const resolvedTitle = await ensureUniqueTitle(Document, validatedPayload.title, {
+      maxLength: DOCUMENT_TITLE_MAX,
+    });
 
     // Calculate SHA-256 hash of the uploaded file
     let sha256Hash = null;
@@ -31,8 +79,8 @@ const uploadDocument = async (req, res) => {
 
     // Create document record
     const document = new Document({
-      title,
-      description,
+      title: resolvedTitle,
+      description: validatedPayload.description,
       uploadedBy: userId,
       originalFile: {
         filename: req.file.filename,
@@ -41,7 +89,7 @@ const uploadDocument = async (req, res) => {
         mimetype: req.file.mimetype
       },
       category,
-      tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
+      tags: validatedPayload.tags,
       sha256Hash: sha256Hash
     });
 
@@ -447,17 +495,41 @@ const getDocumentThumbnail = async (req, res) => {
 // Get admin documents
 const getAdminDocuments = async (req, res) => {
   try {
-    // const { page = 1, limit = 10 } = req.query; for testing
-    const { page = 1, limit = 4 } = req.query;
+    const { page = 1, limit = 4, category, status, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const query = {};
 
-    const documents = await Document.find()
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    if (search && String(search).trim()) {
+      const normalizedSearch = String(search).trim();
+      const searchRegex = new RegExp(normalizedSearch, 'i');
+      const searchConditions = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: { $in: [searchRegex] } },
+      ];
+
+      if (/^[0-9a-fA-F]{24}$/.test(normalizedSearch)) {
+        searchConditions.push({ _id: normalizedSearch });
+      }
+
+      query.$or = searchConditions;
+    }
+
+    const documents = await Document.find(query)
       .populate('uploadedBy', 'username email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Document.countDocuments();
+    const total = await Document.countDocuments(query);
 
     res.json({
       documents,
@@ -511,18 +583,48 @@ const updateDocument = async (req, res) => {
     const { id } = req.params;
     const { title, description, category, tags, isPublic } = req.body;
 
-    const document = await Document.findByIdAndUpdate(
-      id,
-      {
-        title,
-        description,
-        category,
-        tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
-        isPublic,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).populate('uploadedBy', 'username email');
+    const update = {
+      updatedAt: new Date(),
+    };
+    if (typeof title === 'string' && title.trim()) {
+      if (title.trim().length > DOCUMENT_TITLE_MAX) {
+        return res.status(400).json({ message: `Title must be ${DOCUMENT_TITLE_MAX} characters or fewer` });
+      }
+
+      update.title = await ensureUniqueTitle(Document, title.trim(), {
+        excludeId: id,
+        maxLength: DOCUMENT_TITLE_MAX,
+      });
+    }
+    if (description !== undefined) {
+      const trimmedDescription = String(description).trim();
+
+      if (!trimmedDescription) {
+        return res.status(400).json({ message: 'Description is required' });
+      }
+
+      if (trimmedDescription.length > DOCUMENT_DESCRIPTION_MAX) {
+        return res.status(400).json({ message: `Description must be ${DOCUMENT_DESCRIPTION_MAX} characters or fewer` });
+      }
+
+      update.description = trimmedDescription;
+    }
+    if (category !== undefined) update.category = category;
+    if (tags !== undefined) {
+      const normalizedTags = parseDocumentTags(tags);
+
+      if (normalizedTags.length > DOCUMENT_MAX_TAGS) {
+        return res.status(400).json({ message: `You can add up to ${DOCUMENT_MAX_TAGS} tags only` });
+      }
+
+      update.tags = normalizedTags;
+    }
+    if (isPublic !== undefined) update.isPublic = isPublic;
+
+    const document = await Document.findByIdAndUpdate(id, update, { new: true }).populate(
+      'uploadedBy',
+      'username email'
+    );
 
     if (!document) {
       return res.status(404).json({ message: 'Document not found' });
@@ -730,4 +832,3 @@ module.exports = {
   toggleDocumentLike,
   getDocumentLikedByUsers
 };
-

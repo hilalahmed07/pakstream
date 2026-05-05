@@ -1,5 +1,23 @@
 import React, { useState } from 'react';
 import { CreateUserData } from '../../types/user';
+import {
+  USERNAME_MESSAGE,
+  EMAIL_MESSAGE,
+  PASSWORD_MESSAGE,
+  EMAIL_MAX_LENGTH,
+  ORGANIZATION_MESSAGE,
+  ADDRESS_MESSAGE,
+  normalizeUsername,
+  normalizeEmail,
+  sanitizeUsernameInput,
+  sanitizeEmailInput,
+  sanitizeProfileTextInput,
+  isValidUsername,
+  isValidEmail,
+  isStrongPassword,
+  isValidOrganization,
+  isValidAddress,
+} from '../../utils/userValidation';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -20,7 +38,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
     },
     organization: '',
     dateOfEnrollment: new Date().toISOString().split('T')[0],
-    contactNumber: '',
     address: ''
   });
   const [loading, setLoading] = useState(false);
@@ -31,14 +48,54 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
     setError('');
     setLoading(true);
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    const normalizedUsername = normalizeUsername(formData.username);
+    const normalizedEmail = normalizeEmail(formData.email);
+
+    // Check all required fields are filled
+    if (!normalizedUsername || !normalizedEmail || !formData.password || !formData.role) {
+      setError('Please fill in all required fields (Username, Email, Password, and Role).');
+      setLoading(false);
+      return;
+    }
+
+    if (!isValidUsername(normalizedUsername)) {
+      setError(USERNAME_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      setError(EMAIL_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    if (!isStrongPassword(formData.password)) {
+      setError(PASSWORD_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    // Validate organization if provided
+    if (formData.organization && !isValidOrganization(formData.organization)) {
+      setError(ORGANIZATION_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    // Validate address if provided
+    if (formData.address && !isValidAddress(formData.address)) {
+      setError(ADDRESS_MESSAGE);
       setLoading(false);
       return;
     }
 
     try {
-      await onSubmit(formData);
+      await onSubmit({
+        ...formData,
+        username: normalizedUsername,
+        email: normalizedEmail,
+      });
       setFormData({
         username: '',
         email: '',
@@ -51,7 +108,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
         },
         organization: '',
         dateOfEnrollment: new Date().toISOString().split('T')[0],
-        contactNumber: '',
         address: ''
       });
     } catch (err: any) {
@@ -92,7 +148,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
               <input
                 type="text"
                 value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, username: sanitizeUsernameInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -100,6 +156,8 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                   color: 'var(--color-text)'
                 }}
                 required
+                minLength={3}
+                maxLength={30}
               />
             </div>
 
@@ -110,7 +168,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, email: sanitizeEmailInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -118,6 +176,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                   color: 'var(--color-text)'
                 }}
                 required
+                maxLength={EMAIL_MAX_LENGTH}
               />
             </div>
           </div>
@@ -138,7 +197,8 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                   color: 'var(--color-text)'
                 }}
                 required
-                minLength={6}
+                minLength={8}
+                placeholder="Min 8 chars with upper/lower/number/special"
               />
             </div>
 
@@ -173,14 +233,15 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 value={formData.profile?.firstName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, firstName: e.target.value }
+                  profile: { ...formData.profile, firstName: sanitizeProfileTextInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
+                maxLength={50}
               />
             </div>
 
@@ -193,14 +254,15 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 value={formData.profile?.lastName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, lastName: e.target.value }
+                  profile: { ...formData.profile, lastName: sanitizeProfileTextInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
+                maxLength={50}
               />
             </div>
           </div>
@@ -213,7 +275,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
               value={formData.profile?.bio || ''}
               onChange={(e) => setFormData({
                 ...formData,
-                profile: { ...formData.profile, bio: e.target.value }
+                profile: { ...formData.profile, bio: sanitizeProfileTextInput(e.target.value) }
               })}
               rows={3}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
@@ -233,14 +295,15 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
               <input
                 type="text"
                 value={formData.organization || ''}
-                onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, organization: sanitizeProfileTextInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 placeholder="Organization name"
+                maxLength={50}
               />
             </div>
 
@@ -262,42 +325,22 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-                Contact Number
-              </label>
-              <input
-                type="tel"
-                value={formData.contactNumber || ''}
-                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)'
-                }}
-                placeholder="Phone number"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-                Address/Location
-              </label>
-              <textarea
-                value={formData.address || ''}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)'
-                }}
-                placeholder="Full address or location"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
+              Address/Location
+            </label>
+            <textarea
+              value={formData.address || ''}
+              onChange={(e) => setFormData({ ...formData, address: sanitizeProfileTextInput(e.target.value) })}
+              rows={2}
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
+              placeholder="Full address or location"
+            />
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

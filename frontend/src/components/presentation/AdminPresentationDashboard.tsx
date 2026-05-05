@@ -8,12 +8,24 @@ import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
 import VerificationTabLayout from '../common/VerificationTabLayout';
+import {
+  validatePresentationUpload,
+  PRESENTATION_TAGS_MESSAGE,
+  MAX_PRESENTATION_TITLE_LENGTH,
+  MAX_PRESENTATION_DESCRIPTION_LENGTH,
+  MAX_PRESENTATION_TAGS,
+  normalizeTitle,
+  normalizeDescription,
+} from '../../utils/assetValidation';
+
+const requiredLabelClass = 'ml-1';
 
 const AdminPresentationDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
   const [activeTab, setActiveTab] = useState<'presentations' | 'verification'>('presentations');
   const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -29,25 +41,43 @@ const AdminPresentationDashboard: React.FC = () => {
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
   const [loadingLikes, setLoadingLikes] = useState(false);
+  const [editingPresentation, setEditingPresentation] = useState<Presentation | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [filters, setFilters] = useState({
+    search: '',
+    category: '',
+    status: '',
+  });
 
   const fetchPresentations = async () => {
     try {
       setLoading(true);
       // const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
-      const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 4 });
+      const response = await presentationService.getAdminPresentations({
+        page: currentPage,
+        limit: 4,
+        search: filters.search.trim() || undefined,
+        category: filters.category || undefined,
+        status: filters.status || undefined,
+      });
       setPresentations(response.presentations);
       setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
       console.error('Failed to fetch presentations:', error);
     } finally {
       setLoading(false);
+      setHasFetchedOnce(true);
     }
   };
 
   useEffect(() => {
     fetchPresentations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [currentPage, filters]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.search, filters.category, filters.status]);
 
   const handleUpload = async (formData: FormData) => {
     try {
@@ -69,20 +99,16 @@ const AdminPresentationDashboard: React.FC = () => {
       const pollInterval = setInterval(async () => {
         try {
           pollCount++;
-          // const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
-          const updatedPresentations = await presentationService.getAdminPresentations({ page: currentPage, limit: 4 });
-          const uploadedPresentation = updatedPresentations.presentations.find(
-            p => p._id === presentationId
-          );
+          const presentationResponse = await presentationService.getPresentationById(presentationId);
+          const uploadedPresentation = presentationResponse.presentation;
           
           if (uploadedPresentation) {
-            setPresentations(updatedPresentations.presentations);
-            
             if (uploadedPresentation.status === 'ready' || uploadedPresentation.status === 'error') {
               clearInterval(pollInterval);
               setUploadProgress(100);
               setUploading(false);
               setUploadProgress(0);
+              fetchPresentations();
               return;
             }
             
@@ -101,6 +127,15 @@ const AdminPresentationDashboard: React.FC = () => {
             fetchPresentations();
           }
         } catch (error) {
+          const message = error instanceof Error ? error.message : '';
+          if (message.toLowerCase().includes('not found')) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            setUploadProgress(0);
+            fetchPresentations();
+            showError('Upload tracking stopped because the presentation was removed.');
+            return;
+          }
           console.error('Error polling presentation status:', error);
         }
       }, 5000);
@@ -117,6 +152,21 @@ const AdminPresentationDashboard: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     setDeleteConfirm({ isOpen: true, presentationId: id });
+  };
+
+  const handleEdit = async (presentationId: string, updateData: Partial<CreatePresentationData>) => {
+    try {
+      await presentationService.updatePresentation(presentationId, updateData);
+      showSuccess('Presentation updated successfully');
+      await fetchPresentations();
+      setShowEditModal(false);
+      setEditingPresentation(null);
+    } catch (error) {
+      console.error('Update failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update presentation';
+      showError(message);
+      throw new Error(message);
+    }
   };
 
   const confirmDelete = async () => {
@@ -184,7 +234,7 @@ const AdminPresentationDashboard: React.FC = () => {
     return colors[category as keyof typeof colors] || colors.other;
   };
 
-  if (loading) {
+  if (loading && !hasFetchedOnce) {
     return (
       <div className="text-center py-12">
         <div 
@@ -200,17 +250,8 @@ const AdminPresentationDashboard: React.FC = () => {
     <ProtectedRoute requireAdmin>
       <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-                Admin Presentation Management
-              </h1>
-              <p style={{ color: 'var(--color-text-secondary)' }}>
-                Administrators can manage and verify all presentations
-              </p>
-            </div>
-            {activeTab === 'presentations' && (
+          {activeTab === 'presentations' && (
+            <div className="flex justify-end mb-6">
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
@@ -219,8 +260,8 @@ const AdminPresentationDashboard: React.FC = () => {
               >
                 {uploading ? 'Uploading...' : 'Upload Presentation'}
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Tab Navigation */}
           <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -251,19 +292,91 @@ const AdminPresentationDashboard: React.FC = () => {
           {/* Presentations Tab Content */}
           {activeTab === 'presentations' && (
             <div className="space-y-6">
+              <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Search
+                    </label>
+                    <input
+                      type="text"
+                      value={filters.search}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                      placeholder="Search title, description, ID..."
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{
+                        backgroundColor: 'var(--color-hover)',
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Category
+                    </label>
+                    <select
+                      value={filters.category}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{
+                        backgroundColor: 'var(--color-hover)',
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)',
+                      }}
+                    >
+                      <option value="">All Categories</option>
+                      <option value="business">Business</option>
+                      <option value="education">Education</option>
+                      <option value="marketing">Marketing</option>
+                      <option value="technology">Technology</option>
+                      <option value="design">Design</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                      Status
+                    </label>
+                    <select
+                      value={filters.status}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+                      style={{
+                        backgroundColor: 'var(--color-hover)',
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text)',
+                      }}
+                    >
+                      <option value="">All Status</option>
+                      <option value="ready">Ready</option>
+                      <option value="processing">Processing</option>
+                      <option value="error">Error</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
               {/* Upload Progress */}
               {uploading && (
-                <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span style={{ color: 'var(--color-text)' }}>Uploading presentation...</span>
-                    <span style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
+                <div className="fixed top-4 right-4 z-50 rounded-lg p-4 shadow-lg" style={{ backgroundColor: 'var(--color-secondary)', minWidth: '320px' }}>
+                  <div className="flex items-center mb-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-3" style={{ borderColor: 'var(--color-accent)' }}></div>
+                    <span style={{ color: 'var(--color-text)' }}>
+                      {uploadProgress >= 90 ? 'Processing presentation...' : 'Uploading presentation...'}
+                    </span>
+                    <span className="ml-2 font-semibold" style={{ color: 'var(--color-accent)' }}>{Math.round(uploadProgress)}%</span>
                   </div>
-                  <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
+                  <div className="w-full rounded-full h-2 overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-hover)' }}>
                     <div
-                      className="h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
-                    />
+                      className="h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
+                    ></div>
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                    {uploadProgress >= 90
+                      ? 'Finalizing the presentation. This can take a moment.'
+                      : 'Your presentation is uploading in the background.'}
                   </div>
                 </div>
               )}
@@ -387,14 +500,27 @@ const AdminPresentationDashboard: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleDelete(presentation._id)}
-                              className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
+                          {presentation.status === 'ready' ? (
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingPresentation(presentation);
+                                  setShowEditModal(true);
+                                }}
+                                className="text-blue-400 hover:text-blue-300 text-sm px-3 py-1 border border-blue-400 rounded hover:bg-blue-400 hover:text-white transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(presentation._id)}
+                                className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <div />
+                          )}
                           
                           <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                             by {presentation.uploadedBy.username}
@@ -470,34 +596,33 @@ const AdminPresentationDashboard: React.FC = () => {
                             <div className="text-xs max-w-md truncate" style={{ color: 'var(--color-text-secondary)' }}>{presentation.description}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              presentation.status === 'ready' ? 'bg-green-900 text-green-200' :
-                              presentation.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                              'bg-red-900 text-red-200'
+                            <span className={`px-2.5 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ring-1 ${
+                              presentation.status === 'ready' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' :
+                              presentation.status === 'processing' ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40' :
+                              'bg-rose-500/15 text-rose-300 ring-rose-500/40'
                             }`}>
                               {presentation.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {presentation.sha256Hash ? (
-                              <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={presentation.sha256Hash}>
+                              <div className="text-sm font-mono max-w-xs truncate" style={{ color: 'var(--color-text)' }} title={presentation.sha256Hash}>
                                 {presentation.sha256Hash.substring(0, 16)}...
                               </div>
                             ) : (
-                              <span className="text-xs opacity-70" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
+                              <span className="text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             {presentation.status === 'ready' && presentation.sha256Hash ? (
                               <button
                                 onClick={() => handleVerifyClick(presentation)}
-                                className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:opacity-90"
-                                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                                className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 hover:bg-blue-500/25 transition-all shadow-sm hover:shadow-md active:shadow-sm"
                               >
                                 Verify
                               </button>
                             ) : (
-                              <span className="text-xs opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
+                              <span className="text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
                                 {presentation.status !== 'ready' ? 'Not ready' : 'No hash'}
                               </span>
                             )}
@@ -550,6 +675,18 @@ const AdminPresentationDashboard: React.FC = () => {
             onClose={() => setLikesModalOpen(false)}
           />
 
+          {/* Edit Modal */}
+          {showEditModal && editingPresentation && (
+            <PresentationEditModal
+              presentation={editingPresentation}
+              onClose={() => {
+                setShowEditModal(false);
+                setEditingPresentation(null);
+              }}
+              onEdit={handleEdit}
+            />
+          )}
+
           {/* Confirmation Dialog */}
           <ConfirmationDialog
             isOpen={deleteConfirm.isOpen}
@@ -574,6 +711,12 @@ interface PresentationUploadModalProps {
   uploading?: boolean;
 }
 
+interface PresentationEditModalProps {
+  presentation: Presentation;
+  onClose: () => void;
+  onEdit: (id: string, data: Partial<CreatePresentationData>) => Promise<void>;
+}
+
 const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload, uploading = false }) => {
   const { showWarning } = useNotification();
   const [formData, setFormData] = useState<CreatePresentationData>({
@@ -584,10 +727,29 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [tagInput, setTagInput] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+    const normalizedTitle = normalizeTitle(formData.title);
+    const normalizedDescription = normalizeDescription(formData.description);
+    const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
     
+    // Validate all fields
+    const validationResult = validatePresentationUpload({
+      title: normalizedTitle,
+      description: normalizedDescription,
+      category: formData.category,
+      tags: normalizedTags,
+      file: selectedFile || undefined
+    });
+
+    if (validationResult) {
+      setValidationError(validationResult);
+      return;
+    }
+
     if (!selectedFile) {
       showWarning('Please select a presentation file');
       return;
@@ -595,20 +757,32 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
 
     const uploadData = new FormData();
     uploadData.append('presentation', selectedFile);
-    uploadData.append('title', formData.title);
-    uploadData.append('description', formData.description);
+    uploadData.append('title', normalizedTitle);
+    uploadData.append('description', normalizedDescription);
     uploadData.append('category', formData.category);
-    uploadData.append('tags', formData.tags.join(','));
+    uploadData.append('tags', normalizedTags.join(','));
 
     onUpload(uploadData);
   };
 
   const addTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+    const nextTag = tagInput.trim();
+
+    if (!nextTag) {
+      return;
+    }
+
+    if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
+      setValidationError(PRESENTATION_TAGS_MESSAGE);
+      return;
+    }
+
+    if (!formData.tags.includes(nextTag)) {
       setFormData(prev => ({
         ...prev,
-        tags: [...prev.tags, tagInput.trim()]
+        tags: [...prev.tags, nextTag]
       }));
+      setValidationError(null);
       setTagInput('');
     }
   };
@@ -636,12 +810,18 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
             </button>
           </div>
 
+          {validationError && (
+            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
+              {validationError}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* File Upload */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Presentation File
-              </label>
+              {/* <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Presentation File<span className={requiredLabelClass}>*</span>
+              </label> */}
               <input
                 type="file"
                 accept=".ppt,.pptx,.odp"
@@ -663,7 +843,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
             {/* Title */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Title
+                Title<span className={requiredLabelClass}>*</span>
               </label>
               <input
                 type="text"
@@ -677,13 +857,14 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 }}
                 required
                 disabled={uploading}
+                maxLength={MAX_PRESENTATION_TITLE_LENGTH}
               />
             </div>
 
             {/* Description */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Description
+                Description<span className={requiredLabelClass}>*</span>
               </label>
               <textarea
                 value={formData.description}
@@ -697,13 +878,14 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 }}
                 required
                 disabled={uploading}
+                maxLength={MAX_PRESENTATION_DESCRIPTION_LENGTH}
               />
             </div>
 
             {/* Category */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Category
+                Category<span className={requiredLabelClass}>*</span>
               </label>
               <select
                 value={formData.category}
@@ -744,17 +926,21 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                     color: 'var(--color-text)'
                   }}
                   disabled={uploading}
+                  maxLength={30}
                 />
                 <button
                   type="button"
                   onClick={addTag}
                   className="px-4 py-2 rounded-lg transition-colors"
                   style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
-                  disabled={uploading}
+                  disabled={uploading || formData.tags.length >= MAX_PRESENTATION_TAGS}
                 >
                   Add
                 </button>
               </div>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                {formData.tags.length}/{MAX_PRESENTATION_TAGS} tags
+              </p>
               <div className="flex flex-wrap gap-2">
                 {formData.tags.map((tag, index) => (
                   <span
@@ -793,6 +979,248 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 disabled={uploading}
               >
                 Upload
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentation, onClose, onEdit }) => {
+  const [formData, setFormData] = useState<CreatePresentationData>({
+    title: presentation.title,
+    description: presentation.description,
+    category: presentation.category,
+    tags: presentation.tags,
+  });
+  const [tagInput, setTagInput] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError(null);
+    const normalizedTitle = normalizeTitle(formData.title);
+    const normalizedDescription = normalizeDescription(formData.description);
+    const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
+
+    const validationResult = validatePresentationUpload({
+      title: normalizedTitle,
+      description: normalizedDescription,
+      category: formData.category,
+      tags: normalizedTags,
+    });
+
+    if (validationResult) {
+      setValidationError(validationResult);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await onEdit(presentation._id, {
+        ...formData,
+        title: normalizedTitle,
+        description: normalizedDescription,
+        tags: normalizedTags,
+      });
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : 'Failed to update presentation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addTag = () => {
+    const nextTag = tagInput.trim();
+
+    if (!nextTag) {
+      return;
+    }
+
+    if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
+      setValidationError(PRESENTATION_TAGS_MESSAGE);
+      return;
+    }
+
+    if (!formData.tags.includes(nextTag)) {
+      setFormData((prev) => ({
+        ...prev,
+        tags: [...prev.tags, nextTag],
+      }));
+      setValidationError(null);
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags.filter((tag) => tag !== tagToRemove),
+    }));
+    setValidationError(null);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Presentation</h2>
+            <button
+              onClick={onClose}
+              className="text-2xl transition-colors disabled:opacity-50"
+              style={{ color: 'var(--color-text-secondary)' }}
+              disabled={saving}
+            >
+              ×
+            </button>
+          </div>
+
+          {validationError && (
+            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
+              {validationError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Title<span className={requiredLabelClass}>*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--color-hover)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+                required
+                disabled={saving}
+                maxLength={MAX_PRESENTATION_TITLE_LENGTH}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Description<span className={requiredLabelClass}>*</span>
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--color-hover)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+                required
+                disabled={saving}
+                maxLength={MAX_PRESENTATION_DESCRIPTION_LENGTH}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Category<span className={requiredLabelClass}>*</span>
+              </label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--color-hover)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+                disabled={saving}
+              >
+                <option value="business">Business</option>
+                <option value="education">Education</option>
+                <option value="marketing">Marketing</option>
+                <option value="technology">Technology</option>
+                <option value="design">Design</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Tags
+              </label>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                  placeholder="Add a tag"
+                  className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
+                  style={{
+                    backgroundColor: 'var(--color-hover)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                  disabled={saving}
+                  maxLength={30}
+                />
+                <button
+                  type="button"
+                  onClick={addTag}
+                  className="px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                  disabled={saving || formData.tags.length >= MAX_PRESENTATION_TAGS}
+                >
+                  Add
+                </button>
+              </div>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                {formData.tags.length}/{MAX_PRESENTATION_TAGS} tags
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {formData.tags.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 text-sm rounded flex items-center space-x-1"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="hover:opacity-70 disabled:opacity-50"
+                      disabled={saving}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex space-x-4 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>

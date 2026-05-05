@@ -1,6 +1,17 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL } from '../config/api';
 
+export interface SocketAck {
+  ok: boolean;
+  error?: { code: string; action?: string; message: string };
+}
+
+export interface SocketError {
+  code?: string;
+  action?: string;
+  message: string;
+}
+
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -61,6 +72,20 @@ class SocketService {
       this.socket = null;
       this.isConnected = false;
     }
+  }
+
+  /**
+   * Tear down any existing socket and re-open with the current localStorage
+   * token. Call this whenever auth state changes (login, logout, token
+   * refresh) so the backend sees the correct userRole for the fresh
+   * handshake — otherwise an admin who logs in after the socket already
+   * connected is treated as anonymous/viewer and can't drive premieres.
+   */
+  reconnectWithCurrentAuth() {
+    this.disconnect();
+    this.activeRooms.clear();
+    this.joinTimestamps.clear();
+    this.connect();
   }
 
   getSocket() {
@@ -172,6 +197,45 @@ class SocketService {
     }
   }
 
+  /**
+   * Ack-based variants of the admin controls. Returns a promise that resolves
+   * with { ok, error } so the caller can surface backend rejections (forbidden,
+   * not-found, etc.) to the user instead of the emit disappearing silently.
+   */
+  playVideoWithAck(premiereId: string, timeoutMs = 3000): Promise<SocketAck> {
+    return this.emitWithAck('play-video', [premiereId], timeoutMs);
+  }
+
+  pauseVideoWithAck(premiereId: string, timeoutMs = 3000): Promise<SocketAck> {
+    return this.emitWithAck('pause-video', [premiereId], timeoutMs);
+  }
+
+  seekVideoWithAck(premiereId: string, time: number, timeoutMs = 3000): Promise<SocketAck> {
+    return this.emitWithAck('seek-video', [premiereId, time], timeoutMs);
+  }
+
+  private emitWithAck(event: string, args: any[], timeoutMs: number): Promise<SocketAck> {
+    return new Promise((resolve) => {
+      const socket = this.getSocket();
+      if (!socket) {
+        resolve({ ok: false, error: { code: 'NO_SOCKET', message: 'Not connected' } });
+        return;
+      }
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve({ ok: false, error: { code: 'TIMEOUT', message: 'No response from server' } });
+      }, timeoutMs);
+      socket.emit(event, ...args, (response: SocketAck) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(response ?? { ok: true });
+      });
+    });
+  }
+
   // Chat methods
   sendMessage(premiereId: string, message: string, username?: string) {
     const socket = this.getSocket();
@@ -248,6 +312,21 @@ class SocketService {
     const socket = this.getSocket();
     if (socket) {
       socket.on('error', callback);
+    }
+  }
+
+  // Called by admin dashboards to react live when another admin deletes a premiere.
+  onPremiereDeleted(callback: (data: { premiereId: string }) => void) {
+    const socket = this.getSocket();
+    if (socket) {
+      socket.on('premiere-deleted', callback);
+    }
+  }
+
+  offPremiereDeleted(callback?: (data: { premiereId: string }) => void) {
+    const socket = this.getSocket();
+    if (socket) {
+      socket.off('premiere-deleted', callback);
     }
   }
 

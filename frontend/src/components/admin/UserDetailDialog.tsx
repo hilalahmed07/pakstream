@@ -140,7 +140,7 @@ const UserDetailDialog: React.FC<UserDetailDialogProps> = ({ userId, open, onClo
               </div>
             )}
 
-            {(user.organization || user.contactNumber || user.address) && (
+            {(user.organization || user.address) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {user.organization && (
                   <div>
@@ -148,14 +148,6 @@ const UserDetailDialog: React.FC<UserDetailDialogProps> = ({ userId, open, onClo
                       Organization
                     </div>
                     <div style={{ color: 'var(--color-text)' }}>{user.organization}</div>
-                  </div>
-                )}
-                {user.contactNumber && (
-                  <div>
-                    <div className="text-xs uppercase mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                      Contact Number
-                    </div>
-                    <div style={{ color: 'var(--color-text)' }}>{user.contactNumber}</div>
                   </div>
                 )}
                 {user.address && (

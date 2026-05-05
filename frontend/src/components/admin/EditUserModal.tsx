@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { User, UpdateUserData } from '../../types/user';
+import {
+  USERNAME_MESSAGE,
+  EMAIL_MESSAGE,
+  EMAIL_MAX_LENGTH,
+  ORGANIZATION_MESSAGE,
+  ADDRESS_MESSAGE,
+  normalizeUsername,
+  normalizeEmail,
+  sanitizeUsernameInput,
+  sanitizeEmailInput,
+  sanitizeProfileTextInput,
+  isValidUsername,
+  isValidEmail,
+  isValidOrganization,
+  isValidAddress,
+} from '../../utils/userValidation';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -21,7 +37,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
     },
     organization: user.organization || '',
     dateOfEnrollment: user.dateOfEnrollment ? new Date(user.dateOfEnrollment).toISOString().split('T')[0] : '',
-    contactNumber: user.contactNumber || '',
     address: user.address || ''
   });
   const [loading, setLoading] = useState(false);
@@ -41,8 +56,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
         },
         organization: user.organization || '',
         dateOfEnrollment: user.dateOfEnrollment ? new Date(user.dateOfEnrollment).toISOString().split('T')[0] : '',
-        contactNumber: user.contactNumber || '',
-        address: user.address || ''
+            address: user.address || ''
       });
     }
   }, [isOpen, user]);
@@ -52,8 +66,39 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
     setError('');
     setLoading(true);
 
+    const normalizedUsername = normalizeUsername(formData.username || '');
+    const normalizedEmail = normalizeEmail(formData.email || '');
+
+    if (!isValidUsername(normalizedUsername)) {
+      setError(USERNAME_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      setError(EMAIL_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    if (formData.organization && !isValidOrganization(formData.organization)) {
+      setError(ORGANIZATION_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    if (formData.address && !isValidAddress(formData.address)) {
+      setError(ADDRESS_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
     try {
-      await onSubmit(user._id, formData);
+      await onSubmit(user._id, {
+        ...formData,
+        username: normalizedUsername,
+        email: normalizedEmail,
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to update user');
     } finally {
@@ -92,7 +137,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
               <input
                 type="text"
                 value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, username: sanitizeUsernameInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -100,6 +145,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                   color: 'var(--color-text)'
                 }}
                 required
+                minLength={3}
+                maxLength={30}
               />
             </div>
 
@@ -110,7 +157,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, email: sanitizeEmailInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -118,6 +165,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                   color: 'var(--color-text)'
                 }}
                 required
+                maxLength={EMAIL_MAX_LENGTH}
               />
             </div>
           </div>
@@ -174,14 +222,15 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                 value={formData.profile?.firstName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, firstName: e.target.value }
+                  profile: { ...formData.profile, firstName: sanitizeProfileTextInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
+                maxLength={50}
               />
             </div>
 
@@ -194,14 +243,15 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                 value={formData.profile?.lastName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, lastName: e.target.value }
+                  profile: { ...formData.profile, lastName: sanitizeProfileTextInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
+                maxLength={50}
               />
             </div>
           </div>
@@ -214,7 +264,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
               value={formData.profile?.bio || ''}
               onChange={(e) => setFormData({
                 ...formData,
-                profile: { ...formData.profile, bio: e.target.value }
+                profile: { ...formData.profile, bio: sanitizeProfileTextInput(e.target.value) }
               })}
               rows={3}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
@@ -234,14 +284,15 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
               <input
                 type="text"
                 value={formData.organization || ''}
-                onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, organization: sanitizeProfileTextInput(e.target.value) })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
+                style={{
+                  backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 placeholder="Organization name"
+                maxLength={50}
               />
             </div>
 
@@ -263,42 +314,22 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-                Contact Number
-              </label>
-              <input
-                type="tel"
-                value={formData.contactNumber || ''}
-                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)'
-                }}
-                placeholder="Phone number"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
-                Address/Location
-              </label>
-              <textarea
-                value={formData.address || ''}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)'
-                }}
-                placeholder="Full address or location"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
+              Address/Location
+            </label>
+            <textarea
+              value={formData.address || ''}
+              onChange={(e) => setFormData({ ...formData, address: sanitizeProfileTextInput(e.target.value) })}
+              rows={2}
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)'
+              }}
+              placeholder="Full address or location"
+            />
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

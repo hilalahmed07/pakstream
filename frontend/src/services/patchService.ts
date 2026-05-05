@@ -23,11 +23,13 @@ class PatchService {
     };
 
     try {
+      console.log(`[PatchService] ${options.method || 'GET'} ${endpoint}`, options.body ? JSON.parse(options.body as string) : '');
       const response = await fetch(url, config);
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        console.error(`[PatchService] Error response (${response.status}):`, data);
+        throw new Error(data.message || `Request failed with status ${response.status}`);
       }
 
       return data;
@@ -144,10 +146,21 @@ class PatchService {
     });
   }
 
-  async getAdminPatches(params?: { page?: number; limit?: number }): Promise<{ patches: Patch[]; pagination: { current: number; pages: number; total: number } }> {
+  async getAdminPatches(params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    status?: string;
+    patchType?: string;
+    search?: string;
+  }): Promise<{ patches: Patch[]; pagination: { current: number; pages: number; total: number } }> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.patchType) queryParams.append('patchType', params.patchType);
+    if (params?.search) queryParams.append('search', params.search);
     const queryString = queryParams.toString();
     return this.request<{ patches: Patch[]; pagination: { current: number; pages: number; total: number } }>(
       `/patches/admin/all${queryString ? `?${queryString}` : ''}`
@@ -366,18 +379,25 @@ class PatchService {
   async downloadPatch(patchId: string): Promise<void> {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required to download patches');
+      }
+
       const patchResponse = await this.getPatchById(patchId);
       const patch = patchResponse.patch;
 
       const url = this.getPatchDownloadUrl(patchId);
       const response = await fetch(url, {
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download patch file');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof errorData.message === 'string' ? errorData.message : 'Failed to download patch file'
+        );
       }
 
       const blob = await response.blob();

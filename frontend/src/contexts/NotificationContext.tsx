@@ -27,6 +27,14 @@ interface NotificationProviderProps {
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const formatErrorToastMessage = (message: string): string => {
+    const safe = (message ?? '').toString().trim();
+    if (!safe) return 'Error: An unexpected error occurred.';
+    // Avoid double-prefixing if the caller already formatted it.
+    if (/^error\s*:/i.test(safe)) return safe.replace(/^error\s*:/i, 'Error: ');
+    return `Error: ${safe}`;
+  };
+
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
@@ -47,7 +55,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   }, [showToast]);
 
   const showError = useCallback((message: string) => {
-    showToast(message, 'error', 5000); // Errors stay longer
+    showToast(formatErrorToastMessage(message), 'error', 5000); // Errors stay longer
   }, [showToast]);
 
   const showWarning = useCallback((message: string) => {

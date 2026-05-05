@@ -39,6 +39,6 @@ router.post('/upload', authenticateToken, requireAdmin, upload.single('presentat
 router.get('/admin/all', authenticateToken, requireAdmin, getAdminPresentations);
 router.put('/:id', authenticateToken, requireAdmin, updatePresentation);
 router.delete('/:id', authenticateToken, requireAdmin, deletePresentation);
-router.get('/:id/download', optionalAuth, downloadPresentation);
+router.get('/:id/download', authenticateToken, downloadPresentation);
 
 module.exports = router;

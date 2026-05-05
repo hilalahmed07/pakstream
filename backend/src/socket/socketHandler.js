@@ -289,45 +289,73 @@ class SocketHandler {
         }
       });
 
-      // Video playback controls - ONLY admin/creator is allowed to drive these
-      socket.on('play-video', (premiereId) => {
+      // Video playback controls - ONLY admin/creator is allowed to drive these.
+      // Each handler accepts an optional ack callback so the client can surface
+      // failures immediately instead of silently doing nothing.
+      socket.on('play-video', (premiereId, ack) => {
         const roomData = this.premiereRooms.get(premiereId);
-        if (!roomData) return;
+        if (!roomData) {
+          const err = { code: 'NOT_FOUND', action: 'play-video', message: 'Premiere room not active' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
+        }
 
         const viewer = roomData.viewers.get(socket.id);
         const isAdminViewer = viewer?.role === 'admin';
 
         if (!isAdminViewer) {
+          const err = { code: 'FORBIDDEN', action: 'play-video', message: 'Only the premiere admin can play the video' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
           return;
         }
 
         roomData.isPlaying = true;
         this.io.to(`premiere-${premiereId}`).emit('video-play');
+        if (typeof ack === 'function') ack({ ok: true });
       });
 
-      socket.on('pause-video', (premiereId) => {
+      socket.on('pause-video', (premiereId, ack) => {
         const roomData = this.premiereRooms.get(premiereId);
-        if (!roomData) return;
+        if (!roomData) {
+          const err = { code: 'NOT_FOUND', action: 'pause-video', message: 'Premiere room not active' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
+        }
 
         const viewer = roomData.viewers.get(socket.id);
         const isAdminViewer = viewer?.role === 'admin';
 
         if (!isAdminViewer) {
+          const err = { code: 'FORBIDDEN', action: 'pause-video', message: 'Only the premiere admin can pause the video' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
           return;
         }
 
         roomData.isPlaying = false;
         this.io.to(`premiere-${premiereId}`).emit('video-pause');
+        if (typeof ack === 'function') ack({ ok: true });
       });
 
-      socket.on('seek-video', (premiereId, time) => {
+      socket.on('seek-video', (premiereId, time, ack) => {
         const roomData = this.premiereRooms.get(premiereId);
-        if (!roomData) return;
+        if (!roomData) {
+          const err = { code: 'NOT_FOUND', action: 'seek-video', message: 'Premiere room not active' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
+        }
 
         const viewer = roomData.viewers.get(socket.id);
         const isAdminViewer = viewer?.role === 'admin';
 
         if (!isAdminViewer) {
+          const err = { code: 'FORBIDDEN', action: 'seek-video', message: 'Only the premiere admin can seek the video' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
           return;
         }
 
@@ -336,6 +364,7 @@ class SocketHandler {
         roomData.startTime = new Date(now.getTime() - time * 1000);
 
         this.io.to(`premiere-${premiereId}`).emit('video-seek', { time });
+        if (typeof ack === 'function') ack({ ok: true });
       });
 
       // Chat functionality

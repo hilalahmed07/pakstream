@@ -125,10 +125,19 @@ class DocumentService {
     });
   }
 
-  async getAdminDocuments(params?: { page?: number; limit?: number }): Promise<{ documents: Document[]; pagination: { current: number; pages: number; total: number } }> {
+  async getAdminDocuments(params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    status?: string;
+    search?: string;
+  }): Promise<{ documents: Document[]; pagination: { current: number; pages: number; total: number } }> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
     const queryString = queryParams.toString();
     return this.request<{ documents: Document[]; pagination: { current: number; pages: number; total: number } }>(
       `/documents/admin/all${queryString ? `?${queryString}` : ''}`

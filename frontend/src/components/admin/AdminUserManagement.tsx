@@ -20,7 +20,10 @@ const AdminUserManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debounce search input
@@ -110,16 +113,33 @@ const AdminUserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-    
+    const user = users.find((item) => item._id === userId);
+    if (!user) return;
+
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return;
+
     try {
-      await userService.deleteUser(userId);
+      setDeletingUser(true);
+      await userService.deleteUser(userToDelete._id);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
       fetchUsers();
     } catch (err: any) {
       setError(err.message || 'Failed to delete user');
+    } finally {
+      setDeletingUser(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    if (deletingUser) return;
+    setShowDeleteModal(false);
+    setUserToDelete(null);
   };
 
   const openEditModal = (user: User) => {
@@ -133,12 +153,7 @@ const AdminUserManagement: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-6 py-8">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>User Management</h2>
-        <p style={{ color: 'var(--color-text-secondary)' }}>Manage users, roles, and permissions</p>
-      </div>
-
+    <div>
       {error && (
         <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
           {error}
@@ -222,6 +237,78 @@ const AdminUserManagement: React.FC = () => {
           user={selectedUser}
           onSubmit={handleResetPassword}
         />
+      )}
+
+      {showDeleteModal && userToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div
+            className="w-full max-w-md rounded-lg border p-6 shadow-2xl"
+            style={{
+              backgroundColor: 'var(--color-secondary)',
+              borderColor: 'var(--color-border)',
+            }}
+          >
+            <div className="flex items-start gap-4 mb-5">
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-full text-xl font-bold"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  color: '#f87171',
+                }}
+              >
+                !
+              </div>
+              <div>
+                <h3 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
+                  Delete user
+                </h3>
+                <p style={{ color: 'var(--color-text-secondary)' }}>
+                  This action is permanent and cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="mb-6 rounded-lg p-4"
+              style={{ backgroundColor: 'var(--color-hover)' }}
+            >
+              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
+                {userToDelete.username}
+              </p>
+              <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                {userToDelete.email}
+              </p>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Role: {userToDelete.role} | Status: {userToDelete.isActive ? 'Active' : 'Blocked'}
+              </p>
+            </div>
+
+            <p className="mb-6" style={{ color: 'var(--color-text)' }}>
+              Are you sure you want to delete this user account?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleDeleteCancel}
+                disabled={deletingUser}
+                className="flex-1 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={deletingUser}
+                className="flex-1 rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: '#dc2626' }}
+              >
+                {deletingUser ? 'Deleting...' : 'Delete user'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

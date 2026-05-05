@@ -1,5 +1,16 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const {
+  USERNAME_MESSAGE,
+  EMAIL_MESSAGE,
+  PASSWORD_MESSAGE,
+  normalizeUsername,
+  normalizeEmail,
+  normalizePassword,
+  isValidUsername,
+  isValidEmail,
+  isStrongPassword,
+} = require('../utils/validation');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -25,30 +36,48 @@ const register = async (req, res) => {
       address
     } = req.body;
 
+    const normalizedUsername = normalizeUsername(username);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
+
     // Validation
-    if (!username || !email || !password) {
+    if (!normalizedUsername || !normalizedEmail || !normalizedPassword) {
       return res.status(400).json({
         success: false,
         message: 'Username, email, and password are required'
       });
     }
 
-    if (password.length < 6) {
+    if (!isValidUsername(normalizedUsername)) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long'
+        message: USERNAME_MESSAGE
+      });
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: EMAIL_MESSAGE
+      });
+    }
+
+    if (!isStrongPassword(normalizedPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_MESSAGE
       });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
     });
 
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email 
+        message: existingUser.email === normalizedEmail 
           ? 'Email already registered' 
           : 'Username already taken'
       });
@@ -56,9 +85,9 @@ const register = async (req, res) => {
 
     // Create new user
     const userData = {
-      username,
-      email,
-      password,
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: normalizedPassword,
       role
     };
 
@@ -98,6 +127,9 @@ const register = async (req, res) => {
 const registerAdmin = async (req, res) => {
   try {
     const { username, email, password, adminKey } = req.body;
+    const normalizedUsername = normalizeUsername(username);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
 
     // Check admin key (you can set this in environment variables)
     const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || 'admin123';
@@ -110,22 +142,43 @@ const registerAdmin = async (req, res) => {
     }
 
     // Validation
-    if (!username || !email || !password) {
+    if (!normalizedUsername || !normalizedEmail || !normalizedPassword) {
       return res.status(400).json({
         success: false,
         message: 'Username, email, and password are required'
       });
     }
 
+    if (!isValidUsername(normalizedUsername)) {
+      return res.status(400).json({
+        success: false,
+        message: USERNAME_MESSAGE
+      });
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: EMAIL_MESSAGE
+      });
+    }
+
+    if (!isStrongPassword(normalizedPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_MESSAGE
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
     });
 
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email 
+        message: existingUser.email === normalizedEmail 
           ? 'Email already registered' 
           : 'Username already taken'
       });
@@ -133,9 +186,9 @@ const registerAdmin = async (req, res) => {
 
     // Create admin user
     const user = new User({
-      username,
-      email,
-      password,
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: normalizedPassword,
       role: 'admin'
     });
 
@@ -167,15 +220,16 @@ const registerAdmin = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'
       });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -310,23 +364,25 @@ const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user._id;
+    const normalizedCurrentPassword = normalizePassword(currentPassword);
+    const normalizedNewPassword = normalizePassword(newPassword);
 
-    if (!currentPassword || !newPassword) {
+    if (!normalizedCurrentPassword || !normalizedNewPassword) {
       return res.status(400).json({
         success: false,
         message: 'Current password and new password are required'
       });
     }
 
-    if (newPassword.length < 6) {
+    if (!isStrongPassword(normalizedNewPassword)) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters long'
+        message: PASSWORD_MESSAGE
       });
     }
 
     const user = await User.findById(userId);
-    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    const isCurrentPasswordValid = await user.comparePassword(normalizedCurrentPassword);
 
     if (!isCurrentPasswordValid) {
       return res.status(400).json({
@@ -335,7 +391,7 @@ const changePassword = async (req, res) => {
       });
     }
 
-    user.password = newPassword;
+    user.password = normalizedNewPassword;
     await user.save();
 
     res.json({

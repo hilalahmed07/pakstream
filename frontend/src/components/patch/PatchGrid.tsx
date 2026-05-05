@@ -123,11 +123,10 @@ const PatchGrid: React.FC<PatchGridProps> = ({ patches: initialPatches, onPatchC
         {patches.map((patch) => (
           <div
             key={patch._id}
-            className="rounded-lg shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col h-full"
+            className="rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group flex flex-col h-full"
             style={{
               backgroundColor: 'var(--color-secondary)'
             }}
-            onClick={() => onPatchClick(patch)}
           >
             {/* Header */}
             <div className="p-6 flex-grow">
@@ -184,19 +183,21 @@ const PatchGrid: React.FC<PatchGridProps> = ({ patches: initialPatches, onPatchC
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="px-6 pb-6 pt-0 space-y-2">
-              <button
-                onClick={(e) => handleDownload(patch, e)}
-                className="w-full py-2 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 font-medium"
-                style={{
-                  backgroundColor: 'var(--color-accent)',
-                  color: 'var(--color-accent-text)'
-                }}
-              >
-                <span>Download</span>
-              </button>
-            </div>
+            {/* Action Buttons — Download is for signed-in users only */}
+            {user && (
+              <div className="px-6 pb-6 pt-0 space-y-2">
+                <button
+                  onClick={(e) => handleDownload(patch, e)}
+                  className="w-full py-2 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 font-medium"
+                  style={{
+                    backgroundColor: 'var(--color-accent)',
+                    color: 'var(--color-accent-text)'
+                  }}
+                >
+                  <span>Download</span>
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

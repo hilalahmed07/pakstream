@@ -8,6 +8,31 @@ import ProtectedRoute from '../ProtectedRoute';
 import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
 import VerificationTabLayout from '../common/VerificationTabLayout';
+import {
+  validatePatchUpload,
+  MAX_ASSET_TITLE_LENGTH,
+  MAX_ASSET_DESCRIPTION_LENGTH,
+} from '../../utils/assetValidation';
+
+const PATCH_CATEGORIES = ['security', 'system', 'application', 'driver', 'other'] as const;
+const PATCH_TYPES = ['security', 'feature', 'bugfix', 'driver', 'update', 'other'] as const;
+const PATCH_ARCHITECTURES = ['x86', 'x64', 'arm64', 'all'] as const;
+const PATCH_TARGET_OS_OPTIONS = ['windows 10', 'windows 11', 'windows server 2019', 'windows server 2022', 'all'] as const;
+const sanitizePatchText = (value: string) => value.replace(/[^a-zA-Z0-9\s.,_-]/g, '');
+const requiredLabelClass = 'ml-1';
+
+const toggleTargetOs = (current: string[], value: string): string[] => {
+  if (value === 'all') {
+    return current.includes('all') ? [] : ['all'];
+  }
+
+  const withoutAll = current.filter((item) => item !== 'all');
+  if (withoutAll.includes(value)) {
+    return withoutAll.filter((item) => item !== value);
+  }
+
+  return [...withoutAll, value];
+};
 
 const AdminPatchDashboard: React.FC = () => {
   const { showError, showSuccess } = useNotification();
@@ -31,11 +56,24 @@ const AdminPatchDashboard: React.FC = () => {
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
   const [loadingLikes, setLoadingLikes] = useState(false);
+  const [filters, setFilters] = useState({
+    search: '',
+    category: '',
+    status: '',
+    patchType: '',
+  });
 
   const fetchPatches = async () => {
     try {
       setLoading(true);
-      const response = await patchService.getAdminPatches({ page: currentPage, limit: 10 });
+      const response = await patchService.getAdminPatches({
+        page: currentPage,
+        limit: 10,
+        search: filters.search || undefined,
+        category: filters.category || undefined,
+        status: filters.status || undefined,
+        patchType: filters.patchType || undefined,
+      });
       setPatches(response.patches);
       setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -49,7 +87,11 @@ const AdminPatchDashboard: React.FC = () => {
   useEffect(() => {
     fetchPatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [currentPage, filters]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.search, filters.category, filters.status, filters.patchType]);
 
   const handleUpload = async (file: File, uploadData: PatchUploadData) => {
     try {
@@ -95,14 +137,23 @@ const AdminPatchDashboard: React.FC = () => {
 
   const handleEdit = async (patchId: string, updateData: Partial<PatchUploadData>) => {
     try {
+      console.log('[AdminPatchDashboard] handleEdit called with:', { patchId, updateData });
       await patchService.updatePatch(patchId, updateData);
+      console.log('[AdminPatchDashboard] Patch updated successfully');
       showSuccess('Patch updated successfully');
       await fetchPatches();
       setShowEditModal(false);
       setEditingPatch(null);
-    } catch (error) {
-      console.error('Update failed:', error);
-      showError('Failed to update patch');
+    } catch (error: any) {
+      console.error('[AdminPatchDashboard] Update failed:', error);
+      console.error('[AdminPatchDashboard] Error details:', {
+        message: error?.message,
+        status: error?.status,
+        stack: error?.stack,
+      });
+      const message = error?.message || 'Failed to update patch';
+      showError(message);
+      throw new Error(message);
     }
   };
 
@@ -156,17 +207,8 @@ const AdminPatchDashboard: React.FC = () => {
     <ProtectedRoute requireAdmin>
       <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-                Admin Patch Management
-              </h1>
-              <p style={{ color: 'var(--color-text-secondary)' }}>
-                Administrators can manage and verify all Windows patches
-              </p>
-            </div>
-            {activeTab === 'patches' && (
+          {activeTab === 'patches' && (
+            <div className="flex justify-end mb-6">
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg font-bold transition-all flex items-center space-x-2 hover:opacity-90"
@@ -176,21 +218,27 @@ const AdminPatchDashboard: React.FC = () => {
                 <span className="text-xl">+</span>
                 <span>Upload Patch</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Progress Bar */}
+          {/* Upload Progress */}
           {uploading && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Uploading...</span>
-                <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
+            <div className="fixed top-4 right-4 z-50 rounded-lg p-4 shadow-lg" style={{ backgroundColor: 'var(--color-secondary)', minWidth: '320px' }}>
+              <div className="flex items-center mb-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-3" style={{ borderColor: 'var(--color-accent)' }}></div>
+                <span style={{ color: 'var(--color-text)' }}>
+                  Uploading patch...
+                </span>
+                <span className="ml-2 font-semibold" style={{ color: 'var(--color-accent)' }}>{Math.round(uploadProgress)}%</span>
               </div>
-              <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
+              <div className="w-full rounded-full h-2 overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-hover)' }}>
                 <div 
-                  className="h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
-                />
+                  className="h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
+                ></div>
+              </div>
+              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Your patch is uploading in the background.
               </div>
             </div>
           )}
@@ -224,11 +272,97 @@ const AdminPatchDashboard: React.FC = () => {
           {/* Patches Tab Content */}
 {activeTab === 'patches' && (
   <div className="space-y-6">
+    <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Search
+          </label>
+          <input
+            type="text"
+            value={filters.search}
+            onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+            placeholder="Search title, description, ID..."
+            className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: 'var(--color-hover)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Category
+          </label>
+          <select
+            value={filters.category}
+            onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
+            className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: 'var(--color-hover)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <option value="">All Categories</option>
+            {PATCH_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Status
+          </label>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+            className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: 'var(--color-hover)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <option value="">All Status</option>
+            <option value="ready">Ready</option>
+            <option value="processing">Processing</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Patch Type
+          </label>
+          <select
+            value={filters.patchType}
+            onChange={(e) => setFilters((prev) => ({ ...prev, patchType: e.target.value }))}
+            className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: 'var(--color-hover)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <option value="">All Types</option>
+            {PATCH_TYPES.map((patchType) => (
+              <option key={patchType} value={patchType}>
+                {patchType.charAt(0).toUpperCase() + patchType.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div
-      className="rounded-lg overflow-hidden"
+      className="rounded-lg overflow-x-auto"
       style={{ backgroundColor: 'var(--color-secondary)' }}
     >
-      <table className="w-full table-auto" style={{ margin: '-10px' }}>
+      <table className="w-full min-w-[1100px] table-auto">
         <thead style={{ backgroundColor: 'var(--color-hover)' }}>
           <tr>
             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Title</th>
@@ -325,34 +459,27 @@ const AdminPatchDashboard: React.FC = () => {
 
                 {/* Actions */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center gap-4 justify-start">
-                    
-                    {/* Edit */}
-                    <button
-                      onClick={() => {
-                        setEditingPatch(patch);
-                        setShowEditModal(true);
-                      }}
-                      className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded hover:bg-blue-400/10"
-                      title="Edit Patch"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(patch._id)}
-                      className="text-red-400 hover:text-red-300 transition-colors p-1 rounded hover:bg-red-400/10"
-                      title="Delete Patch"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-
-                  </div>
+                  {patch.status === 'ready' && (
+                    <div className="flex items-center gap-2 justify-start">
+                      <button
+                        onClick={() => {
+                          setEditingPatch(patch);
+                          setShowEditModal(true);
+                        }}
+                        className="px-3 py-1 rounded border text-blue-400 border-blue-400 hover:bg-blue-400/10 transition-colors"
+                        title="Edit Patch"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(patch._id)}
+                        className="px-3 py-1 rounded border text-red-400 border-red-400 hover:bg-red-400/10 transition-colors"
+                        title="Delete Patch"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </td>
 
               </tr>
@@ -390,16 +517,16 @@ const AdminPatchDashboard: React.FC = () => {
                 <table className="w-full text-left">
                   <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                     <tr>
-                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Patch Details</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Type / OS Support</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Integrity Status</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Compliance Action</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Patch Details</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Type / OS Support</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Integrity Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Compliance Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                     {filteredPatchesForVerification.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
+                        <td colSpan={4} className="px-6 py-10 text-center text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
                           No records match search query
                         </td>
                       </tr>
@@ -407,32 +534,33 @@ const AdminPatchDashboard: React.FC = () => {
                       filteredPatchesForVerification.map((patch) => (
                         <tr key={patch._id} className="hover:bg-black/5 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="font-bold text-sm" style={{ color: 'var(--color-text)' }}>{patch.title}</div>
-                            <div className="text-[10px] font-mono opacity-50 uppercase">ID: {patch._id}</div>
+                            <div className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{patch.title}</div>
+                            <div className="text-xs font-mono opacity-60 mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>ID: {patch._id}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex gap-2 mb-1">
-                              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase border border-blue-500/20">{patch.patchType}</span>
-                              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase border border-purple-500/20">{patch.architecture}</span>
+                            <div className="flex flex-wrap gap-2 mb-1">
+                              <span className="px-2.5 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ring-1 bg-sky-500/15 text-sky-300 ring-sky-500/40">{patch.patchType}</span>
+                              <span className="px-2.5 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ring-1 bg-violet-500/15 text-violet-300 ring-violet-500/40">{patch.architecture}</span>
                             </div>
-                            <div className="text-[10px] opacity-60">{patch.targetOs.join(', ')}</div>
+                            <div className="text-xs opacity-70 mt-1" style={{ color: 'var(--color-text-secondary)' }}>{patch.targetOs.join(', ')}</div>
                           </td>
                           <td className="px-6 py-4">
                             {patch.sha256Hash ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-green-500 font-black flex items-center gap-1">
-                                  ● HASH IDENTIFIED
+                              <div className="flex flex-col gap-1.5">
+                                <span className="px-2.5 py-1 inline-flex w-fit text-sm leading-5 font-semibold rounded-full ring-1 bg-emerald-500/15 text-emerald-300 ring-emerald-500/40">
+                                  Hash identified
                                 </span>
                                 <code
-                                  className="text-[10px] bg-black/20 p-1.5 rounded font-mono truncate max-w-[220px] opacity-70"
+                                  className="text-sm font-mono truncate max-w-[260px]"
+                                  style={{ color: 'var(--color-text)' }}
                                   title={patch.sha256Hash}
                                 >
-                                  {patch.sha256Hash}
+                                  {patch.sha256Hash.substring(0, 16)}...
                                 </code>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-red-500 font-black flex items-center gap-1">
-                                ● ALERT: MISSING HASH
+                              <span className="px-2.5 py-1 inline-flex w-fit text-sm leading-5 font-semibold rounded-full ring-1 bg-rose-500/15 text-rose-300 ring-rose-500/40">
+                                Missing hash
                               </span>
                             )}
                           </td>
@@ -442,8 +570,7 @@ const AdminPatchDashboard: React.FC = () => {
                                 setPatchToVerify(patch);
                                 setShowVerificationModal(true);
                               }}
-                              className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:opacity-90"
-                              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                              className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 hover:bg-blue-500/25 transition-all shadow-sm hover:shadow-md active:shadow-sm"
                             >
                               Run Audit
                             </button>
@@ -473,30 +600,126 @@ const AdminPatchDashboard: React.FC = () => {
 const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, data: PatchUploadData) => void }> = ({ onClose, onUpload }) => {
   const [file, setFile] = useState<File | null>(null);
   const [formData, setFormData] = useState<PatchUploadData>({ title: '', description: '', version: '', category: 'other', tags: '', patchType: 'other', targetOs: ['windows 10', 'windows 11'], architecture: 'x64' });
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError(null);
+    
+    // Validate all fields
+    const validationResult = validatePatchUpload({
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      tags: formData.tags,
+      patchType: formData.patchType,
+      version: formData.version,
+      targetOs: formData.targetOs,
+      architecture: formData.architecture,
+      file: file || undefined
+    });
+
+    if (validationResult) {
+      setValidationError(validationResult);
+      return;
+    }
+
+    if (file) {
+      onUpload(file, formData);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
-      <div className="rounded-xl shadow-2xl w-full max-w-xl overflow-hidden border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+      <div className="rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
         <div className="p-6 border-b flex justify-between items-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }}>
           <h2 className="text-xl font-bold">Upload New Patch</h2>
           <button onClick={onClose} className="text-2xl opacity-50 hover:opacity-100">×</button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); if (file) onUpload(file, formData); }} className="p-6 space-y-4">
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full p-6 border-2 border-dashed rounded-lg text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }} required />
-          <div className="grid grid-cols-2 gap-4">
-            <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
-            <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: e.target.value})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+        
+        {validationError && (
+          <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded m-4">
+            {validationError}
           </div>
-          <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+        )}
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Patch File<span className={requiredLabelClass}>*</span>
+            </label>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full p-6 border-2 border-dashed rounded-lg text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }} required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Title<span className={requiredLabelClass}>*</span>
+              </label>
+              <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Version
+              </label>
+              <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Description<span className={requiredLabelClass}>*</span>
+            </label>
+            <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Tags
+            </label>
+            <input type="text" placeholder="Tags (comma separated)" value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+          </div>
           <div className="grid grid-cols-3 gap-4">
-            <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="security">Security</option><option value="system">System</option><option value="application">Application</option><option value="driver">Driver</option><option value="other">Other</option>
-            </select>
-            <select value={formData.patchType} onChange={e => setFormData({...formData, patchType: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="security">Security</option><option value="feature">Feature</option><option value="bugfix">Bug Fix</option><option value="driver">Driver</option><option value="update">Update</option>
-            </select>
-            <select value={formData.architecture} onChange={e => setFormData({...formData, architecture: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="x86">x86</option><option value="x64">x64</option><option value="arm64">ARM64</option><option value="all">All</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Category<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_CATEGORIES.map((category) => (
+                <option key={category} value={category}>{category.charAt(0).toUpperCase() + category.slice(1)}</option>
+              ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Patch Type<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.patchType} onChange={e => setFormData({...formData, patchType: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_TYPES.map((patchType) => (
+                <option key={patchType} value={patchType}>{patchType.charAt(0).toUpperCase() + patchType.slice(1)}</option>
+              ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Architecture<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.architecture} onChange={e => setFormData({...formData, architecture: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_ARCHITECTURES.map((architecture) => (
+                <option key={architecture} value={architecture}>{architecture.toUpperCase()}</option>
+              ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Target OS<span className={requiredLabelClass}>*</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {PATCH_TARGET_OS_OPTIONS.map((targetOs) => (
+                <label key={targetOs} className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={formData.targetOs.includes(targetOs)} onChange={() => setFormData({ ...formData, targetOs: toggleTargetOs(formData.targetOs, targetOs) })} />
+                  <span>{targetOs}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={onClose} className="px-6 py-2 rounded bg-gray-600 font-bold">Cancel</button>
@@ -508,35 +731,120 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
   );
 };
 
-const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id: string, data: Partial<PatchUploadData>) => void }> = ({ patch, onClose, onEdit }) => {
-  const [formData, setFormData] = useState<Partial<PatchUploadData>>({ title: patch.title, description: patch.description, category: patch.category, tags: patch.tags.join(', '), patchType: patch.patchType, version: patch.version || '', targetOs: patch.targetOs, architecture: patch.architecture });
+const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id: string, data: Partial<PatchUploadData>) => Promise<void> }> = ({ patch, onClose, onEdit }) => {
+  const [formData, setFormData] = useState<PatchUploadData>({ title: patch.title, description: patch.description, category: patch.category, tags: patch.tags.join(', '), patchType: patch.patchType, version: patch.version || '', targetOs: patch.targetOs, architecture: patch.architecture });
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError(null);
+    const validationResult = validatePatchUpload(formData);
+    console.log('[PatchEditModal] Validation result:', validationResult);
+    if (validationResult) {
+      console.log('[PatchEditModal] Validation failed:', validationResult);
+      setValidationError(validationResult);
+      return;
+    }
+    try {
+      setSaving(true);
+      console.log('[PatchEditModal] Submitting form data:', formData);
+      await onEdit(patch._id, formData);
+      console.log('[PatchEditModal] Edit successful');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update patch';
+      console.error('[PatchEditModal] Edit failed with error:', errorMessage);
+      setValidationError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
-      <div className="rounded-xl shadow-2xl w-full max-w-xl overflow-hidden border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
+      <div className="rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
         <div className="p-6 border-b flex justify-between items-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }}>
           <h2 className="text-xl font-bold">Edit Patch</h2>
           <button onClick={onClose} className="text-2xl opacity-50 hover:opacity-100">×</button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); onEdit(patch._id, formData); }} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
-            <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: e.target.value})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+        {validationError && (
+          <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded m-4">
+            {validationError}
           </div>
-          <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+        )}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Title<span className={requiredLabelClass}>*</span>
+              </label>
+              <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Version
+              </label>
+              <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Description<span className={requiredLabelClass}>*</span>
+            </label>
+            <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Tags
+            </label>
+            <input type="text" placeholder="Tags (comma separated)" value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+          </div>
           <div className="grid grid-cols-3 gap-4">
-            <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="security">Security</option><option value="system">System</option><option value="application">Application</option><option value="driver">Driver</option><option value="other">Other</option>
-            </select>
-            <select value={formData.patchType} onChange={e => setFormData({...formData, patchType: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="security">Security</option><option value="feature">Feature</option><option value="bugfix">Bug Fix</option><option value="driver">Driver</option><option value="update">Update</option>
-            </select>
-            <select value={formData.architecture} onChange={e => setFormData({...formData, architecture: e.target.value})} className="p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <option value="x86">x86</option><option value="x64">x64</option><option value="arm64">ARM64</option><option value="all">All</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Category<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_CATEGORIES.map((category) => (
+                <option key={category} value={category}>{category.charAt(0).toUpperCase() + category.slice(1)}</option>
+              ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Patch Type<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.patchType} onChange={e => setFormData({...formData, patchType: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_TYPES.map((patchType) => (
+                <option key={patchType} value={patchType}>{patchType.charAt(0).toUpperCase() + patchType.slice(1)}</option>
+              ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Architecture<span className={requiredLabelClass}>*</span>
+              </label>
+              <select value={formData.architecture} onChange={e => setFormData({...formData, architecture: e.target.value})} className="w-full p-2 rounded border" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              {PATCH_ARCHITECTURES.map((architecture) => (
+                <option key={architecture} value={architecture}>{architecture.toUpperCase()}</option>
+              ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Target OS<span className={requiredLabelClass}>*</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {PATCH_TARGET_OS_OPTIONS.map((targetOs) => (
+                <label key={targetOs} className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={formData.targetOs.includes(targetOs)} onChange={() => setFormData({ ...formData, targetOs: toggleTargetOs(formData.targetOs, targetOs) })} />
+                  <span>{targetOs}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="px-6 py-2 rounded bg-gray-600 font-bold">Cancel</button>
-            <button type="submit" className="px-6 py-2 rounded font-bold" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>Save Changes</button>
+            <button type="button" onClick={onClose} disabled={saving} className="px-6 py-2 rounded bg-gray-600 font-bold disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="px-6 py-2 rounded font-bold disabled:opacity-50" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{saving ? 'Saving...' : 'Save Changes'}</button>
           </div>
         </form>
       </div>

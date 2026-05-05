@@ -1,21 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Premiere } from '../../types/premiere';
+import { Video, VideoVariant } from '../../types/video';
 import premiereService from '../../services/premiereService';
 import socketService from '../../services/socketService';
 import { useAuth } from '../../hooks';
+import { useNotification } from '../../contexts/NotificationContext';
 import { formatVideoDuration } from '../../utils/videoUtils';
+import VideoPlayer, { VideoPlayerRef } from '../../components/video/VideoPlayer';
+import PremiereChat from '../../components/premiere/PremiereChat';
+import ConfirmationDialog from '../../components/common/ConfirmationDialog';
+
+interface AdminViewer {
+  id: string;
+  userId?: string;
+  joinedAt: Date;
+}
 
 const LivePremiereControlPage: React.FC = () => {
   const { premiereId } = useParams<{ premiereId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showError, showSuccess } = useNotification();
+
   const [premiere, setPremiere] = useState<Premiere | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [viewers, setViewers] = useState<AdminViewer[]>([]);
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
 
+  const videoRef = useRef<VideoPlayerRef>(null);
+  const hasJoinedRef = useRef(false);
+  const isApplyingServerCommandRef = useRef(false);
+
+  // Fetch the premiere record + initial counters.
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/admin');
@@ -27,14 +49,17 @@ const LivePremiereControlPage: React.FC = () => {
       return;
     }
 
-    // Fetch premiere data
     const fetchPremiere = async () => {
       try {
         const response = await premiereService.getPremiereById(premiereId);
         setPremiere(response.data.premiere);
         setViewerCount(response.data.premiere.totalViewers || 0);
+        if (response.data.premiere.status === 'live') {
+          setIsPlaying(true);
+        }
       } catch (error) {
         console.error('Failed to fetch premiere:', error);
+        showError('Failed to load premiere');
         navigate('/admin/premieres');
       } finally {
         setLoading(false);
@@ -42,26 +67,30 @@ const LivePremiereControlPage: React.FC = () => {
     };
 
     fetchPremiere();
-  }, [premiereId, user, navigate]);
+  }, [premiereId, user, navigate, showError]);
 
+  // Join the room, subscribe to sync events, follow server commands on the
+  // local preview so the admin sees the same frame viewers see.
   useEffect(() => {
     if (!premiere) return;
+    if (hasJoinedRef.current) return;
 
-    // Join the premiere room as admin
+    hasJoinedRef.current = true;
     socketService.joinPremiere(premiere._id);
 
-    // Listen for premiere events
-    const handlePremiereStarted = (data: any) => {
-      console.log('Premiere started:', data);
-      setIsPlaying(true);
-    };
-
-    const handleVideoPlay = () => {
-      setIsPlaying(true);
-    };
-
-    const handleVideoPause = () => {
-      setIsPlaying(false);
+    const handlePremiereJoined = (data: any) => {
+      setViewerCount(data.viewerCount);
+      setIsPlaying(!!data.isPlaying);
+      if (typeof data.currentTime === 'number') {
+        setCurrentTime(data.currentTime);
+        if (videoRef.current && data.currentTime > 0 && isVideoReady) {
+          isApplyingServerCommandRef.current = true;
+          videoRef.current.seek(data.currentTime);
+          setTimeout(() => {
+            isApplyingServerCommandRef.current = false;
+          }, 300);
+        }
+      }
     };
 
     const handleViewerJoined = (data: any) => {
@@ -72,76 +101,187 @@ const LivePremiereControlPage: React.FC = () => {
       setViewerCount(data.viewerCount);
     };
 
-    socketService.onPremiereStarted(handlePremiereStarted);
-    socketService.onVideoPlay(handleVideoPlay);
-    socketService.onVideoPause(handleVideoPause);
+    const handleVideoPlay = () => {
+      setIsPlaying(true);
+      if (!videoRef.current) return;
+      isApplyingServerCommandRef.current = true;
+      const p = videoRef.current.play();
+      const release = () => setTimeout(() => { isApplyingServerCommandRef.current = false; }, 300);
+      if (p instanceof Promise) p.finally(release); else release();
+    };
+
+    const handleVideoPause = () => {
+      setIsPlaying(false);
+      if (!videoRef.current) return;
+      isApplyingServerCommandRef.current = true;
+      videoRef.current.pause();
+      setTimeout(() => { isApplyingServerCommandRef.current = false; }, 300);
+    };
+
+    const handleVideoSeek = (data: { time: number }) => {
+      setCurrentTime(data.time);
+      if (!videoRef.current) return;
+      isApplyingServerCommandRef.current = true;
+      videoRef.current.seek(data.time);
+      setTimeout(() => { isApplyingServerCommandRef.current = false; }, 300);
+    };
+
+    const handlePremiereEnded = () => {
+      showSuccess('Premiere ended');
+      navigate('/admin/premieres');
+    };
+
+    socketService.onPremiereJoined(handlePremiereJoined);
     socketService.onViewerJoined(handleViewerJoined);
     socketService.onViewerLeft(handleViewerLeft);
-
-    // Check initial status
-    if (premiere.status === 'live') {
-      setIsPlaying(true);
-    }
+    socketService.onVideoPlay(handleVideoPlay);
+    socketService.onVideoPause(handleVideoPause);
+    socketService.onVideoSeek(handleVideoSeek);
+    socketService.onPremiereEnded(handlePremiereEnded);
 
     return () => {
-      if (premiere) {
-        socketService.leavePremiere(premiere._id);
-      }
-      socketService.removeListener('premiere-started', handlePremiereStarted);
-      socketService.removeListener('video-play', handleVideoPlay);
-      socketService.removeListener('video-pause', handleVideoPause);
+      socketService.leavePremiere(premiere._id);
+      hasJoinedRef.current = false;
+      socketService.removeListener('premiere-joined', handlePremiereJoined);
       socketService.removeListener('viewer-joined', handleViewerJoined);
       socketService.removeListener('viewer-left', handleViewerLeft);
+      socketService.removeListener('video-play', handleVideoPlay);
+      socketService.removeListener('video-pause', handleVideoPause);
+      socketService.removeListener('video-seek', handleVideoSeek);
+      socketService.removeListener('premiere-ended', handlePremiereEnded);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [premiere?._id]);
+
+  // Sample the preview's current time every second for the admin readout.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (videoRef.current) {
+        const t = videoRef.current.getCurrentTime?.();
+        if (typeof t === 'number' && !Number.isNaN(t)) {
+          setCurrentTime(t);
+        }
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Validate video data.
+  useEffect(() => {
+    if (!premiere) return;
+    if (!premiere.video) {
+      setVideoError('Video data is missing from this premiere');
+      return;
+    }
+    if (!premiere.video.processedFiles?.hls?.masterPlaylist) {
+      setVideoError('Video has not been fully processed yet');
+      return;
+    }
+    if (!premiere.video.processedFiles.hls.variants?.length) {
+      setVideoError('No quality variants available for this video');
+      return;
+    }
+    setVideoError(null);
+    setIsVideoReady(true);
   }, [premiere]);
 
-  const handlePlay = () => {
+  // Ack-based control handlers — on failure surface a toast so the admin
+  // isn't left guessing. Backend emits targeted errors for FORBIDDEN /
+  // NOT_FOUND / INVALID_STATE.
+  const handlePlay = async () => {
     if (!premiere) return;
-    try {
-      socketService.playVideo(premiere._id);
-      setIsPlaying(true);
-      setError(null);
-    } catch (err) {
-      setError('Failed to play video');
-      console.error('Error playing video:', err);
-    }
+    const ack = await socketService.playVideoWithAck(premiere._id);
+    if (!ack.ok) showError(ack.error?.message ?? 'Play failed');
   };
 
-  const handlePause = () => {
+  const handlePause = async () => {
     if (!premiere) return;
-    try {
-      socketService.pauseVideo(premiere._id);
-      setIsPlaying(false);
-      setError(null);
-    } catch (err) {
-      setError('Failed to pause video');
-      console.error('Error pausing video:', err);
-    }
+    const ack = await socketService.pauseVideoWithAck(premiere._id);
+    if (!ack.ok) showError(ack.error?.message ?? 'Pause failed');
+  };
+
+  const handleSeekBy = async (delta: number) => {
+    if (!premiere) return;
+    const current = videoRef.current?.getCurrentTime?.() ?? currentTime;
+    const duration = premiere.video?.duration ?? 0;
+    const target = Math.max(0, Math.min(duration, current + delta));
+    const ack = await socketService.seekVideoWithAck(premiere._id, target);
+    if (!ack.ok) showError(ack.error?.message ?? 'Seek failed');
   };
 
   const handleStartPremiere = () => {
     if (!premiere) return;
-    try {
-      socketService.startPremiere(premiere._id);
-      setIsPlaying(true);
-      setError(null);
-    } catch (err) {
-      setError('Failed to start premiere');
-      console.error('Error starting premiere:', err);
-    }
+    socketService.startPremiere(premiere._id);
+    showSuccess('Starting premiere...');
   };
 
   const handleEndPremiere = () => {
     if (!premiere) return;
-    if (window.confirm('Are you sure you want to end this premiere?')) {
-      try {
-        socketService.endPremiere(premiere._id);
-        navigate('/admin/premieres');
-      } catch (err) {
-        setError('Failed to end premiere');
-        console.error('Error ending premiere:', err);
-      }
-    }
+    setEndConfirmOpen(true);
+  };
+
+  const confirmEndPremiere = () => {
+    if (!premiere) return;
+    socketService.endPremiere(premiere._id);
+    setEndConfirmOpen(false);
+  };
+
+  // Shape the premiere's video into the Video type VideoPlayer expects.
+  const videoForPlayer: Video | null = premiere && !videoError ? {
+    _id: premiere.video._id,
+    title: premiere.video.title,
+    description: premiere.video.description,
+    duration: premiere.video.duration,
+    resolution: premiere.video.resolution,
+    fileSize: 0,
+    uploadedBy: {
+      _id: premiere.createdBy._id,
+      username: premiere.createdBy.username,
+      email: premiere.video.uploadedBy?.email || 'premiere@pakstream.com',
+    },
+    originalFile: {
+      filename: premiere.video.originalFile?.filename || '',
+      path: premiere.video.originalFile?.path || '',
+      size: premiere.video.originalFile?.size || 0,
+      mimetype: premiere.video.originalFile?.mimetype || 'video/mp4',
+      duration: premiere.video.duration,
+    },
+    status: (premiere.video.status as 'ready' | 'processing' | 'uploading' | 'failed' | 'error') || 'ready',
+    processingProgress: 100,
+    views: 0,
+    likes: 0,
+    dislikes: 0,
+    tags: [],
+    category: 'movie',
+    isPublic: true,
+    isFeatured: false,
+    createdAt: premiere.createdAt,
+    updatedAt: premiere.updatedAt,
+    processedFiles: {
+      hls: {
+        masterPlaylist: premiere.video.processedFiles.hls.masterPlaylist,
+        segments: premiere.video.processedFiles.hls.segments || [],
+        variants: premiere.video.processedFiles.hls.variants.map(v => ({
+          resolution: v.resolution,
+          bitrate: v.bitrate,
+          playlist: v.playlist,
+          segments: v.segments || [],
+        })) as VideoVariant[],
+      },
+      thumbnails: premiere.video.processedFiles.thumbnails || [],
+      poster: premiere.video.processedFiles.poster || '',
+    },
+  } : null;
+
+  // Passive local player callbacks — admin's preview mirrors the broadcast,
+  // not the other way around. Ignore user interactions on the preview.
+  const noop = () => {};
+
+  const formatTime = (seconds: number): string => {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -168,135 +308,174 @@ const LivePremiereControlPage: React.FC = () => {
     );
   }
 
+  const duration = premiere.video?.duration ?? 0;
+
   return (
     <div className="min-h-screen bg-black">
-      <div className="ml-64 p-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Premiere Control</h1>
-          <p className="text-gray-400">Control video playback for all viewers</p>
+      <div className="ml-64 p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-1">Premiere Control</h1>
+            <p className="text-gray-400">
+              {premiere.title}{' '}
+              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-700">
+                {premiere.status === 'live' ? 'LIVE' : premiere.status.toUpperCase()}
+              </span>
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/admin/premieres')}
+            className="text-gray-400 hover:text-white"
+          >
+            ← Back
+          </button>
         </div>
 
-        {error && (
-          <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        {/* Premiere Info */}
-        <div className="bg-netflix-gray rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">{premiere.title}</h2>
-              <p className="text-gray-300">{premiere.description}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-white font-bold text-2xl mb-1">{viewerCount}</div>
-              <div className="text-gray-400 text-sm">Viewers</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div>
-              <div className="text-gray-400 text-sm">Status</div>
-              <div className={`text-white font-semibold ${
-                premiere.status === 'live' ? 'text-green-500' : 'text-yellow-500'
-              }`}>
-                {premiere.status === 'live' ? '🔴 LIVE' : '⏸ Scheduled'}
+        {/* Two-column layout: preview + controls on the left, chat + viewers on the right. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+          <div className="space-y-4">
+            {/* Video Preview (muted; admin sees what viewers see) */}
+            <div className="aspect-video rounded-lg overflow-hidden bg-gray-900 relative">
+              {videoError ? (
+                <div className="h-full flex items-center justify-center text-center p-6">
+                  <div>
+                    <div className="text-5xl mb-3">⚠️</div>
+                    <p className="text-red-400 font-semibold">{videoError}</p>
+                  </div>
+                </div>
+              ) : videoForPlayer ? (
+                <VideoPlayer
+                  video={videoForPlayer}
+                  autoPlay={false}
+                  controls={false}
+                  showProgressBar={false}
+                  className="h-full w-full"
+                  onPlay={noop}
+                  onPause={noop}
+                  onSeek={noop}
+                  ref={videoRef}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-white">Loading video...</div>
+              )}
+              <div className="absolute top-2 left-2 px-2 py-1 rounded bg-black/70 text-white text-xs font-semibold">
+                Admin preview · muted
               </div>
             </div>
-            <div>
-              <div className="text-gray-400 text-sm">Video</div>
-              <div className="text-white font-semibold">{premiere.video?.title || 'N/A'}</div>
-            </div>
-            <div>
-              <div className="text-gray-400 text-sm">Duration</div>
-              <div className="text-white font-semibold">
-                {premiere.video?.duration 
-                  ? formatVideoDuration(premiere.video.duration)
-                  : 'N/A'}
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-400 text-sm">Resolution</div>
-              <div className="text-white font-semibold">{premiere.video?.resolution || 'N/A'}</div>
-            </div>
-          </div>
 
-          {/* Control Buttons */}
-          <div className="flex flex-wrap gap-4">
-            {premiere.status === 'scheduled' && (
-              <button
-                onClick={handleStartPremiere}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center space-x-2"
-              >
-                <span>▶</span>
-                <span>Start Premiere</span>
-              </button>
-            )}
-
-            {premiere.status === 'live' && (
-              <>
-                {!isPlaying ? (
+            {/* Transport row */}
+            <div className="bg-netflix-gray rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-4">
+                {premiere.status === 'scheduled' && (
                   <button
-                    onClick={handlePlay}
-                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors flex items-center space-x-2"
+                    onClick={handleStartPremiere}
+                    className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg"
                   >
-                    <span>▶</span>
-                    <span>Play Video</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handlePause}
-                    className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-colors flex items-center space-x-2"
-                  >
-                    <span>⏸</span>
-                    <span>Pause Video</span>
+                    ▶ Start Premiere
                   </button>
                 )}
+                {premiere.status === 'live' && (
+                  <>
+                    {isPlaying ? (
+                      <button
+                        onClick={handlePause}
+                        className="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg"
+                      >
+                        ⏸ Pause
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePlay}
+                        className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg"
+                      >
+                        ▶ Play
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleSeekBy(-10)}
+                      className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                      title="Skip back 10s"
+                    >
+                      ⏪ 10s
+                    </button>
+                    <button
+                      onClick={() => handleSeekBy(10)}
+                      className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                      title="Skip forward 10s"
+                    >
+                      10s ⏩
+                    </button>
+                    <button
+                      onClick={handleEndPremiere}
+                      className="ml-auto px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg"
+                    >
+                      ⏹ End Premiere
+                    </button>
+                  </>
+                )}
+              </div>
 
-                <button
-                  onClick={handleEndPremiere}
-                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors flex items-center space-x-2"
-                >
-                  <span>⏹</span>
-                  <span>End Premiere</span>
-                </button>
-              </>
-            )}
-          </div>
+              {/* Progress + time readout */}
+              <div className="flex items-center gap-3 text-sm text-gray-300">
+                <span className="font-mono">{formatTime(currentTime)}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-gray-700 overflow-hidden">
+                  <div
+                    className="h-full bg-netflix-red transition-all duration-300"
+                    style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
+                  />
+                </div>
+                <span className="font-mono">{formatTime(duration)}</span>
+              </div>
 
-          {/* Video Preview */}
-          {premiere.video?.processedFiles?.poster && (
-            <div className="mt-6">
-              <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden">
-                <img
-                  src={premiereService.getPosterUrl(premiere.video)}
-                  alt={premiere.title}
-                  className="w-full h-full object-cover"
-                />
+              {/* Meta + sync indicator */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-sm">
+                <div>
+                  <div className="text-gray-400">Status</div>
+                  <div className={premiere.status === 'live' ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
+                    {premiere.status === 'live' ? `🔴 LIVE · ${isPlaying ? 'Playing' : 'Paused'}` : '⏸ Scheduled'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Viewers</div>
+                  <div className="text-white font-semibold">{viewerCount}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Duration</div>
+                  <div className="text-white font-semibold">{formatVideoDuration(duration)}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400">Started</div>
+                  <div className="text-white font-semibold">
+                    {premiere.status === 'live' ? new Date(premiere.startTime).toLocaleTimeString() : '—'}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Status Info */}
-        <div className="bg-netflix-gray rounded-lg p-4">
-          <div className="text-gray-400 text-sm">
-            <p className="mb-2">
-              <strong className="text-white">Current Status:</strong> {isPlaying ? 'Playing' : 'Paused'}
-            </p>
-            <p className="mb-2">
-              <strong className="text-white">Started:</strong> {new Date(premiere.startTime).toLocaleString()}
-            </p>
-            <p>
-              <strong className="text-white">Note:</strong> All viewers will see the video play/pause when you control it.
-            </p>
           </div>
+
+          {/* Chat sidebar — admin sees viewer chat in real time. */}
+          <PremiereChat
+            premiereId={premiere._id}
+            currentUsername={user?.username}
+            viewerCount={viewerCount}
+            heading="Live Chat (admin)"
+            className="h-[680px] rounded-lg overflow-hidden"
+          />
         </div>
       </div>
+
+      <ConfirmationDialog
+        isOpen={endConfirmOpen}
+        title="End Premiere"
+        message="Are you sure you want to end this premiere? All viewers will be disconnected."
+        confirmText="End Premiere"
+        cancelText="Keep Live"
+        type="danger"
+        onConfirm={confirmEndPremiere}
+        onCancel={() => setEndConfirmOpen(false)}
+      />
     </div>
   );
 };
 
 export default LivePremiereControlPage;
-

@@ -5,30 +5,21 @@ import VideoPlayer, { VideoPlayerRef } from '../video/VideoPlayer';
 import socketService from '../../services/socketService';
 import { useAuth } from '../../hooks';
 import { formatVideoDuration } from '../../utils/videoUtils';
+import PremiereChat from './PremiereChat';
 
 interface LivePremiereProps {
   premiere: Premiere;
   onClose?: () => void;
 }
 
-interface ChatMessage {
-  id: number;
-  user: string;
-  message: string;
-  timestamp: Date;
-}
-
 const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
   const { user } = useAuth();
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [viewerCount, setViewerCount] = useState(premiere.totalViewers);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const videoRef = useRef<VideoPlayerRef>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasJoinedRef = useRef(false);
   const autoPlayAttemptedRef = useRef(false);
 
@@ -52,7 +43,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     const handlePremiereJoined = (data: any) => {
       console.log('Premiere joined:', data);
       setViewerCount(data.viewerCount);
-      setChatMessages(data.chat || []);
+      // Chat history is handled by the <PremiereChat> child component.
       
       // Resume from current playback time (TV broadcast behavior)
       // User joins/refreshes and gets the current live playback position
@@ -154,16 +145,13 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       }, 300);
     };
 
-    const handleNewMessage = (message: any) => {
-      setChatMessages(prev => [...prev, message]);
-      scrollToBottom();
-    };
-
     const handleError = (error: any) => {
       console.error('Socket error:', error);
     };
 
-    // Register all event listeners
+    // Register all event listeners.
+    // Chat subscriptions (premiere-joined chat payload, new-message) are owned
+    // by the <PremiereChat> child component — not duplicated here.
     socketService.onPremiereJoined(handlePremiereJoined);
     socketService.onViewerJoined(handleViewerJoined);
     socketService.onViewerLeft(handleViewerLeft);
@@ -172,7 +160,6 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     socketService.onVideoPlay(handleVideoPlay);
     socketService.onVideoPause(handleVideoPause);
     socketService.onVideoSeek(handleVideoSeek);
-    socketService.onNewMessage(handleNewMessage);
     socketService.onError(handleError);
 
     // Update time remaining
@@ -202,17 +189,10 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       socketService.removeListener('video-play', handleVideoPlay);
       socketService.removeListener('video-pause', handleVideoPause);
       socketService.removeListener('video-seek', handleVideoSeek);
-      socketService.removeListener('new-message', handleNewMessage);
       socketService.removeListener('error', handleError);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  };
 
   const formatTimeRemaining = (milliseconds: number) => {
     const totalSeconds = Math.floor(milliseconds / 1000);
@@ -224,16 +204,6 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     } else {
       return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-  };
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newMessage.trim()) {
-      // Pass username from user object if available
-      const username = user?.username || undefined;
-      socketService.sendMessage(premiere._id, newMessage.trim(), username);
-      setNewMessage('');
     }
   };
 
@@ -294,7 +264,11 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
 
-  // Auto-play video when ready: try muted first (browsers often allow it), then unmute; show "Click to play" if blocked
+  // Auto-play video when ready: try muted first (browsers often allow it), then unmute; show "Click to play" if blocked.
+  // Viewers are passive — they never emit play-video; the admin is the only
+  // authorised driver of playback. Emitting it here was causing the backend
+  // to respond with a FORBIDDEN error ("Only the premiere admin can play the
+  // video") which surfaced as a toast on every viewer's screen.
   useEffect(() => {
     if (isVideoReady && videoRef.current && !autoPlayAttemptedRef.current && premiere.status === 'live') {
       autoPlayAttemptedRef.current = true;
@@ -312,21 +286,12 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
                 videoRef.current?.setMuted(false);
                 const unmutePlay: unknown = videoRef.current?.play();
                 if (unmutePlay instanceof Promise) {
-                  await unmutePlay.then(() => {
-                    console.log('✅ Premiere video started with sound');
-                    socketService.playVideo(premiere._id);
-                  }).catch(() => {
-                    setAutoplayBlocked(true);
-                  });
-                } else {
-                  socketService.playVideo(premiere._id);
+                  await unmutePlay.catch(() => setAutoplayBlocked(true));
                 }
               })
               .catch(() => {
                 setAutoplayBlocked(true);
               });
-          } else {
-            socketService.playVideo(premiere._id);
           }
         } catch (error) {
           console.error('Error during autoplay:', error);
@@ -521,45 +486,12 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       </div>
 
       {/* Chat Sidebar */}
-      <div className="w-80 bg-gray-900 flex flex-col">
-        <div className="p-4 border-b border-gray-700">
-          <h3 className="text-white font-semibold">Live Chat</h3>
-          <p className="text-gray-400 text-sm">{viewerCount} viewers</p>
-        </div>
-        
-        <div 
-          ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-2"
-        >
-          {chatMessages.map((message) => (
-            <div key={message.id} className="text-sm">
-              <span className="text-blue-400 font-medium">{message.user}:</span>
-              <span className="text-white ml-2">{message.message}</span>
-              <div className="text-gray-500 text-xs">
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-700">
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              Send
-            </button>
-          </div>
-        </form>
-      </div>
+      <PremiereChat
+        premiereId={premiere._id}
+        currentUsername={user?.username}
+        viewerCount={viewerCount}
+        className="w-80"
+      />
     </div>
   );
 };

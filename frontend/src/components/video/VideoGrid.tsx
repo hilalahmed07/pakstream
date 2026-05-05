@@ -11,7 +11,9 @@ interface VideoGridProps {
   loading: boolean;
   onVideoClick: (video: Video) => void;
   onDeleteClick?: (video: Video) => void;
+  onEditClick?: (video: Video) => void;
   showDeleteButton?: boolean;
+  showEditButton?: boolean;
   onLikesCountClick?: (video: Video) => void;
 }
 
@@ -20,7 +22,9 @@ const VideoGrid: React.FC<VideoGridProps> = ({
   loading, 
   onVideoClick, 
   onDeleteClick,
+  onEditClick,
   showDeleteButton = false,
+  showEditButton = false,
   onLikesCountClick
 }) => {
   const { user } = useAuth();
@@ -214,28 +218,41 @@ const VideoGrid: React.FC<VideoGridProps> = ({
               )}
             </div>
 
-            {/* Delete Button (Admin only) */}
-            {showDeleteButton && onDeleteClick && (
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteClick(video);
-                  }}
-                  className="bg-accent hover:opacity-90 text-accent-text p-2 rounded-full transition-colors"
-                  title="Delete video"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                  </svg>
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="p-4">
             <h3 className="text-text-primary font-semibold mb-2 line-clamp-2">{video.title}</h3>
             <p className="text-text-secondary text-sm mb-3 line-clamp-2">{video.description}</p>
+
+            {video.status === 'ready' && ((showDeleteButton && onDeleteClick) || (showEditButton && onEditClick)) ? (
+              <div className="flex items-center gap-2 mb-3">
+                {showEditButton && onEditClick && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditClick(video);
+                    }}
+                    className="px-3 py-1 rounded border text-blue-400 border-blue-400 hover:bg-blue-400/10 transition-colors text-sm font-medium"
+                    title="Edit video"
+                  >
+                    Edit
+                  </button>
+                )}
+
+                {showDeleteButton && onDeleteClick && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteClick(video);
+                    }}
+                    className="px-3 py-1 rounded border text-red-400 border-red-400 hover:bg-red-400/10 transition-colors text-sm font-medium"
+                    title="Delete video"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ) : null}
             
             <div className="flex items-center justify-between text-sm text-text-secondary">
               <span className="capitalize">{video.category}</span>

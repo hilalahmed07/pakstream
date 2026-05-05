@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import patchService from '../../services/patchService';
 import { Patch, PatchVerificationData } from '../../types/patch';
 import { calculateFileHash, isCryptoSubtleAvailable } from '../../utils/hashUtils';
+import { useNotification } from '../../contexts/NotificationContext';
 
 interface PatchVerificationModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ const PatchVerificationModal: React.FC<PatchVerificationModalProps> = ({
   onClose,
   patch
 }) => {
+  const { showSuccess, showError } = useNotification();
   const [verificationMethod, setVerificationMethod] = useState<'file' | 'hash'>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [calculatedHash, setCalculatedHash] = useState<string | null>(null);
@@ -132,8 +134,14 @@ const PatchVerificationModal: React.FC<PatchVerificationModalProps> = ({
     onClose();
   };
 
-  const copyHashToClipboard = (hash: string) => {
-    navigator.clipboard.writeText(hash);
+  const copyHashToClipboard = async (hash: string) => {
+    try {
+      await navigator.clipboard.writeText(hash);
+      showSuccess('Hash copied to clipboard');
+    } catch (clipboardError) {
+      console.error('Failed to copy hash:', clipboardError);
+      showError('Failed to copy hash');
+    }
   };
 
   if (!isOpen || !patch) return null;
@@ -205,7 +213,7 @@ const PatchVerificationModal: React.FC<PatchVerificationModalProps> = ({
                   </code>
                   <button
                     onClick={() => copyHashToClipboard((originalHash || patch.sha256Hash)!)}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80 shadow-md hover:shadow-lg active:shadow-sm"
                     style={{ 
                       backgroundColor: 'var(--color-button-bg)',
                       color: 'var(--color-button-text)'

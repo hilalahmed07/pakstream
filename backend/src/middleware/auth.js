@@ -94,9 +94,18 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+// Document file: inline/view is public (optional auth); ?download=true requires login
+const authenticateWhenDocumentDownload = (req, res, next) => {
+  if (String(req.query.download) === 'true') {
+    return authenticateToken(req, res, next);
+  }
+  return optionalAuth(req, res, next);
+};
+
 module.exports = {
   authenticateToken,
   requireAdmin,
   requireAdminOrOwner,
-  optionalAuth
+  optionalAuth,
+  authenticateWhenDocumentDownload
 };

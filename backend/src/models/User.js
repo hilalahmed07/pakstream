@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const {
+  USERNAME_REGEX,
+  EMAIL_REGEX,
+  EMAIL_MAX_LENGTH,
+  PASSWORD_REGEX,
+  USERNAME_MESSAGE,
+  EMAIL_MESSAGE,
+  PASSWORD_MESSAGE,
+} = require('../utils/validation');
 
 const userSchema = new mongoose.Schema({
   username: {
@@ -8,19 +17,30 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     minlength: 3,
-    maxlength: 30
+    maxlength: 30,
+    match: [USERNAME_REGEX, USERNAME_MESSAGE],
   },
   email: {
     type: String,
     required: true,
     unique: true,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    maxlength: EMAIL_MAX_LENGTH,
+    match: [EMAIL_REGEX, EMAIL_MESSAGE],
   },
   password: {
     type: String,
     required: true,
-    minlength: 6
+    minlength: 8,
+    validate: {
+      validator: function validatePassword(value) {
+        // Allow existing hashed passwords loaded from DB to pass validation.
+        if (typeof value === 'string' && value.startsWith('$2')) return true;
+        return PASSWORD_REGEX.test(value);
+      },
+      message: PASSWORD_MESSAGE,
+    },
   },
   role: {
     type: String,

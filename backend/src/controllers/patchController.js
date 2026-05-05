@@ -4,6 +4,32 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+
+const PATCH_TITLE_MAX = 90;
+const PATCH_DESCRIPTION_MAX = 180;
+
+const validatePatchPayload = ({ title, description }) => {
+  const trimmedTitle = String(title || '').trim();
+  const trimmedDescription = String(description || '').trim();
+
+  if (!trimmedTitle || !trimmedDescription) {
+    return { message: 'Title and description are required' };
+  }
+
+  if (trimmedTitle.length > PATCH_TITLE_MAX) {
+    return { message: `Title must be ${PATCH_TITLE_MAX} characters or fewer` };
+  }
+
+  if (trimmedDescription.length > PATCH_DESCRIPTION_MAX) {
+    return { message: `Description must be ${PATCH_DESCRIPTION_MAX} characters or fewer` };
+  }
+
+  return {
+    title: trimmedTitle,
+    description: trimmedDescription,
+  };
+};
 
 // Upload patch
 const uploadPatch = async (req, res) => {
@@ -23,6 +49,15 @@ const uploadPatch = async (req, res) => {
       architecture = 'x64'
     } = req.body;
     const userId = req.user.id;
+    const validatedPayload = validatePatchPayload({ title, description });
+
+    if (validatedPayload.message) {
+      return res.status(400).json({ message: validatedPayload.message });
+    }
+
+    const resolvedTitle = await ensureUniqueTitle(Patch, validatedPayload.title, {
+      maxLength: PATCH_TITLE_MAX,
+    });
 
     // Calculate SHA-256 hash of the uploaded file
     let sha256Hash = null;
@@ -55,8 +90,8 @@ const uploadPatch = async (req, res) => {
 
     // Create patch record
     const patch = new Patch({
-      title,
-      description,
+      title: resolvedTitle,
+      description: validatedPayload.description,
       uploadedBy: userId,
       originalFile: {
         filename: req.file.filename,
@@ -328,16 +363,46 @@ const getPatchFile = async (req, res) => {
 // Get admin patches
 const getAdminPatches = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, category, status, search, patchType } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const query = {};
 
-    const patches = await Patch.find()
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    if (patchType && patchType !== 'all') {
+      query.patchType = patchType;
+    }
+
+    if (search && String(search).trim()) {
+      const normalizedSearch = String(search).trim();
+      const searchRegex = new RegExp(normalizedSearch, 'i');
+      const searchConditions = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: { $in: [searchRegex] } },
+        { version: searchRegex },
+      ];
+
+      if (/^[0-9a-fA-F]{24}$/.test(normalizedSearch)) {
+        searchConditions.push({ _id: normalizedSearch });
+      }
+
+      query.$or = searchConditions;
+    }
+
+    const patches = await Patch.find(query)
       .populate('uploadedBy', 'username email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Patch.countDocuments();
+    const total = await Patch.countDocuments(query);
 
     res.json({
       patches,
@@ -386,32 +451,80 @@ const updatePatch = async (req, res) => {
     const { id } = req.params;
     const { title, description, category, tags, isPublic, patchType, version, targetOs, architecture } = req.body;
 
-    const patch = await Patch.findByIdAndUpdate(
+    console.log('[updatePatch] Request received:', {
       id,
-      {
-        title,
-        description,
-        category,
-        tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
-        isPublic,
-        patchType,
-        version,
-        targetOs: Array.isArray(targetOs) ? targetOs : targetOs.split(',').map(os => os.trim()),
-        architecture,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).populate('uploadedBy', 'username email');
+      body: req.body,
+      timestamp: new Date().toISOString(),
+    });
+
+    const update = {
+      updatedAt: new Date(),
+    };
+    if (typeof title === 'string' && title.trim()) {
+      if (title.trim().length > PATCH_TITLE_MAX) {
+        console.log('[updatePatch] Title validation failed: too long');
+        return res.status(400).json({ message: `Title must be ${PATCH_TITLE_MAX} characters or fewer` });
+      }
+
+      update.title = await ensureUniqueTitle(Patch, title.trim(), {
+        excludeId: id,
+        maxLength: PATCH_TITLE_MAX,
+      });
+    }
+    if (description !== undefined) {
+      const trimmedDescription = String(description).trim();
+
+      if (!trimmedDescription) {
+        console.log('[updatePatch] Description validation failed: empty');
+        return res.status(400).json({ message: 'Description is required' });
+      }
+
+      if (trimmedDescription.length > PATCH_DESCRIPTION_MAX) {
+        console.log('[updatePatch] Description validation failed: too long');
+        return res.status(400).json({ message: `Description must be ${PATCH_DESCRIPTION_MAX} characters or fewer` });
+      }
+
+      update.description = trimmedDescription;
+    }
+    if (category !== undefined) update.category = category;
+    if (tags !== undefined) {
+      update.tags = Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim());
+    }
+    if (isPublic !== undefined) update.isPublic = isPublic;
+    if (patchType !== undefined) update.patchType = patchType;
+    if (version !== undefined) update.version = version;
+    if (targetOs !== undefined) {
+      update.targetOs = Array.isArray(targetOs) ? targetOs : targetOs.split(',').map(os => os.trim());
+    }
+    if (architecture !== undefined) update.architecture = architecture;
+
+    console.log('[updatePatch] Update object prepared:', update);
+
+    const patch = await Patch.findByIdAndUpdate(id, update, { new: true }).populate(
+      'uploadedBy',
+      'username email'
+    );
 
     if (!patch) {
+      console.log('[updatePatch] Patch not found with id:', id);
       return res.status(404).json({ message: 'Patch not found' });
     }
 
+    console.log('[updatePatch] Patch updated successfully:', patch._id);
     res.json({ patch });
 
   } catch (error) {
-    console.error('Update patch error:', error);
-    res.status(500).json({ message: 'Failed to update patch', error: error.message });
+    console.error('[updatePatch] ERROR:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      details: error,
+    });
+    res.status(500).json({ 
+      message: 'Failed to update patch', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 

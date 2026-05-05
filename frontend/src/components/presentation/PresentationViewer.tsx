@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Presentation, PresentationSlide } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import { getBaseUrl } from '../../config/api';
+import { useAuth } from '../../hooks';
 
 interface PresentationViewerProps {
   presentation: Presentation;
@@ -9,6 +10,7 @@ interface PresentationViewerProps {
 }
 
 const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, onClose }) => {
+  const { user } = useAuth();
   const [slides, setSlides] = useState<PresentationSlide[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -271,13 +273,20 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({ presentation, o
           </span>
         </div>
         <div className="flex items-center space-x-3">
-          <button
-            onClick={() => presentationService.downloadPresentation(presentation._id)}
-            className="bg-netflix-red hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            title="Download presentation file"
-          >
-            ⬇️ Download
-          </button>
+          {user && (
+            <button
+              onClick={() =>
+                presentationService.downloadPresentation(presentation._id).catch((err) => {
+                  console.error(err);
+                  alert(err instanceof Error ? err.message : 'Download failed');
+                })
+              }
+              className="bg-netflix-red hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              title="Download presentation file"
+            >
+              ⬇️ Download
+            </button>
+          )}
           <button
             onClick={onClose}
             className="text-gray-300 hover:text-white text-2xl font-bold px-3 py-1 hover:bg-gray-800 rounded transition-colors"

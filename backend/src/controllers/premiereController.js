@@ -1,10 +1,16 @@
 const Premiere = require('../models/Premiere');
 const Video = require('../models/Video');
+const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+
+const PREMIERE_TITLE_MAX = 90;
+const PREMIERE_DESCRIPTION_MAX = 180;
+
+const normalizePremiereDescription = (value) => String(value || '').trim();
 
 const createPremiere = async (req, res) => {
   try {
     const { videoId, title, description, startTime, duration } = req.body;
-    
+
     // Check if video exists
     const video = await Video.findById(videoId);
     if (!video) {
@@ -14,14 +20,33 @@ const createPremiere = async (req, res) => {
       });
     }
 
+    // Reject start times in the past. Allow a 1-minute grace window for clock
+    // skew between admin machine and server.
+    if (startTime) {
+      const requested = new Date(startTime);
+      if (Number.isNaN(requested.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid start time'
+        });
+      }
+      const nowMinus1m = new Date(Date.now() - 60 * 1000);
+      if (requested < nowMinus1m) {
+        return res.status(400).json({
+          success: false,
+          message: 'Start time must be in the future'
+        });
+      }
+    }
+
     // Check if there's already an active premiere
-    const activePremiere = await Premiere.findOne({ 
+    const activePremiere = await Premiere.findOne({
       status: { $in: ['scheduled', 'live'] },
       isActive: true
     });
 
     if (activePremiere) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: 'There is already an active premiere. Please end it first.'
       });
@@ -31,10 +56,31 @@ const createPremiere = async (req, res) => {
     const start = startTime ? new Date(startTime) : new Date();
     const end = new Date(start.getTime() + (duration || video.duration) * 1000);
 
+    const rawPremiereTitle = String(title || video.title || 'Premiere').trim() || 'Premiere';
+    const rawPremiereDescription = normalizePremiereDescription(description || video.description || '');
+
+    if (rawPremiereTitle.length > PREMIERE_TITLE_MAX) {
+      return res.status(400).json({
+        success: false,
+        message: `Title must be ${PREMIERE_TITLE_MAX} characters or fewer`
+      });
+    }
+
+    if (rawPremiereDescription.length > PREMIERE_DESCRIPTION_MAX) {
+      return res.status(400).json({
+        success: false,
+        message: `Description must be ${PREMIERE_DESCRIPTION_MAX} characters or fewer`
+      });
+    }
+
+    const resolvedPremiereTitle = await ensureUniqueTitle(Premiere, rawPremiereTitle, {
+      maxLength: PREMIERE_TITLE_MAX,
+    });
+
     const premiere = new Premiere({
       video: videoId,
-      title: title || video.title,
-      description: description || video.description,
+      title: resolvedPremiereTitle,
+      description: rawPremiereDescription,
       startTime: start,
       endTime: end,
       createdBy: req.user.id,
@@ -85,11 +131,52 @@ const getActivePremiere = async (req, res) => {
       });
     }
 
-    // Update status if needed
+    // Update status if needed. When the scheduled startTime has passed, flip
+    // the premiere to 'live' and broadcast the transition so every connected
+    // admin dashboard AND every user's live-premiere modal updates without a
+    // manual refresh. Without this broadcast, admin windows and countdown
+    // dialogs can get stuck in an in-between state until the next page reload.
     const now = new Date();
     if (premiere.status === 'scheduled' && premiere.startTime <= now) {
       premiere.status = 'live';
       await premiere.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('premiere-started', {
+          premiere,
+          currentTime: 0,
+          isPlaying: false,
+        });
+        io.emit('premiere-status-updated', {
+          premiereId: premiere._id.toString(),
+          action: 'started',
+          premiere,
+        });
+      }
+    }
+
+    // Similarly auto-end premieres whose endTime has passed so viewers don't
+    // see a stuck "live" state after the video should be over.
+    if (premiere.status === 'live' && premiere.endTime && premiere.endTime <= now) {
+      premiere.status = 'ended';
+      premiere.isActive = false;
+      await premiere.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('premiere-ended', { premiere });
+        io.emit('premiere-status-updated', {
+          premiereId: premiere._id.toString(),
+          action: 'ended',
+          premiere,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { premiere: null }, // treat as no active premiere now
+      });
     }
 
     res.json({
@@ -305,8 +392,30 @@ const updatePremiere = async (req, res) => {
       });
     }
 
-    if (title) premiere.title = title;
-    if (description) premiere.description = description;
+    if (title) {
+      const trimmedTitle = String(title).trim();
+      if (trimmedTitle.length > PREMIERE_TITLE_MAX) {
+        return res.status(400).json({
+          success: false,
+          message: `Title must be ${PREMIERE_TITLE_MAX} characters or fewer`
+        });
+      }
+
+      premiere.title = await ensureUniqueTitle(Premiere, String(title).trim(), {
+        excludeId: premiere._id,
+        maxLength: PREMIERE_TITLE_MAX,
+      });
+    }
+    if (description !== undefined) {
+      const trimmedDescription = normalizePremiereDescription(description);
+      if (trimmedDescription.length > PREMIERE_DESCRIPTION_MAX) {
+        return res.status(400).json({
+          success: false,
+          message: `Description must be ${PREMIERE_DESCRIPTION_MAX} characters or fewer`
+        });
+      }
+      premiere.description = trimmedDescription;
+    }
     if (startTime) {
       premiere.startTime = new Date(startTime);
       if (duration) {
@@ -353,6 +462,14 @@ const deletePremiere = async (req, res) => {
     }
 
     await Premiere.findByIdAndDelete(req.params.id);
+
+    // Broadcast so other admin sessions update their dashboards live without
+    // needing a manual refresh. Emitted globally because the premiere room is
+    // gone after delete — any connected admin should see it.
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('premiere-deleted', { premiereId: req.params.id });
+    }
 
     res.json({
       success: true,

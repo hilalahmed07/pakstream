@@ -50,6 +50,18 @@ const Navbar: React.FC = () => {
                   Presentations
                 </button>
                 <button
+                  onClick={() => scrollToSection('documents')}
+                  className="text-text-primary hover:text-text-secondary transition-colors"
+                >
+                  Documents
+                </button>
+                <button
+                  onClick={() => scrollToSection('patches')}
+                  className="text-text-primary hover:text-text-secondary transition-colors"
+                >
+                  Patches
+                </button>
+                <button
                   onClick={() => scrollToSection('premieres')}
                   className="text-text-primary hover:text-text-secondary transition-colors"
                 >

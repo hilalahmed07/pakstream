@@ -6,6 +6,32 @@ const { addCdnUrlsToVideos, addCdnUrlsToVideo } = require('../utils/cdnUtils');
 const { calculateFileHash, calculateBufferHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
+const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+
+const VIDEO_TITLE_MAX = 90;
+const VIDEO_DESCRIPTION_MAX = 180;
+
+const validateVideoPayload = ({ title, description }) => {
+  const trimmedTitle = String(title || '').trim();
+  const trimmedDescription = String(description || '').trim();
+
+  if (!trimmedTitle || !trimmedDescription) {
+    return { message: 'Title and description are required' };
+  }
+
+  if (trimmedTitle.length > VIDEO_TITLE_MAX) {
+    return { message: `Title must be ${VIDEO_TITLE_MAX} characters or fewer` };
+  }
+
+  if (trimmedDescription.length > VIDEO_DESCRIPTION_MAX) {
+    return { message: `Description must be ${VIDEO_DESCRIPTION_MAX} characters or fewer` };
+  }
+
+  return {
+    title: trimmedTitle,
+    description: trimmedDescription,
+  };
+};
 
 /**
  * Check if a video is part of an active/scheduled premiere
@@ -74,7 +100,19 @@ const uploadVideo = async (req, res) => {
     }
 
     const { title, description, category, tags, isForPremiere } = req.body;
-    
+    const validatedPayload = validateVideoPayload({ title, description });
+
+    if (validatedPayload.message) {
+      return res.status(400).json({
+        success: false,
+        message: validatedPayload.message
+      });
+    }
+
+    const resolvedTitle = await ensureUniqueTitle(Video, validatedPayload.title, {
+      maxLength: VIDEO_TITLE_MAX,
+    });
+
     // Calculate SHA-256 hash of the uploaded file
     let sha256Hash = null;
     try {
@@ -87,8 +125,8 @@ const uploadVideo = async (req, res) => {
     
     // Create video record
     const video = new Video({
-      title,
-      description,
+      title: resolvedTitle,
+      description: validatedPayload.description,
       category: category || 'other',
       tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
       uploadedBy: req.user.id,
@@ -422,37 +460,109 @@ const getUserVideos = async (req, res) => {
 const updateVideo = async (req, res) => {
   try {
     const { title, description, category, tags, isPublic } = req.body;
-    
-    const video = await Video.findOne({
-      _id: req.params.id,
-      uploadedBy: req.user.id
+    const videoId = req.params.id;
+
+    console.log('[updateVideo] Request received:', {
+      videoId,
+      body: req.body,
+      userId: req.user?.id,
+      userRole: req.user?.role,
+      timestamp: new Date().toISOString(),
     });
 
+    const isAdmin = req.user.role === 'admin';
+    const video = isAdmin
+      ? await Video.findById(videoId)
+      : await Video.findOne({
+          _id: videoId,
+          uploadedBy: req.user.id
+        });
+
     if (!video) {
+      console.log('[updateVideo] Video not found:', { videoId, isAdmin });
       return res.status(404).json({
         success: false,
         message: 'Video not found or access denied'
       });
     }
 
-    if (title) video.title = title;
-    if (description) video.description = description;
+    if (title) {
+      const trimmedTitle = String(title).trim();
+      if (trimmedTitle.length > VIDEO_TITLE_MAX) {
+        console.log('[updateVideo] Title validation failed: too long', { length: trimmedTitle.length, max: VIDEO_TITLE_MAX });
+        return res.status(400).json({
+          success: false,
+          message: `Title must be ${VIDEO_TITLE_MAX} characters or fewer`
+        });
+      }
+
+      video.title = await ensureUniqueTitle(Video, String(title).trim(), {
+        excludeId: video._id,
+        maxLength: VIDEO_TITLE_MAX,
+      });
+    }
+    if (description !== undefined) {
+      const trimmedDescription = String(description).trim();
+      if (!trimmedDescription) {
+        console.log('[updateVideo] Description validation failed: empty');
+        return res.status(400).json({
+          success: false,
+          message: 'Description is required'
+        });
+      }
+      if (trimmedDescription.length > VIDEO_DESCRIPTION_MAX) {
+        console.log('[updateVideo] Description validation failed: too long', { length: trimmedDescription.length, max: VIDEO_DESCRIPTION_MAX });
+        return res.status(400).json({
+          success: false,
+          message: `Description must be ${VIDEO_DESCRIPTION_MAX} characters or fewer`
+        });
+      }
+      video.description = trimmedDescription;
+    }
     if (category) video.category = category;
-    if (tags) video.tags = tags.split(',').map(tag => tag.trim());
+    
+    // Handle tags as both string and array
+    if (tags) {
+      if (Array.isArray(tags)) {
+        video.tags = tags;
+        console.log('[updateVideo] Tags updated (array format):', tags);
+      } else if (typeof tags === 'string') {
+        video.tags = tags.split(',').map(tag => tag.trim());
+        console.log('[updateVideo] Tags updated (string format):', video.tags);
+      }
+    }
+    
     if (typeof isPublic !== 'undefined') video.isPublic = isPublic;
+
+    console.log('[updateVideo] About to save video with updates:', {
+      title: video.title,
+      description: video.description,
+      category: video.category,
+      tags: video.tags,
+      isPublic: video.isPublic,
+    });
 
     await video.save();
 
+    console.log('[updateVideo] Video saved successfully:', videoId);
     res.json({
       success: true,
       message: 'Video updated successfully',
       data: { video }
     });
   } catch (error) {
+    console.error('[updateVideo] ERROR OCCURRED:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      name: error.name,
+      details: error,
+    });
     res.status(500).json({
       success: false,
       message: 'Failed to update video',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

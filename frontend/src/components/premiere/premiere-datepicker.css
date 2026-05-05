@@ -1,0 +1,81 @@
+/* Dark-theme overrides for react-datepicker so the popup matches PakStream's
+   design tokens. Rules are scoped via .premiere-datepicker-popper so they
+   don't affect any future datepicker usage elsewhere in the app. */
+
+.premiere-datepicker-popper {
+  z-index: 60 !important;
+}
+
+/* The rendered input itself — react-datepicker doesn't accept inline `style`
+   so we theme it via the shared CSS. The className on <DatePicker> already
+   gives it the Tailwind sizing; we just add the PakStream palette here. */
+.react-datepicker__input-container input {
+  width: 100%;
+  background-color: var(--color-hover);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+.react-datepicker__input-container input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.premiere-datepicker-popper .react-datepicker {
+  background-color: var(--color-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+.premiere-datepicker-popper .react-datepicker__header {
+  background-color: var(--color-hover);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.premiere-datepicker-popper .react-datepicker__current-month,
+.premiere-datepicker-popper .react-datepicker-time__header,
+.premiere-datepicker-popper .react-datepicker__day-name {
+  color: var(--color-text);
+}
+
+.premiere-datepicker-popper .react-datepicker__day,
+.premiere-datepicker-popper .react-datepicker__time-list-item {
+  color: var(--color-text);
+}
+
+.premiere-datepicker-popper .react-datepicker__day:hover,
+.premiere-datepicker-popper .react-datepicker__time-list-item:hover {
+  background-color: var(--color-hover);
+}
+
+.premiere-datepicker-popper .react-datepicker__day--selected,
+.premiere-datepicker-popper .react-datepicker__day--keyboard-selected,
+.premiere-datepicker-popper .react-datepicker__time-list-item--selected {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.premiere-datepicker-popper .react-datepicker__day--disabled,
+.premiere-datepicker-popper .react-datepicker__time-list-item--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.premiere-datepicker-popper .react-datepicker__triangle {
+  display: none;
+}
+
+.premiere-datepicker-popper .react-datepicker__navigation-icon::before,
+.premiere-datepicker-popper .react-datepicker__navigation-icon::after {
+  border-color: var(--color-text-secondary);
+}
+
+.premiere-datepicker-popper .react-datepicker__time-container {
+  border-left: 1px solid var(--color-border);
+}
+
+.premiere-datepicker-popper .react-datepicker__time {
+  background-color: var(--color-secondary);
+}

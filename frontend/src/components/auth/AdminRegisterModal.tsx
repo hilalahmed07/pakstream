@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks';
+import { EMAIL_MAX_LENGTH } from '../../utils/userValidation';
 
 interface AdminRegisterModalProps {
   isOpen: boolean;
@@ -99,6 +100,7 @@ const AdminRegisterModal: React.FC<AdminRegisterModalProps> = ({
               }}
               className="w-full px-3 py-2 bg-secondary text-text-primary rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
               required
+              maxLength={EMAIL_MAX_LENGTH}
             />
           </div>
 

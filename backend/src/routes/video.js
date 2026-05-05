@@ -403,11 +403,27 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
 router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const Video = require('../models/Video');
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, category, search } = req.query;
     const skip = (page - 1) * limit;
 
     let query = {};
-    if (status) query.status = status;
+    if (status && status !== 'all') query.status = status;
+    if (category && category !== 'all') query.category = category;
+    if (search && String(search).trim()) {
+      const normalizedSearch = String(search).trim();
+      const searchRegex = new RegExp(normalizedSearch, 'i');
+      const searchConditions = [
+        { title: { $regex: searchRegex } },
+        { description: { $regex: searchRegex } },
+        { tags: { $in: [searchRegex] } },
+      ];
+
+      if (/^[0-9a-fA-F]{24}$/.test(normalizedSearch)) {
+        searchConditions.push({ _id: normalizedSearch });
+      }
+
+      query.$or = searchConditions;
+    }
 
     const videos = await Video.find(query)
       .populate('uploadedBy', 'username email')

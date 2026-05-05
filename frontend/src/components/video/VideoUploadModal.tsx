@@ -1,17 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../../hooks';
+import { useAuth } from '../../hooks/useAuth';
 import videoService from '../../services/videoService';
+import uploadManager from '../../services/uploadManager';
 import { VideoUploadData } from '../../types/video';
+import {
+  validateVideoUpload,
+  MAX_ASSET_TITLE_LENGTH,
+  MAX_ASSET_DESCRIPTION_LENGTH,
+  sanitizeAssetText,
+  sanitizeAssetTags,
+} from '../../utils/assetValidation';
 
 interface VideoUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: () => void;
   onUploadStart?: () => void;
-  onUploadProgress?: (progress: number) => void;
+  onUploadProgress?: (progress: number, speed: number, timeRemaining: number, uploadedSize: number) => void;
   onUploadComplete?: (videoId: string) => void;
   uploading?: boolean;
-  uploadProgress?: number;
 }
 
 const VideoUploadModal: React.FC<VideoUploadModalProps> = ({ 
@@ -21,8 +28,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   onUploadStart,
   onUploadProgress,
   onUploadComplete,
-  uploading: parentUploading = false,
-  uploadProgress: parentUploadProgress = 0
+  uploading: parentUploading = false
 }) => {
   const { user } = useAuth();
   const [uploadData, setUploadData] = useState<VideoUploadData>({
@@ -34,7 +40,9 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const categories = [
     { value: 'movie', label: 'Movie' },
@@ -47,29 +55,6 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
-      const allowedTypes = [
-        'video/mp4',
-        'video/avi',
-        'video/mov',
-        'video/wmv',
-        'video/flv',
-        'video/webm',
-        'video/mkv',
-        'video/3gp'
-      ];
-      
-      if (!allowedTypes.includes(file.type)) {
-        setError('Invalid file type. Please select a video file.');
-        return;
-      }
-
-      // Validate file size (2GB limit)
-      if (file.size > 2 * 1024 * 1024 * 1024) {
-        setError('File too large. Maximum size is 2GB.');
-        return;
-      }
-
       setSelectedFile(file);
       setError(null);
     }
@@ -77,85 +62,173 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    const sanitizedValue =
+      name === 'title' || name === 'description'
+        ? sanitizeAssetText(value)
+        : name === 'tags'
+        ? sanitizeAssetTags(value)
+        : value;
     setUploadData(prev => ({
       ...prev,
-      [name]: value
+      [name]: sanitizedValue
     }));
   };
 
+  // The parent keeps this component mounted and toggles isOpen, so state
+  // persists across opens. Reset it each time the modal is freshly opened
+  // so a prior upload's isUploading/selectedFile doesn't leak into a new session.
+  useEffect(() => {
+    if (isOpen) {
+      setUploadData({
+        title: '',
+        description: '',
+        category: 'other',
+        tags: '',
+        isForPremiere: false
+      });
+      setSelectedFile(null);
+      setError(null);
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [isOpen]);
+
+  // Setup UploadManager event listeners.
+  // Progress state is owned by the dashboard's floating panel — the modal
+  // doesn't subscribe to 'progress' to avoid showing stale state from an
+  // in-flight upload if the user reopens the modal while one is running.
+  useEffect(() => {
+    const offComplete = uploadManager.on('complete', (videoId: string) => {
+      onUploadComplete?.(videoId);
+      onUploadSuccess?.();
+    });
+
+    const offError = uploadManager.on('error', (error: string) => {
+      setError(error);
+      setIsUploading(false);
+    });
+
+    const offCancel = uploadManager.on('cancel', () => {
+      setIsUploading(false);
+      resetForm();
+      onClose();
+    });
+
+    return () => {
+      offComplete();
+      offError();
+      offCancel();
+    };
+  }, [onUploadComplete, onUploadSuccess, onClose]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
-    if (!selectedFile) {
-      setError('Please select a video file.');
+    // Validate all fields
+    const validationResult = validateVideoUpload({
+      title: uploadData.title,
+      description: uploadData.description,
+      category: uploadData.category,
+      tags: uploadData.tags,
+      file: selectedFile || undefined
+    });
+
+    if (validationResult) {
+      setError(validationResult);
       return;
     }
 
-    if (!uploadData.title.trim() || !uploadData.description.trim()) {
-      setError('Title and description are required.');
+    if (!selectedFile) {
+      setError('Please select a video file');
       return;
     }
 
     try {
-      setError(null);
-      
+      setIsUploading(true);
+
       // Notify parent that upload is starting
       onUploadStart?.();
-      
-      // Close modal immediately when upload starts
-      onClose();
 
-      // Upload with real progress tracking (0-90% for upload phase)
-      const response = await videoService.uploadVideo(
-        selectedFile, 
-        uploadData,
-        (progress) => {
-          // Progress is already scaled to 0-90% in videoService
-          onUploadProgress?.(progress);
-        }
-      );
-      
-      // Notify parent that upload is complete, pass videoId for polling
-      const videoId = response.data.video._id;
-      onUploadComplete?.(videoId);
-      
-      // Reset form
-      setUploadData({
-        title: '',
-        description: '',
-        category: 'other',
-        tags: '',
-        isForPremiere: false
-      });
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      // Use UploadManager for upload
+      await uploadManager.uploadVideo(selectedFile, uploadData);
       
     } catch (error: any) {
-      onUploadProgress?.(0);
-      setError(error.message || 'Upload failed. Please try again.');
+      // Error handling is done by UploadManager through events
+      console.error('Upload failed:', error);
+    }
+  };
+
+  const resetForm = () => {
+    setUploadData({
+      title: '',
+      description: '',
+      category: 'other',
+      tags: '',
+      isForPremiere: false
+    });
+    setSelectedFile(null);
+    setError(null);
+    setIsUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancel = () => {
+    if (isUploading) {
+      // Cancel upload through UploadManager
+      uploadManager.cancelUpload();
+    } else {
+      // Just close the modal if not uploading
+      resetForm();
+      onClose();
     }
   };
 
   const handleClose = () => {
-    if (!parentUploading) {
-      setUploadData({
-        title: '',
-        description: '',
-        category: 'other',
-        tags: '',
-        isForPremiere: false
-      });
-      setSelectedFile(null);
-      setError(null);
-      onUploadProgress?.(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      onClose();
-    }
+    handleCancel();
   };
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Disable body scroll
+      document.body.style.overflow = 'hidden';
+      
+      // Handle wheel events on the modal to prevent propagation
+      const handleWheel = (e: WheelEvent) => {
+        if (modalRef.current && modalRef.current.contains(e.target as Node)) {
+          // Allow scrolling within the modal
+          const modalContent = modalRef.current.querySelector('.overflow-y-auto') as HTMLElement;
+          if (modalContent) {
+            const { scrollTop, scrollHeight, clientHeight } = modalContent;
+            const isScrollingUp = e.deltaY < 0;
+            const isScrollingDown = e.deltaY > 0;
+            
+            // Prevent scroll propagation if at bounds
+            if ((isScrollingUp && scrollTop === 0) || (isScrollingDown && scrollTop + clientHeight >= scrollHeight)) {
+              e.preventDefault();
+            }
+          }
+        } else {
+          // Prevent scrolling outside modal
+          e.preventDefault();
+        }
+      };
+
+      // Add wheel event listener
+      document.addEventListener('wheel', handleWheel, { passive: false });
+      
+      return () => {
+        // Re-enable body scroll and remove event listener
+        document.body.style.overflow = '';
+        document.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [isOpen]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -174,13 +247,12 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
+      <div ref={modalRef} className="rounded-lg p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Upload Video</h2>
           <button
             onClick={handleClose}
-            disabled={parentUploading}
-            className="text-2xl disabled:opacity-50 hover:opacity-75"
+            className="text-2xl hover:opacity-75 transition-opacity"
             style={{ color: 'var(--color-text-secondary)' }}
           >
             ×
@@ -205,7 +277,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 type="file"
                 accept="video/*"
                 onChange={handleFileSelect}
-                disabled={parentUploading}
+                disabled={isUploading}
                 className="hidden"
               />
               {selectedFile ? (
@@ -248,22 +320,16 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
             </div>
           </div>
 
-          {/* Upload Progress - Always visible when uploading */}
+          {/* Progress for an in-flight upload is shown by the dashboard's
+              floating panel — don't duplicate it inside the modal form. */}
           {parentUploading && (
-            <div className="mb-4">
-              <div className="flex justify-between text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                <span className="font-medium">Uploading video...</span>
-                <span className="font-semibold">{Math.round(parentUploadProgress)}%</span>
-              </div>
-              <div className="w-full rounded-full h-3 overflow-hidden" style={{ backgroundColor: 'var(--color-hover)' }}>
-                <div
-                  className="h-3 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.max(0, Math.min(100, parentUploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
-                ></div>
-              </div>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Please wait while your video is being uploaded. Do not close this window.
-              </p>
+            <div className="flex items-start gap-2 p-3 rounded-md text-sm bg-blue-500/10 ring-1 ring-blue-500/30" style={{ color: 'var(--color-text)' }}>
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                <strong className="text-blue-300">Note:</strong> Please upload one video at a time. Starting a new upload will cancel the video already in progress.
+              </span>
             </div>
           )}
 
@@ -278,8 +344,9 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               name="title"
               value={uploadData.title}
               onChange={handleInputChange}
+              maxLength={MAX_ASSET_TITLE_LENGTH}
               required
-              disabled={parentUploading}
+              disabled={isUploading}
               className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
               style={{ 
                 backgroundColor: 'var(--color-hover)',
@@ -301,8 +368,9 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               name="description"
               value={uploadData.description}
               onChange={handleInputChange}
+              maxLength={MAX_ASSET_DESCRIPTION_LENGTH}
               required
-              disabled={parentUploading}
+              disabled={isUploading}
               rows={4}
               className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
               style={{ 
@@ -318,14 +386,14 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
           {/* Category */}
           <div>
             <label htmlFor="category" className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-              Category
+              Category *
             </label>
             <select
               id="category"
               name="category"
               value={uploadData.category}
               onChange={handleInputChange}
-              disabled={parentUploading}
+              disabled={isUploading}
               className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
               style={{ 
                 backgroundColor: 'var(--color-hover)',
@@ -354,7 +422,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   name="isForPremiere"
                   checked={!uploadData.isForPremiere}
                   onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: false }))}
-                  disabled={parentUploading}
+                  disabled={isUploading}
                   className="w-4 h-4 disabled:opacity-50"
                   style={{ 
                     accentColor: 'var(--color-accent)'
@@ -371,7 +439,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   name="isForPremiere"
                   checked={uploadData.isForPremiere === true}
                   onChange={() => setUploadData(prev => ({ ...prev, isForPremiere: true }))}
-                  disabled={parentUploading}
+                  disabled={isUploading}
                   className="w-4 h-4 disabled:opacity-50"
                   style={{ 
                     accentColor: 'var(--color-accent)'
@@ -396,7 +464,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               name="tags"
               value={uploadData.tags}
               onChange={handleInputChange}
-              disabled={parentUploading}
+              disabled={isUploading}
               className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
               style={{ 
                 backgroundColor: 'var(--color-hover)',
@@ -415,20 +483,19 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
           <div className="flex space-x-4">
             <button
               type="button"
-              onClick={handleClose}
-              disabled={parentUploading}
-              className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+              onClick={handleCancel}
+              className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90"
               style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
             >
-              Cancel
+              {isUploading ? 'Cancel Upload' : 'Cancel'}
             </button>
             <button
               type="submit"
-              disabled={parentUploading || !selectedFile}
+              disabled={isUploading || !selectedFile}
               className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
-              {parentUploading ? 'Uploading...' : 'Upload Video'}
+              {isUploading ? 'Uploading...' : 'Upload Video'}
             </button>
           </div>
         </form>

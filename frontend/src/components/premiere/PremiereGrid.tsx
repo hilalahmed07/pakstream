@@ -6,9 +6,10 @@ import { formatVideoDuration } from '../../utils/videoUtils';
 interface PremiereGridProps {
   premieres: Premiere[];
   loading?: boolean;
+  onCardClick?: (premiere: Premiere) => void;
 }
 
-const PremiereGrid: React.FC<PremiereGridProps> = ({ premieres, loading }) => {
+const PremiereGrid: React.FC<PremiereGridProps> = ({ premieres, loading, onCardClick }) => {
   const getPremierePosterUrl = (premiere: Premiere): string => {
     if (!premiere.video?.processedFiles?.poster) {
       return '';
@@ -86,6 +87,15 @@ const PremiereGrid: React.FC<PremiereGridProps> = ({ premieres, loading }) => {
       {premieres.map((premiere) => (
         <div
           key={premiere._id}
+          role={onCardClick ? 'button' : undefined}
+          tabIndex={onCardClick ? 0 : undefined}
+          onClick={() => onCardClick?.(premiere)}
+          onKeyDown={(e) => {
+            if (onCardClick && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              onCardClick(premiere);
+            }
+          }}
           className="group bg-card rounded-lg overflow-hidden hover:scale-105 hover:bg-card-hover transition-all duration-300 cursor-pointer"
         >
           {/* Poster Image */}

@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Video } from '../../types/video';
 import videoService from '../../services/videoService';
+import uploadManager, { UploadProgress } from '../../services/uploadManager';
+import { useNotification } from '../../contexts/NotificationContext';
 import VideoGrid from './VideoGrid';
 import VideoUploadModal from './VideoUploadModal';
 import VideoVerificationModal from './VideoVerificationModal';
 import Pagination from '../common/Pagination';
 import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
-import { useNotification } from '../../contexts/NotificationContext';
+import {
+  validateVideoUpload,
+  MAX_ASSET_TITLE_LENGTH,
+  MAX_ASSET_DESCRIPTION_LENGTH,
+  sanitizeAssetText,
+  sanitizeAssetTags,
+} from '../../utils/assetValidation';
+
+const requiredLabelClass = 'ml-1';
 
 const AdminVideoDashboard: React.FC = () => {
   const { showError } = useNotification();
@@ -15,8 +25,13 @@ const AdminVideoDashboard: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(() => uploadManager.isUploadInProgress());
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSpeed, setUploadSpeed] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [uploadedSize, setUploadedSize] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'processing' | 'completed' | 'error' | 'cancelled'>('uploading');
+  const [processingMessage, setProcessingMessage] = useState<string>('');
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<Video | null>(null);
@@ -34,6 +49,8 @@ const AdminVideoDashboard: React.FC = () => {
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
   const [loadingLikes, setLoadingLikes] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [videoToEdit, setVideoToEdit] = useState<Video | null>(null);
 
   const fetchVideos = async () => {
     try {
@@ -62,70 +79,67 @@ const AdminVideoDashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, currentPage]);
 
+  // If a video is still processing (e.g. the user refreshed the page during
+  // processing), re-attach the progress panel to it. resumeProcessing is
+  // idempotent so this is safe to run on every videos change.
+  useEffect(() => {
+    const processingVideo = videos.find(v => v.status === 'processing');
+    if (processingVideo) {
+      uploadManager.resumeProcessing(processingVideo._id);
+    }
+  }, [videos]);
+
+  // Setup UploadManager event listeners
+  useEffect(() => {
+    const offProgress = uploadManager.on('progress', (progress: UploadProgress) => {
+      setUploadProgress(progress.progress);
+      setUploadSpeed(progress.speed);
+      setTimeRemaining(progress.timeRemaining);
+      setUploadedSize(progress.uploadedBytes);
+      setUploadStatus(progress.status);
+      setProcessingMessage(progress.message || '');
+      setUploading(progress.status === 'uploading' || progress.status === 'processing');
+
+      if (progress.status === 'completed' || progress.status === 'error' || progress.status === 'cancelled') {
+        fetchVideos();
+      }
+    });
+
+    const offComplete = uploadManager.on('complete', (videoId: string) => {
+      handleUploadComplete(videoId);
+    });
+
+    const offError = uploadManager.on('error', (error: string) => {
+      showError(error);
+      setUploading(false);
+    });
+
+    const offCancel = uploadManager.on('cancel', () => {
+      setUploading(false);
+    });
+
+    return () => {
+      offProgress();
+      offComplete();
+      offError();
+      offCancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showError]);
+
   const handleUploadStart = () => {
     setUploading(true);
     setUploadProgress(0);
     setShowUploadModal(false);
   };
 
-  const handleUploadProgress = (progress: number) => {
-    setUploadProgress(progress);
+  const handleUploadProgress = () => {
+    // Progress is handled by UploadManager events
   };
 
   const handleUploadComplete = (videoId: string) => {
-    let pollCount = 0;
-    const maxPolls = 120;
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        pollCount++;
-        const updatedVideos = await videoService.getAdminVideos({
-          ...filter,
-          page: currentPage,
-          // limit: 10 for testing
-          limit: 4
-        });
-        const uploadedVideo = updatedVideos.data.videos.find(
-          v => v._id === videoId
-        );
-        
-        if (uploadedVideo) {
-          setVideos(updatedVideos.data.videos);
-          
-          if (uploadedVideo.status === 'ready' || uploadedVideo.status === 'error' || uploadedVideo.status === 'failed') {
-            clearInterval(pollInterval);
-            setUploadProgress(100);
-            setTimeout(() => {
-              setUploading(false);
-              setUploadProgress(0);
-            }, 1000);
-            return;
-          }
-          
-          if (uploadedVideo.processingProgress !== undefined) {
-            const processingProgressScaled = 90 + (uploadedVideo.processingProgress * 0.1);
-            setUploadProgress(processingProgressScaled);
-          } else {
-            setUploadProgress(90);
-          }
-        }
-        
-        if (pollCount >= maxPolls) {
-          clearInterval(pollInterval);
-          setUploading(false);
-          setUploadProgress(0);
-          fetchVideos();
-        }
-      } catch (error) {
-        console.error('Error polling video status:', error);
-      }
-    }, 5000);
-    
-    fetchVideos();
-  };
-
-  const handleUploadSuccess = () => {
-    fetchVideos();
+    // Processing is handled by UploadManager
+    console.log('Upload completed for video:', videoId);
   };
 
   const handleVideoClick = (video: Video) => {
@@ -141,21 +155,49 @@ const AdminVideoDashboard: React.FC = () => {
     setShowDeleteModal(true);
   };
 
+  const handleEditClick = (video: Video) => {
+    setVideoToEdit(video);
+    setShowEditModal(true);
+  };
+
+  const handleEditSave = async (videoId: string, payload: { title: string; description: string; category: Video['category']; tags: string[] }) => {
+    try {
+      console.log('[handleEditSave] Updating video with payload:', { videoId, payload });
+      await videoService.updateVideo(videoId, payload);
+      console.log('[handleEditSave] Video updated successfully');
+      setShowEditModal(false);
+      setVideoToEdit(null);
+      await fetchVideos();
+    } catch (error) {
+      console.error('[handleEditSave] Failed to update video:', error);
+      console.error('[handleEditSave] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : 'N/A',
+      });
+      throw error;
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (!videoToDelete) return;
 
     try {
       setDeleting(true);
       await videoService.deleteVideo(videoToDelete._id);
-      setVideos(prev => prev.filter(v => v._id !== videoToDelete._id));
       setShowDeleteModal(false);
       setVideoToDelete(null);
       console.log('Video deleted successfully by administrator');
+      // Refetch videos to update pagination and fill the gap with next page videos
+      fetchVideos();
     } catch (error) {
       console.error('Failed to delete video:', error);
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleUploadSuccess = () => {
+    fetchVideos();
   };
 
   const handleDeleteCancel = () => {
@@ -225,17 +267,8 @@ const AdminVideoDashboard: React.FC = () => {
     <ProtectedRoute requireAdmin>
       <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-                Admin Video Management
-              </h1>
-              <p style={{ color: 'var(--color-text-secondary)' }}>
-                Administrators can manage and verify all videos
-              </p>
-            </div>
-            {activeTab === 'videos' && (
+          {activeTab === 'videos' && (
+            <div className="flex justify-end mb-6">
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
@@ -243,8 +276,8 @@ const AdminVideoDashboard: React.FC = () => {
               >
                 Upload Video
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Tab Navigation */}
           <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -276,23 +309,46 @@ const AdminVideoDashboard: React.FC = () => {
           {activeTab === 'videos' && (
             <div className="space-y-6">
               
-              {/* Upload Progress */}
-              {uploading && (
-                <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span style={{ color: 'var(--color-text)' }}>Uploading video...</span>
-                    <span style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
+              {/* Show the floating panel only during the processing phase.
+                  The upload phase is handled by the modal; we skip showing a
+                  second panel for it to keep the UI clean. */}
+              {uploadStatus === 'processing' && (
+                <div className="fixed top-4 right-4 z-50 rounded-lg p-4 shadow-lg" style={{ backgroundColor: 'var(--color-secondary)', minWidth: '320px' }}>
+                  <div className="flex items-center mb-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-3" style={{ borderColor: 'var(--color-accent)' }}></div>
+                    <span style={{ color: 'var(--color-text)' }}>Processing video...</span>
+                    <span className="ml-2 font-semibold" style={{ color: 'var(--color-accent)' }}>{Math.round(uploadProgress)}%</span>
                   </div>
-                  <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
+                  <div className="w-full rounded-full h-2 overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-hover)' }}>
                     <div
-                      className="h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
-                    />
+                      className="h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
+                    ></div>
                   </div>
+
+                  <div className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+                    <div>
+                      <span className="font-medium">Stage:</span>
+                      <span className="ml-1" style={{ color: 'var(--color-accent)' }}>
+                        {processingMessage || 'Starting processing...'}
+                      </span>
+                    </div>
+                    <div className="mt-1 opacity-75">
+                      Encoding HLS variants. This can take a few minutes depending on video length.
+                    </div>
+                  </div>
+
+                  <button
+                    disabled
+                    className="w-full px-3 py-2 rounded text-sm opacity-50 cursor-not-allowed"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    Processing — please wait
+                  </button>
                 </div>
               )}
 
-              {/* Admin Notice */}
+              {/* Admin Notice
               <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgb(202, 138, 4)' }}>
                 <div className="flex items-center">
                   <div className="text-yellow-400 text-xl mr-3">⚠️</div>
@@ -303,7 +359,7 @@ const AdminVideoDashboard: React.FC = () => {
                     </p>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -401,7 +457,9 @@ const AdminVideoDashboard: React.FC = () => {
                 loading={loading}
                 onVideoClick={handleVideoClick}
                 onDeleteClick={handleDeleteClick}
+                onEditClick={handleEditClick}
                 showDeleteButton={true}
+                showEditButton={true}
                 onLikesCountClick={handleLikesCountClick}
               />
               <Pagination
@@ -463,17 +521,28 @@ const AdminVideoDashboard: React.FC = () => {
                     {/* Admin Actions */}
                     <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
                       <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Administrator Actions</h3>
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={() => {
-                            handleDeleteClick(selectedVideo);
-                            handleCloseVideo();
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
-                        >
-                          🗑️ Delete Video (Admin Only)
-                        </button>
-                      </div>
+                      {selectedVideo.status === 'ready' && (
+                        <div className="flex space-x-4">
+                          <button
+                            onClick={() => {
+                              handleEditClick(selectedVideo);
+                              handleCloseVideo();
+                            }}
+                            className="px-4 py-2 rounded-lg border text-blue-400 border-blue-400 hover:bg-blue-400/10 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDeleteClick(selectedVideo);
+                              handleCloseVideo();
+                            }}
+                            className="px-4 py-2 rounded-lg border text-red-400 border-red-400 hover:bg-red-400/10 transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                       <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                         Only administrators can delete videos. Regular users cannot delete any videos.
                       </p>
@@ -538,6 +607,18 @@ const AdminVideoDashboard: React.FC = () => {
                 onClose={() => setLikesModalOpen(false)}
               />
 
+              {/* Edit Video Modal */}
+              {showEditModal && videoToEdit && (
+                <VideoEditModal
+                  video={videoToEdit}
+                  onClose={() => {
+                    setShowEditModal(false);
+                    setVideoToEdit(null);
+                  }}
+                  onSave={handleEditSave}
+                />
+              )}
+
               {/* Upload Modal */}
               <VideoUploadModal
                 isOpen={showUploadModal}
@@ -547,7 +628,6 @@ const AdminVideoDashboard: React.FC = () => {
                 onUploadProgress={handleUploadProgress}
                 onUploadComplete={handleUploadComplete}
                 uploading={uploading}
-                uploadProgress={uploadProgress}
               />
             </div>
           )}
@@ -619,33 +699,33 @@ const AdminVideoDashboard: React.FC = () => {
                               <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{video.description.substring(0, 60)}...</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                video.status === 'ready' ? 'bg-green-900 text-green-200' :
-                                video.status === 'processing' ? 'bg-yellow-900 text-yellow-200' :
-                                'bg-red-900 text-red-200'
+                              <span className={`px-2.5 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ring-1 ${
+                                video.status === 'ready' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' :
+                                video.status === 'processing' ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40' :
+                                'bg-rose-500/15 text-rose-300 ring-rose-500/40'
                               }`}>
                                 {video.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               {video.sha256Hash ? (
-                                <div className="text-xs font-mono max-w-xs truncate" style={{ color: 'var(--color-text-secondary)' }} title={video.sha256Hash}>
+                                <div className="text-sm font-mono max-w-xs truncate" style={{ color: 'var(--color-text)' }} title={video.sha256Hash}>
                                   {video.sha256Hash.substring(0, 16)}...
                                 </div>
                               ) : (
-                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
+                                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               {video.status === 'ready' && video.sha256Hash ? (
                                 <button
                                   onClick={() => handleVerifyClick(video)}
-                                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 hover:bg-blue-500/25 transition-all shadow-sm hover:shadow-md active:shadow-sm"
                                 >
                                   Verify
                                 </button>
                               ) : (
-                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                                   {video.status !== 'ready' ? 'Not ready' : 'No hash'}
                                 </span>
                               )}
@@ -691,6 +771,201 @@ const AdminVideoDashboard: React.FC = () => {
         </div>
       </div>
     </ProtectedRoute>
+  );
+};
+
+interface VideoEditModalProps {
+  video: Video;
+  onClose: () => void;
+  onSave: (videoId: string, payload: { title: string; description: string; category: Video['category']; tags: string[] }) => Promise<void>;
+}
+
+type VideoEditFormData = {
+  title: string;
+  description: string;
+  category: Video['category'];
+  tags: string;
+};
+
+const VideoEditModal: React.FC<VideoEditModalProps> = ({ video, onClose, onSave }) => {
+  const { showError, showSuccess } = useNotification();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<VideoEditFormData>({
+    title: video.title,
+    description: video.description,
+    category: video.category,
+    tags: video.tags.join(', '),
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const validationMessage = validateVideoUpload({
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      tags: formData.tags,
+    });
+
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const payload: { title: string; description: string; category: Video['category']; tags: string[] } = {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        tags: formData.tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      };
+      await onSave(video._id, payload);
+      showSuccess('Video updated successfully');
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : 'Failed to update video';
+      setError(message);
+      showError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Edit Video</h2>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="text-2xl hover:opacity-75 disabled:opacity-50 transition-opacity"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            ×
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 rounded mb-4" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgb(239, 68, 68)', color: 'var(--color-text)' }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Title<span className={requiredLabelClass}>*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData((prev) => ({ ...prev, title: sanitizeAssetText(e.target.value) }))}
+              maxLength={MAX_ASSET_TITLE_LENGTH}
+              required
+              disabled={saving}
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)',
+              } as React.CSSProperties}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Description<span className={requiredLabelClass}>*</span>
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData((prev) => ({ ...prev, description: sanitizeAssetText(e.target.value) }))}
+              maxLength={MAX_ASSET_DESCRIPTION_LENGTH}
+              required
+              rows={4}
+              disabled={saving}
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)',
+              } as React.CSSProperties}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Category<span className={requiredLabelClass}>*</span>
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value as Video['category'] }))}
+              disabled={saving}
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)',
+              } as React.CSSProperties}
+            >
+              <option value="movie">Movie</option>
+              <option value="tv-show">TV Show</option>
+              <option value="documentary">Documentary</option>
+              <option value="short-film">Short Film</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Tags
+            </label>
+            <input
+              type="text"
+              value={formData.tags}
+              onChange={(e) => setFormData((prev) => ({ ...prev, tags: sanitizeAssetTags(e.target.value) }))}
+              disabled={saving}
+              className="w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-hover)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                '--tw-ring-color': 'var(--color-accent)',
+              } as React.CSSProperties}
+              placeholder="action, thriller, drama"
+            />
+          </div>
+
+          <div className="flex space-x-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 };
 

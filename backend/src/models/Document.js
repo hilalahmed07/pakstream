@@ -1,17 +1,21 @@
 const mongoose = require('mongoose');
 
+const DOCUMENT_TITLE_MAX_LENGTH = 90;
+const DOCUMENT_DESCRIPTION_MAX_LENGTH = 180;
+const DOCUMENT_MAX_TAGS = 3;
+
 const documentSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
     trim: true,
-    maxlength: 200
+    maxlength: DOCUMENT_TITLE_MAX_LENGTH
   },
   description: {
     type: String,
     required: true,
     trim: true,
-    maxlength: 1000
+    maxlength: DOCUMENT_DESCRIPTION_MAX_LENGTH
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -54,7 +58,15 @@ const documentSchema = new mongoose.Schema({
     enum: ['academic', 'business', 'legal', 'technical', 'other'],
     default: 'other'
   },
-  tags: [String],
+  tags: {
+    type: [String],
+    validate: {
+      validator: function validateTags(tags) {
+        return !Array.isArray(tags) || tags.length <= DOCUMENT_MAX_TAGS;
+      },
+      message: `A document can have at most ${DOCUMENT_MAX_TAGS} tags`,
+    },
+  },
   isPublic: {
     type: Boolean,
     default: true
@@ -89,4 +101,3 @@ documentSchema.index({ status: 1 });
 documentSchema.index({ isPublic: 1 });
 
 module.exports = mongoose.model('Document', documentSchema);
-

@@ -19,16 +19,18 @@ class VideoService {
     };
 
     try {
+      console.log(`[VideoService] ${options.method || 'GET'} ${endpoint}`, options.body ? JSON.parse(options.body as string) : '');
       const response = await fetch(url, config);
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        console.error(`[VideoService] Error response (${response.status}):`, data);
+        throw new Error(data.message || `Request failed with status ${response.status}`);
       }
 
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('VideoService API request failed:', error);
       throw error;
     }
   }
@@ -36,7 +38,8 @@ class VideoService {
   async uploadVideo(
     videoFile: File,
     uploadData: VideoUploadData,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    abortController?: AbortController
   ): Promise<VideoResponse> {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
@@ -53,45 +56,32 @@ class VideoService {
       const url = `${API_BASE_URL}/videos/upload`;
       const token = localStorage.getItem('token');
 
-      let lastProgress = 0;
-      let progressInterval: NodeJS.Timeout | null = null;
+      
+      // Handle abort signal
+      if (abortController) {
+        abortController.signal.addEventListener('abort', () => {
+          xhr.abort();
+          reject(new Error('Upload cancelled by user'));
+        });
+      }
 
       // Track upload progress
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) {
           const percentComplete = (e.loaded / e.total) * 100;
           const progress = Math.min(100, Math.max(0, percentComplete));
-          lastProgress = progress;
-          // Scale to 0-90% for upload phase
-          onProgress(progress * 0.9);
+          onProgress(progress);
         }
       };
 
-      // Fallback for Chrome - force progress updates if no events for a while
-      if (onProgress) {
-        progressInterval = setInterval(() => {
-          if (xhr.readyState < 4 && lastProgress < 90) {
-            // If we haven't received progress in a while, increment slightly
-            // This helps Chrome show progress even if events are delayed
-            const estimatedProgress = Math.min(90, lastProgress + 0.5);
-            onProgress(estimatedProgress * 0.9);
-          }
-        }, 500);
-      }
-
       // Handle completion
       xhr.onload = () => {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
-
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
-            // Don't set to 100% here - let the component handle the transition
-            // Upload phase is 0-90%, processing will be 90-100%
+            // Set to 100% when upload completes
             if (onProgress) {
-              onProgress(90); // Set to 90% when upload completes, processing will take it to 100%
+              onProgress(100);
             }
             resolve(data);
           } catch (error) {
@@ -109,17 +99,11 @@ class VideoService {
 
       // Handle errors
       xhr.onerror = () => {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
         reject(new Error('Network error during upload'));
       };
 
       // Handle abort
       xhr.onabort = () => {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
         reject(new Error('Upload was cancelled'));
       };
 

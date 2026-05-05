@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+const PREMIERE_TITLE_MAX_LENGTH = 90;
+const PREMIERE_DESCRIPTION_MAX_LENGTH = 180;
+
 const premiereSchema = new mongoose.Schema({
   video: {
     type: mongoose.Schema.Types.ObjectId,
@@ -8,11 +11,13 @@ const premiereSchema = new mongoose.Schema({
   },
   title: {
     type: String,
-    required: true
+    required: true,
+    maxlength: PREMIERE_TITLE_MAX_LENGTH
   },
   description: {
     type: String,
-    default: ''
+    default: '',
+    maxlength: PREMIERE_DESCRIPTION_MAX_LENGTH
   },
   startTime: {
     type: Date,

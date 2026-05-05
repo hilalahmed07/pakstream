@@ -7,8 +7,47 @@ const fsSync = require('fs');
 const Download = require('../models/Download');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
+const { ensureUniqueTitle } = require('../utils/uniqueTitle');
 
 const presentationProcessor = new PresentationProcessor();
+const PRESENTATION_TITLE_MAX = 90;
+const PRESENTATION_DESCRIPTION_MAX = 180;
+const PRESENTATION_MAX_TAGS = 3;
+
+const parsePresentationTags = (tags) => {
+  const rawTags = Array.isArray(tags) ? tags : String(tags || '').split(',');
+  return rawTags
+    .map((tag) => String(tag).trim())
+    .filter(Boolean);
+};
+
+const validatePresentationPayload = ({ title, description, tags }) => {
+  const trimmedTitle = String(title || '').trim();
+  const trimmedDescription = String(description || '').trim();
+  const normalizedTags = parsePresentationTags(tags);
+
+  if (!trimmedTitle || !trimmedDescription) {
+    return { message: 'Title and description are required' };
+  }
+
+  if (trimmedTitle.length > PRESENTATION_TITLE_MAX) {
+    return { message: `Title must be ${PRESENTATION_TITLE_MAX} characters or fewer` };
+  }
+
+  if (trimmedDescription.length > PRESENTATION_DESCRIPTION_MAX) {
+    return { message: `Description must be ${PRESENTATION_DESCRIPTION_MAX} characters or fewer` };
+  }
+
+  if (normalizedTags.length > PRESENTATION_MAX_TAGS) {
+    return { message: `You can add up to ${PRESENTATION_MAX_TAGS} tags only` };
+  }
+
+  return {
+    title: trimmedTitle,
+    description: trimmedDescription,
+    tags: normalizedTags,
+  };
+};
 
 // Upload presentation
 const uploadPresentation = async (req, res) => {
@@ -19,6 +58,15 @@ const uploadPresentation = async (req, res) => {
 
     const { title, description, category = 'other', tags = [] } = req.body;
     const userId = req.user.id;
+    const validatedPayload = validatePresentationPayload({ title, description, tags });
+
+    if (validatedPayload.message) {
+      return res.status(400).json({ message: validatedPayload.message });
+    }
+
+    const resolvedTitle = await ensureUniqueTitle(Presentation, validatedPayload.title, {
+      maxLength: PRESENTATION_TITLE_MAX,
+    });
 
     // Calculate SHA-256 hash of the uploaded file
     let sha256Hash = null;
@@ -32,8 +80,8 @@ const uploadPresentation = async (req, res) => {
 
     // Create presentation record
     const presentation = new Presentation({
-      title,
-      description,
+      title: resolvedTitle,
+      description: validatedPayload.description,
       uploadedBy: userId,
       originalFile: {
         filename: req.file.filename,
@@ -42,7 +90,7 @@ const uploadPresentation = async (req, res) => {
         mimetype: req.file.mimetype
       },
       category,
-      tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
+      tags: validatedPayload.tags,
       sha256Hash: sha256Hash
     });
 
@@ -442,17 +490,41 @@ const getPresentationThumbnail = async (req, res) => {
 // Get admin presentations
 const getAdminPresentations = async (req, res) => {
   try {
-    // const { page = 1, limit = 10 } = req.query;  for testing
-    const { page = 1, limit = 4 } = req.query;
+    const { page = 1, limit = 4, category, status, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const query = {};
 
-    const presentations = await Presentation.find()
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    if (search && String(search).trim()) {
+      const normalizedSearch = String(search).trim();
+      const searchRegex = new RegExp(normalizedSearch, 'i');
+      const searchConditions = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: { $in: [searchRegex] } },
+      ];
+
+      if (/^[0-9a-fA-F]{24}$/.test(normalizedSearch)) {
+        searchConditions.push({ _id: normalizedSearch });
+      }
+
+      query.$or = searchConditions;
+    }
+
+    const presentations = await Presentation.find(query)
       .populate('uploadedBy', 'username email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Presentation.countDocuments();
+    const total = await Presentation.countDocuments(query);
 
     res.json({
       presentations,
@@ -505,19 +577,49 @@ const updatePresentation = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, tags, isPublic } = req.body;
+    const update = {
+      updatedAt: new Date(),
+    };
 
-    const presentation = await Presentation.findByIdAndUpdate(
-      id,
-      {
-        title,
-        description,
-        category,
-        tags: Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim()),
-        isPublic,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).populate('uploadedBy', 'username email');
+    if (typeof title === 'string' && title.trim()) {
+      if (title.trim().length > PRESENTATION_TITLE_MAX) {
+        return res.status(400).json({ message: `Title must be ${PRESENTATION_TITLE_MAX} characters or fewer` });
+      }
+
+      update.title = await ensureUniqueTitle(Presentation, title.trim(), {
+        excludeId: id,
+        maxLength: PRESENTATION_TITLE_MAX,
+      });
+    }
+    if (description !== undefined) {
+      const trimmedDescription = String(description).trim();
+
+      if (!trimmedDescription) {
+        return res.status(400).json({ message: 'Description is required' });
+      }
+
+      if (trimmedDescription.length > PRESENTATION_DESCRIPTION_MAX) {
+        return res.status(400).json({ message: `Description must be ${PRESENTATION_DESCRIPTION_MAX} characters or fewer` });
+      }
+
+      update.description = trimmedDescription;
+    }
+    if (category !== undefined) update.category = category;
+    if (tags !== undefined) {
+      const normalizedTags = parsePresentationTags(tags);
+
+      if (normalizedTags.length > PRESENTATION_MAX_TAGS) {
+        return res.status(400).json({ message: `You can add up to ${PRESENTATION_MAX_TAGS} tags only` });
+      }
+
+      update.tags = normalizedTags;
+    }
+    if (isPublic !== undefined) update.isPublic = isPublic;
+
+    const presentation = await Presentation.findByIdAndUpdate(id, update, { new: true }).populate(
+      'uploadedBy',
+      'username email'
+    );
 
     if (!presentation) {
       return res.status(404).json({ message: 'Presentation not found' });

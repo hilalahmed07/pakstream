@@ -31,14 +31,24 @@ class PresentationService {
   }
 
   downloadPresentation = async (id: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required to download presentations');
+    }
+
     const response = await fetch(`${API_BASE_URL}/presentations/${id}/download`, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
-    if (!response.ok) throw new Error('Failed to download');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        typeof errorData.message === 'string' ? errorData.message : 'Failed to download presentation'
+      );
+    }
 
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
@@ -144,10 +154,19 @@ class PresentationService {
     });
   }
 
-  async getAdminPresentations(params?: { page?: number; limit?: number }): Promise<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }> {
+  async getAdminPresentations(params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    status?: string;
+    search?: string;
+  }): Promise<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
     const queryString = queryParams.toString();
     return this.request<{ presentations: Presentation[]; pagination: { current: number; pages: number; total: number } }>(
       `/presentations/admin/all${queryString ? `?${queryString}` : ''}`

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../../types/user';
+import { PASSWORD_MESSAGE, isStrongPassword } from '../../utils/userValidation';
 
 interface ResetPasswordModalProps {
   isOpen: boolean;
@@ -18,8 +19,8 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
     e.preventDefault();
     setError('');
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters long');
+    if (!isStrongPassword(newPassword)) {
+      setError(PASSWORD_MESSAGE);
       return;
     }
 
@@ -87,8 +88,8 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
                 color: 'var(--color-text)'
               }}
               required
-              minLength={6}
-              placeholder="Minimum 6 characters"
+              minLength={8}
+              placeholder="Min 8 chars with upper/lower/number/special"
             />
           </div>
 
@@ -107,7 +108,7 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
                 color: 'var(--color-text)'
               }}
               required
-              minLength={6}
+              minLength={8}
               placeholder="Re-enter password"
             />
           </div>

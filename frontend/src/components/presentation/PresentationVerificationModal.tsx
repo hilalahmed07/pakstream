@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import presentationService from '../../services/presentationService';
 import { Presentation } from '../../types/presentation';
 import { calculateFileHash, isCryptoSubtleAvailable } from '../../utils/hashUtils';
+import { useNotification } from '../../contexts/NotificationContext';
 
 interface PresentationVerificationModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ const PresentationVerificationModal: React.FC<PresentationVerificationModalProps
   onClose,
   presentation
 }) => {
+  const { showSuccess, showError } = useNotification();
   const [verificationMethod, setVerificationMethod] = useState<'file' | 'hash'>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [calculatedHash, setCalculatedHash] = useState<string | null>(null);
@@ -133,8 +135,14 @@ const PresentationVerificationModal: React.FC<PresentationVerificationModalProps
     onClose();
   };
 
-  const copyHashToClipboard = (hash: string) => {
-    navigator.clipboard.writeText(hash);
+  const copyHashToClipboard = async (hash: string) => {
+    try {
+      await navigator.clipboard.writeText(hash);
+      showSuccess('Hash copied to clipboard');
+    } catch (clipboardError) {
+      console.error('Failed to copy hash:', clipboardError);
+      showError('Failed to copy hash');
+    }
   };
 
   if (!isOpen || !presentation) return null;
@@ -188,7 +196,7 @@ const PresentationVerificationModal: React.FC<PresentationVerificationModalProps
                   </code>
                   <button
                     onClick={() => copyHashToClipboard(presentationHash)}
-                    className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-500 transition-colors"
+                    className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-500 transition-all shadow-md hover:shadow-lg active:shadow-sm"
                     title="Copy hash"
                   >
                     Copy

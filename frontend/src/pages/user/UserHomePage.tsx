@@ -10,6 +10,7 @@ import DocumentViewer from '../../components/document/DocumentViewer';
 import LivePremiere from '../../components/premiere/LivePremiere';
 import ScheduledPremiere from '../../components/premiere/ScheduledPremiere';
 import PremiereGrid from '../../components/premiere/PremiereGrid';
+import PremiereDetailModal from '../../components/premiere/PremiereDetailModal';
 import VideoProcessingStatus from '../../components/video/VideoProcessingStatus';
 import Pagination from '../../components/common/Pagination';
 import videoService from '../../services/videoService';
@@ -54,6 +55,7 @@ const UserHomePage: React.FC = () => {
   const [premiereDismissed, setPremiereDismissed] = useState(false);
   const [upcomingPremieres, setUpcomingPremieres] = useState<Premiere[]>([]);
   const [premieresLoading, setPremieresLoading] = useState(false);
+  const [selectedPremiere, setSelectedPremiere] = useState<Premiere | null>(null);
   const reappearIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const activePremiereRef = useRef<Premiere | null>(null);
 
@@ -570,10 +572,18 @@ const UserHomePage: React.FC = () => {
               </h2>
               <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
             </div>
-            <PremiereGrid 
-              premieres={upcomingPremieres} 
+            <PremiereGrid
+              premieres={upcomingPremieres}
               loading={premieresLoading}
+              onCardClick={setSelectedPremiere}
             />
+            {selectedPremiere && (
+              <PremiereDetailModal
+                premiere={selectedPremiere}
+                onClose={() => setSelectedPremiere(null)}
+                onJoin={() => setSelectedPremiere(null)}
+              />
+            )}
           </div>
         </section>
       )}

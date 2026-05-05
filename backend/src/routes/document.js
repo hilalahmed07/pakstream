@@ -15,14 +15,14 @@ const {
   toggleDocumentLike,
   getDocumentLikedByUsers
 } = require('../controllers/documentController');
-const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, optionalAuth, authenticateWhenDocumentDownload } = require('../middleware/auth');
 const upload = require('../middleware/documentUpload');
 const { verificationUpload, handleUploadError } = require('../middleware/documentUpload');
 
 // Public routes (with optional auth to get user like status)
 router.get('/', optionalAuth, getDocuments);
 router.get('/:id', optionalAuth, getDocumentById);
-router.get('/:id/file', optionalAuth, getDocumentFile);
+router.get('/:id/file', authenticateWhenDocumentDownload, getDocumentFile);
 router.get('/:id/thumbnail', getDocumentThumbnail);
 router.get('/:id/hash', getDocumentHash); // Get document hash for manual verification
 // Only admins can see who liked a document

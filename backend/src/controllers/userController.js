@@ -1,5 +1,16 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
+const {
+  USERNAME_MESSAGE,
+  EMAIL_MESSAGE,
+  PASSWORD_MESSAGE,
+  normalizeUsername,
+  normalizeEmail,
+  normalizePassword,
+  isValidUsername,
+  isValidEmail,
+  isStrongPassword,
+} = require('../utils/validation');
 
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
@@ -102,30 +113,48 @@ const createUser = async (req, res) => {
       address
     } = req.body;
     
+    const normalizedUsername = normalizeUsername(username);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
+
     // Validation
-    if (!username || !email || !password) {
+    if (!normalizedUsername || !normalizedEmail || !normalizedPassword) {
       return res.status(400).json({
         success: false,
         message: 'Username, email, and password are required'
       });
     }
-    
-    if (password.length < 6) {
+
+    if (!isValidUsername(normalizedUsername)) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long'
+        message: USERNAME_MESSAGE
       });
     }
-    
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: EMAIL_MESSAGE
+      });
+    }
+
+    if (!isStrongPassword(normalizedPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_MESSAGE
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
     });
     
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email 
+        message: existingUser.email === normalizedEmail 
           ? 'Email already registered' 
           : 'Username already taken'
       });
@@ -133,9 +162,9 @@ const createUser = async (req, res) => {
     
     // Create new user
     const userData = {
-      username,
-      email,
-      password,
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: normalizedPassword,
       role,
       profile: profile || {},
       preferences: preferences || {}
@@ -191,9 +220,68 @@ const updateUser = async (req, res) => {
       });
     }
     
+    const normalizedUsername = username !== undefined ? normalizeUsername(username) : undefined;
+    const normalizedEmail = email !== undefined ? normalizeEmail(email) : undefined;
+
+    if (normalizedUsername !== undefined) {
+      if (!normalizedUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username cannot be empty'
+        });
+      }
+      if (!isValidUsername(normalizedUsername)) {
+        return res.status(400).json({
+          success: false,
+          message: USERNAME_MESSAGE
+        });
+      }
+    }
+
+    if (normalizedEmail !== undefined) {
+      if (!normalizedEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email cannot be empty'
+        });
+      }
+      if (!isValidEmail(normalizedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: EMAIL_MESSAGE
+        });
+      }
+    }
+
+    if (normalizedUsername !== undefined) {
+      const existingByUsername = await User.findOne({
+        username: normalizedUsername,
+        _id: { $ne: user._id }
+      });
+      if (existingByUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username already taken'
+        });
+      }
+    }
+
+    if (normalizedEmail !== undefined) {
+      const existingByEmail = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: user._id }
+      });
+      if (existingByEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already registered'
+        });
+      }
+    }
+
     // Update fields
-    if (username) user.username = username;
-    if (email) user.email = email;
+    if (normalizedUsername !== undefined) user.username = normalizedUsername;
+    if (normalizedEmail !== undefined) user.email = normalizedEmail;
     if (role) user.role = role;
     if (profile) user.profile = { ...user.profile, ...profile };
     if (preferences) user.preferences = { ...user.preferences, ...preferences };
@@ -228,11 +316,19 @@ const updateUser = async (req, res) => {
 const resetUserPassword = async (req, res) => {
   try {
     const { newPassword } = req.body;
-    
-    if (!newPassword || newPassword.length < 6) {
+    const normalizedNewPassword = normalizePassword(newPassword);
+
+    if (!normalizedNewPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long'
+        message: 'New password is required'
+      });
+    }
+
+    if (!isStrongPassword(normalizedNewPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_MESSAGE
       });
     }
     
@@ -246,7 +342,7 @@ const resetUserPassword = async (req, res) => {
     }
     
     // Set new password (will be hashed by pre-save hook)
-    user.password = newPassword;
+    user.password = normalizedNewPassword;
     await user.save();
     
     res.json({

@@ -344,15 +344,6 @@ const AdminDownloadDashboard: React.FC = () => {
                     >
                       Name {sortBy === 'user' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase" style={{ color: 'var(--color-text-secondary)' }}>
-                      Organization
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase" style={{ color: 'var(--color-text-secondary)' }}>
-                      Location
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase" style={{ color: 'var(--color-text-secondary)' }}>
-                      Contact Number
-                    </th>
                     <th
                       className="px-4 py-3 text-left text-xs font-medium uppercase cursor-pointer hover:opacity-80"
                       style={{ color: 'var(--color-text-secondary)' }}
@@ -366,9 +357,6 @@ const AdminDownloadDashboard: React.FC = () => {
                       onClick={() => handleSort('downloadedAt')}
                     >
                       Download Date {sortBy === 'downloadedAt' && (sortOrder === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase" style={{ color: 'var(--color-text-secondary)' }}>
-                      IP Address
                     </th>
                   </tr>
                 </thead>
@@ -385,21 +373,6 @@ const AdminDownloadDashboard: React.FC = () => {
                         <td className="px-4 py-3 text-sm">
                           <div className="font-medium" style={{ color: 'var(--color-text)' }}>{fullName}</div>
                           <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{download.user.email}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {download.user.organization || <span style={{ opacity: 0.5 }}>-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-sm max-w-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                          {download.user.address ? (
-                            <div className="truncate" title={download.user.address}>
-                              {download.user.address}
-                            </div>
-                          ) : (
-                            <span style={{ opacity: 0.5 }}>-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {download.user.contactNumber || <span style={{ opacity: 0.5 }}>-</span>}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {download.asset ? (
@@ -420,9 +393,6 @@ const AdminDownloadDashboard: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                           {formatDate(download.downloadedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {download.ipAddress || 'N/A'}
                         </td>
                       </tr>
                     );
