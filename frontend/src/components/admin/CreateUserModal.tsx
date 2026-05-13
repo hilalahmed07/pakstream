@@ -12,11 +12,17 @@ import {
   sanitizeUsernameInput,
   sanitizeEmailInput,
   sanitizeProfileTextInput,
+  sanitizeNameInput,
   isValidUsername,
   isValidEmail,
   isStrongPassword,
   isValidOrganization,
   isValidAddress,
+  isValidName,
+  BIO_MAX_LENGTH,
+  ADDRESS_MAX_LENGTH,
+  BIO_MESSAGE,
+  isValidBio,
 } from '../../utils/userValidation';
 
 interface CreateUserModalProps {
@@ -86,6 +92,28 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
     // Validate address if provided
     if (formData.address && !isValidAddress(formData.address)) {
       setError(ADDRESS_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    // Validate bio length
+    const bio = formData.profile?.bio || '';
+    if (bio && !isValidBio(bio)) {
+      setError(BIO_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    // Validate first/last name if provided
+    const first = formData.profile?.firstName || '';
+    const last = formData.profile?.lastName || '';
+    if (first && !isValidName(first)) {
+      setError('First name must contain only letters, spaces, hyphens, or apostrophes.');
+      setLoading(false);
+      return;
+    }
+    if (last && !isValidName(last)) {
+      setError('Last name must contain only letters, spaces, hyphens, or apostrophes.');
       setLoading(false);
       return;
     }
@@ -233,7 +261,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 value={formData.profile?.firstName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, firstName: sanitizeProfileTextInput(e.target.value) }
+                  profile: { ...formData.profile, firstName: sanitizeNameInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{
@@ -254,7 +282,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 value={formData.profile?.lastName || ''}
                 onChange={(e) => setFormData({
                   ...formData,
-                  profile: { ...formData.profile, lastName: sanitizeProfileTextInput(e.target.value) }
+                  profile: { ...formData.profile, lastName: sanitizeNameInput(e.target.value) }
                 })}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{
@@ -284,6 +312,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text)'
               }}
+              maxLength={BIO_MAX_LENGTH}
             />
           </div>
 
@@ -340,6 +369,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onSu
                 color: 'var(--color-text)'
               }}
               placeholder="Full address or location"
+              maxLength={ADDRESS_MAX_LENGTH}
             />
           </div>
 

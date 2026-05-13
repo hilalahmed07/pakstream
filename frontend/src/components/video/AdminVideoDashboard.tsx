@@ -635,12 +635,28 @@ const AdminVideoDashboard: React.FC = () => {
           {/* Verification Tab Content */}
           {activeTab === 'verification' && (
             <div>
-              <div className="rounded-lg p-4 mb-6" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgb(59, 130, 246)' }}>
-                <div className="flex items-center">
-                  <div className="text-blue-400 text-xl mr-3">🔒</div>
+              <div
+                className="rounded-lg p-4 mb-6"
+                style={{
+                  backgroundColor: 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.25)',
+                  boxShadow: '0 6px 18px rgba(59,130,246,0.06)',
+                  borderLeft: '6px solid #2563EB'
+                }}
+              >
+                <div className="flex items-start">
+                  <div className="mr-3 flex-shrink-0">
+                    <div
+                      className="flex items-center justify-center rounded-full h-8 w-8"
+                      style={{ backgroundColor: '#2563EB', color: '#fff' }}
+                      aria-hidden
+                    >
+                      🔒
+                    </div>
+                  </div>
                   <div>
-                    <h3 className="text-blue-400 font-semibold">Video Integrity Verification</h3>
-                    <p className="text-blue-200 text-sm">
+                    <h3 style={{ color: '#0f172a', fontWeight: 600 }}>Video Integrity Verification</h3>
+                    <p style={{ color: '#1e3a8a', fontSize: '0.9rem' }}>
                       Verify that downloaded video files match the original by comparing SHA-256 hashes.
                     </p>
                   </div>

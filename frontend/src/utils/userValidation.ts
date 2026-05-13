@@ -16,6 +16,17 @@ export const sanitizeEmailInput = (value: string): string => value.replace(/[^A-
 export const sanitizeProfileTextInput = (value: string): string => value.replace(/[^A-Za-z0-9\s]/g, '');
 export const sanitizeContactNumberInput = (value: string): string => value.replace(/\D/g, '');
 
+// Name validation and sanitization (first/last names)
+export const NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,50}$/;
+export const NAME_MESSAGE =
+  "Name must contain only letters, spaces, hyphens, or apostrophes, and be 1-50 characters.";
+export const sanitizeNameInput = (value: string): string => value.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ' -]/g, '');
+
+export const isValidName = (value: string): boolean => {
+  const trimmed = value.trim();
+  return trimmed.length === 0 || NAME_REGEX.test(trimmed);
+};
+
 export const isValidUsername = (value: string): boolean => USERNAME_REGEX.test(normalizeUsername(value));
 export const isValidEmail = (value: string): boolean => {
   const normalizedEmail = normalizeEmail(value);
@@ -38,5 +49,15 @@ export const isValidOrganization = (value: string): boolean => {
 
 export const isValidAddress = (value: string): boolean => {
   const trimmed = value.trim();
-  return trimmed.length === 0 || ADDRESS_REGEX.test(trimmed);
+  return trimmed.length === 0 || (trimmed.length <= 100 && ADDRESS_REGEX.test(trimmed));
+};
+
+// Bio and address length limits
+export const BIO_MAX_LENGTH = 100;
+export const ADDRESS_MAX_LENGTH = 100;
+export const BIO_MESSAGE = `Bio must be no more than ${BIO_MAX_LENGTH} characters.`;
+
+export const isValidBio = (value: string): boolean => {
+  const trimmed = value.trim();
+  return trimmed.length === 0 || trimmed.length <= BIO_MAX_LENGTH;
 };
