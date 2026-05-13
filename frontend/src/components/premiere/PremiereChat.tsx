@@ -28,6 +28,9 @@ const PremiereChat: React.FC<PremiereChatProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Defensive re-join for chat reliability (parent usually joins too).
+    socketService.joinPremiere(premiereId);
+
     const handlePremiereJoined = (data: any) => {
       if (Array.isArray(data?.chat)) {
         setMessages(data.chat);
@@ -53,11 +56,16 @@ const PremiereChat: React.FC<PremiereChatProps> = ({
     }
   }, [messages]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    socketService.sendMessage(premiereId, text, currentUsername);
+    socketService.joinPremiere(premiereId);
+    const ack = await socketService.sendMessageWithAck(premiereId, text, currentUsername);
+    if (!ack.ok) {
+      console.error('Chat send failed:', ack.error?.message || 'Unknown error');
+      return;
+    }
     setDraft('');
   };
 

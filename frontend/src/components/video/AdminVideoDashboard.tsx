@@ -521,7 +521,7 @@ const AdminVideoDashboard: React.FC = () => {
                     {/* Admin Actions */}
                     <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
                       <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Administrator Actions</h3>
-                      {selectedVideo.status === 'ready' && (
+                      {selectedVideo.status === 'ready' && selectedVideo.processingProgress === 100 && (
                         <div className="flex space-x-4">
                           <button
                             onClick={() => {

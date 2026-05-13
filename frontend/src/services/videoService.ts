@@ -384,21 +384,24 @@ class VideoService {
       const formData = new FormData();
       formData.append('video', file);
 
-      return this.request<{
-        success: boolean;
-        data: {
-          videoId: string;
-          title: string;
-          verified: boolean;
-          providedHash: string;
-          storedHash: string;
-          message: string;
-          verifiedAt: string;
-        };
-      }>(`/videos/${videoId}/verify`, {
+      const url = `${API_BASE_URL}/videos/${videoId}/verify`;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: formData,
       });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Verification failed');
+      }
+
+      return data;
     } else if (hash) {
       // Send hash string for verification
       return this.request<{

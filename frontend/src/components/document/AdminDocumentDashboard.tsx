@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Document, DocumentUploadData } from '../../types/document';
 import documentService from '../../services/documentService';
 import DocumentVerificationModal from './DocumentVerificationModal';
@@ -670,40 +670,72 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
     tags: ''
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setValidationError(null);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError(null);
+    fileInputRef.current?.setCustomValidity('');
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    const normalizedTitle = formData.title.trim();
+    const normalizedDescription = formData.description.trim();
+
+    if (!normalizedTitle) {
+      titleInputRef.current?.setCustomValidity('Title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Description is required.');
+      descriptionInputRef.current?.reportValidity();
+      return;
+    }
     
     // Validate all fields
     const validationResult = validateDocumentUpload({
-      title: formData.title,
-      description: formData.description,
+      title: normalizedTitle,
+      description: normalizedDescription,
       category: formData.category,
       tags: formData.tags,
       file: selectedFile || undefined
     });
 
     if (validationResult) {
-      setValidationError(validationResult);
+      if (!normalizedTitle || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedTitle ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedDescription || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedDescription ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (!selectedFile || validationResult.toLowerCase().includes('document file') || validationResult.toLowerCase().includes('file size')) {
+        fileInputRef.current?.setCustomValidity(!selectedFile ? 'Document file is required.' : validationResult);
+        fileInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
 
     if (!selectedFile) {
-      setValidationError('Please select a document file');
+      fileInputRef.current?.setCustomValidity('Document file is required.');
+      fileInputRef.current?.reportValidity();
       return;
     }
 
-    onUpload(selectedFile, formData);
+    onUpload(selectedFile, { ...formData, title: normalizedTitle, description: normalizedDescription });
   };
 
   return (
@@ -721,19 +753,6 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               ×
             </button>
           </div>
-
-          {validationError && (
-            <div
-              className="px-4 py-3 rounded mb-4"
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.45)',
-                color: '#dc2626',
-              }}
-            >
-              {validationError}
-            </div>
-          )}
 
           {uploading && (
             <div
@@ -769,9 +788,13 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 PDF Document<span className={requiredLabelClass}>*</span>
               </label>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".pdf,application/pdf"
-                onChange={handleFileSelect}
+                onChange={(e) => {
+                  handleFileSelect(e);
+                  e.currentTarget.setCustomValidity('');
+                }}
                 disabled={uploading}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50"
                 style={{ 
@@ -796,9 +819,16 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 Title<span className={requiredLabelClass}>*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Title is required.');
+                  }
+                }}
                 disabled={uploading}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
                 style={{ 
@@ -816,8 +846,15 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 Description<span className={requiredLabelClass}>*</span>
               </label>
               <textarea
+                ref={descriptionInputRef}
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Description is required.');
+                  }
+                }}
                 rows={3}
                 disabled={uploading}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
@@ -870,7 +907,6 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
 
                   if (normalizedTags.length <= MAX_DOCUMENT_TAGS) {
                     setFormData(prev => ({ ...prev, tags: sanitizedTags }));
-                    setValidationError(null);
                   }
                 }}
                 disabled={uploading}
@@ -883,19 +919,6 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 }}
               />
             </div>
-
-            {validationError && (
-              <div
-                className="p-3 rounded-lg text-sm"
-                style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.45)',
-                  color: '#dc2626',
-                }}
-              >
-                {validationError}
-              </div>
-            )}
 
             <div className="flex space-x-4 pt-4">
               <button
@@ -932,26 +955,60 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
   });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const tagsInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    tagsInputRef.current?.setCustomValidity('');
+    const normalizedTitle = formData.title.trim();
+    const normalizedDescription = formData.description.trim();
+
+    if (!normalizedTitle) {
+      titleInputRef.current?.setCustomValidity('Title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Description is required.');
+      descriptionInputRef.current?.reportValidity();
+      return;
+    }
 
     const validationResult = validateDocumentUpload({
-      title: formData.title,
-      description: formData.description,
+      title: normalizedTitle,
+      description: normalizedDescription,
       category: formData.category,
       tags: formData.tags,
     });
 
     if (validationResult) {
-      setValidationError(validationResult);
+      if (!normalizedTitle || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedTitle ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedDescription || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedDescription ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (validationResult.toLowerCase().includes('tag')) {
+        tagsInputRef.current?.setCustomValidity(validationResult);
+        tagsInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
 
     try {
       setSaving(true);
-      await onEdit(document._id, formData);
+      await onEdit(document._id, { ...formData, title: normalizedTitle, description: normalizedDescription });
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : 'Failed to update document');
     } finally {
@@ -987,9 +1044,16 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                 Title<span className={requiredLabelClass}>*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Title is required.');
+                  }
+                }}
                 disabled={saving}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
                 style={{
@@ -1007,8 +1071,15 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                 Description<span className={requiredLabelClass}>*</span>
               </label>
               <textarea
+                ref={descriptionInputRef}
                 value={formData.description}
                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Description is required.');
+                  }
+                }}
                 rows={3}
                 disabled={saving}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
@@ -1050,6 +1121,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                 Tags (comma-separated)
               </label>
               <input
+                ref={tagsInputRef}
                 type="text"
                 value={formData.tags}
                 onChange={(e) => {
@@ -1061,6 +1133,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
 
                   if (normalizedTags.length <= MAX_DOCUMENT_TAGS) {
                     setFormData((prev) => ({ ...prev, tags: sanitizedTags }));
+                    e.currentTarget.setCustomValidity('');
                     setValidationError(null);
                   }
                 }}

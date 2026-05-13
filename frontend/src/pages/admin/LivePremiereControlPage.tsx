@@ -130,6 +130,12 @@ const LivePremiereControlPage: React.FC = () => {
       showSuccess('Premiere ended');
       navigate('/admin/premieres');
     };
+    const handleStatusUpdated = (data: any) => {
+      if (data?.premiereId === premiere._id && data?.action === 'ended') {
+        showSuccess('Premiere ended');
+        navigate('/admin/premieres');
+      }
+    };
 
     socketService.onPremiereJoined(handlePremiereJoined);
     socketService.onViewerJoined(handleViewerJoined);
@@ -138,6 +144,7 @@ const LivePremiereControlPage: React.FC = () => {
     socketService.onVideoPause(handleVideoPause);
     socketService.onVideoSeek(handleVideoSeek);
     socketService.onPremiereEnded(handlePremiereEnded);
+    socketService.on('premiere-status-updated', handleStatusUpdated);
 
     return () => {
       socketService.leavePremiere(premiere._id);
@@ -149,6 +156,7 @@ const LivePremiereControlPage: React.FC = () => {
       socketService.removeListener('video-pause', handleVideoPause);
       socketService.removeListener('video-seek', handleVideoSeek);
       socketService.removeListener('premiere-ended', handlePremiereEnded);
+      socketService.removeListener('premiere-status-updated', handleStatusUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [premiere?._id]);
@@ -209,21 +217,22 @@ const LivePremiereControlPage: React.FC = () => {
     if (!ack.ok) showError(ack.error?.message ?? 'Seek failed');
   };
 
-  const handleStartPremiere = () => {
-    if (!premiere) return;
-    socketService.startPremiere(premiere._id);
-    showSuccess('Starting premiere...');
-  };
-
   const handleEndPremiere = () => {
     if (!premiere) return;
     setEndConfirmOpen(true);
   };
 
-  const confirmEndPremiere = () => {
+  const confirmEndPremiere = async () => {
     if (!premiere) return;
-    socketService.endPremiere(premiere._id);
-    setEndConfirmOpen(false);
+    try {
+      await premiereService.endPremiere(premiere._id);
+      socketService.endPremiere(premiere._id);
+      setEndConfirmOpen(false);
+      showSuccess('Premiere ended');
+      navigate('/admin/premieres');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to end premiere');
+    }
   };
 
   // Shape the premiere's video into the Video type VideoPlayer expects.
@@ -367,12 +376,9 @@ const LivePremiereControlPage: React.FC = () => {
             <div className="bg-netflix-gray rounded-lg p-4">
               <div className="flex items-center gap-3 mb-4">
                 {premiere.status === 'scheduled' && (
-                  <button
-                    onClick={handleStartPremiere}
-                    className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg"
-                  >
-                    ▶ Start Premiere
-                  </button>
+                  <div className="px-5 py-2 bg-blue-600/20 text-blue-200 font-semibold rounded-lg">
+                    Auto-starts at scheduled time
+                  </div>
                 )}
                 {premiere.status === 'live' && (
                   <>

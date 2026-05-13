@@ -211,7 +211,7 @@ const PatchVerificationModal: React.FC<PatchVerificationModalProps> = ({
                   >
                     {originalHash || patch.sha256Hash}
                   </code>
-                  <button
+                  {/* <button
                     onClick={() => copyHashToClipboard((originalHash || patch.sha256Hash)!)}
                     className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80 shadow-md hover:shadow-lg active:shadow-sm"
                     style={{ 
@@ -221,7 +221,7 @@ const PatchVerificationModal: React.FC<PatchVerificationModalProps> = ({
                     title="Copy hash"
                   >
                     Copy
-                  </button>
+                  </button> */}
                 </div>
               </div>
             )}

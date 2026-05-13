@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Presentation, CreatePresentationData } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
 import PresentationVerificationModal from './PresentationVerificationModal';
@@ -500,7 +500,7 @@ const AdminPresentationDashboard: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex items-center justify-between">
-                          {presentation.status === 'ready' ? (
+                          {presentation.status === 'ready' && presentation.processingProgress === 100 ? (
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => {
@@ -718,7 +718,6 @@ interface PresentationEditModalProps {
 }
 
 const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload, uploading = false }) => {
-  const { showWarning } = useNotification();
   const [formData, setFormData] = useState<CreatePresentationData>({
     title: '',
     description: '',
@@ -727,14 +726,31 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [tagInput, setTagInput] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError(null);
+    fileInputRef.current?.setCustomValidity('');
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
     const normalizedTitle = normalizeTitle(formData.title);
     const normalizedDescription = normalizeDescription(formData.description);
     const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
+
+    if (!normalizedTitle) {
+      titleInputRef.current?.setCustomValidity('Title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Description is required.');
+      descriptionInputRef.current?.reportValidity();
+      return;
+    }
     
     // Validate all fields
     const validationResult = validatePresentationUpload({
@@ -746,12 +762,27 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
     });
 
     if (validationResult) {
-      setValidationError(validationResult);
+      if (!normalizedTitle || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedTitle ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedDescription || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedDescription ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (!selectedFile || validationResult.toLowerCase().includes('presentation file') || validationResult.toLowerCase().includes('file size')) {
+        fileInputRef.current?.setCustomValidity(!selectedFile ? 'Presentation file is required.' : validationResult);
+        fileInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
 
     if (!selectedFile) {
-      showWarning('Please select a presentation file');
+      fileInputRef.current?.setCustomValidity('Presentation file is required.');
+      fileInputRef.current?.reportValidity();
       return;
     }
 
@@ -773,7 +804,8 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
     }
 
     if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
-      setValidationError(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
       return;
     }
 
@@ -782,7 +814,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
         ...prev,
         tags: [...prev.tags, nextTag]
       }));
-      setValidationError(null);
+      tagInputRef.current?.setCustomValidity('');
       setTagInput('');
     }
   };
@@ -810,12 +842,6 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
             </button>
           </div>
 
-          {validationError && (
-            <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
-              {validationError}
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* File Upload */}
             <div>
@@ -823,9 +849,13 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 Presentation File<span className={requiredLabelClass}>*</span>
               </label> */}
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".ppt,.pptx,.odp"
-                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  setSelectedFile(e.target.files?.[0] || null);
+                  e.currentTarget.setCustomValidity('');
+                }}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -846,9 +876,16 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 Title<span className={requiredLabelClass}>*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Title is required.');
+                  }
+                }}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -867,8 +904,15 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 Description<span className={requiredLabelClass}>*</span>
               </label>
               <textarea
+                ref={descriptionInputRef}
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Description is required.');
+                  }
+                }}
                 rows={3}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
@@ -914,9 +958,11 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               </label>
               <div className="flex space-x-2 mb-2">
                 <input
+                  ref={tagInputRef}
                   type="text"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
+                  onInput={(e) => e.currentTarget.setCustomValidity('')}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   placeholder="Add a tag"
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
@@ -998,13 +1044,31 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
   const [tagInput, setTagInput] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    tagInputRef.current?.setCustomValidity('');
     const normalizedTitle = normalizeTitle(formData.title);
     const normalizedDescription = normalizeDescription(formData.description);
     const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
+
+    if (!normalizedTitle) {
+      titleInputRef.current?.setCustomValidity('Title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Description is required.');
+      descriptionInputRef.current?.reportValidity();
+      return;
+    }
 
     const validationResult = validatePresentationUpload({
       title: normalizedTitle,
@@ -1014,7 +1078,21 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
     });
 
     if (validationResult) {
-      setValidationError(validationResult);
+      if (!normalizedTitle || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedTitle ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedDescription || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedDescription ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (validationResult.toLowerCase().includes('tag')) {
+        tagInputRef.current?.setCustomValidity(validationResult);
+        tagInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
 
@@ -1041,7 +1119,8 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
     }
 
     if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
-      setValidationError(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
       return;
     }
 
@@ -1051,6 +1130,7 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
         tags: [...prev.tags, nextTag],
       }));
       setValidationError(null);
+      tagInputRef.current?.setCustomValidity('');
       setTagInput('');
     }
   };
@@ -1091,9 +1171,16 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
                 Title<span className={requiredLabelClass}>*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Title is required.');
+                  }
+                }}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                 style={{
                   backgroundColor: 'var(--color-hover)',
@@ -1111,8 +1198,15 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
                 Description<span className={requiredLabelClass}>*</span>
               </label>
               <textarea
+                ref={descriptionInputRef}
                 value={formData.description}
                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onInput={(e) => e.currentTarget.setCustomValidity('')}
+                onInvalid={(e) => {
+                  if (!e.currentTarget.value.trim()) {
+                    e.currentTarget.setCustomValidity('Description is required.');
+                  }
+                }}
                 rows={3}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                 style={{
@@ -1156,9 +1250,11 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
               </label>
               <div className="flex space-x-2 mb-2">
                 <input
+                  ref={tagInputRef}
                   type="text"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
+                  onInput={(e) => e.currentTarget.setCustomValidity('')}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   placeholder="Add a tag"
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"

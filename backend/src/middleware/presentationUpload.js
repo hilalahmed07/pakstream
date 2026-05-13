@@ -34,7 +34,7 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.oasis.opendocument.presentation'
   ];
   
-  const allowedExts = ['.ppt', '.pptx', '.odp'];
+  const allowedExts = ['.ppt', '.pptx',];
   const ext = path.extname(file.originalname).toLowerCase();
   
   console.log('Presentation upload - MIME type:', file.mimetype);
@@ -43,7 +43,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PowerPoint presentations (.ppt, .pptx, .odp) are allowed.'), false);
+    cb(new Error('Invalid file type. Only PowerPoint presentations (.ppt, .pptx, .odp) and disk images (.dmg) are allowed.'), false);
   }
 };
 

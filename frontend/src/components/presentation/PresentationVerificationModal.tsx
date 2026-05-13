@@ -194,13 +194,13 @@ const PresentationVerificationModal: React.FC<PresentationVerificationModalProps
                   <code className="flex-1 p-3 bg-gray-900 rounded-lg text-xs font-mono text-green-400 break-all border border-gray-600">
                     {presentationHash}
                   </code>
-                  <button
+                  {/* <button
                     onClick={() => copyHashToClipboard(presentationHash)}
                     className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-500 transition-all shadow-md hover:shadow-lg active:shadow-sm"
                     title="Copy hash"
                   >
                     Copy
-                  </button>
+                  </button> */}
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   Use this hash to manually verify presentations using command-line tools (e.g., sha256sum)

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PakStream — Secure Media Streaming Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050a05;--card:#0a150a;--border:#1a2f1a;
+  --green:#22c55e;--green-dim:#166534;--gold:#c5a028;
+  --text:#e2e8f0;--muted:#94a3b8;--white:#fff;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden;line-height:1.6}
+
+/* Animated grid background */
+.bg-grid{position:fixed;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(34,197,94,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(34,197,94,.04) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none}
+.bg-glow{position:fixed;top:-30%;left:-10%;width:60vw;height:60vw;border-radius:50%;background:radial-gradient(circle,rgba(34,197,94,.08),transparent 70%);z-index:0;pointer-events:none}
+
+section{position:relative;z-index:1}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem}
+.hero-logo{width:160px;height:160px;border-radius:24px;object-fit:cover;margin-bottom:1.5rem;box-shadow:0 0 60px rgba(34,197,94,.25);animation:float 4s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:900;letter-spacing:-2px;margin-bottom:.5rem}
+.hero h1 span{background:linear-gradient(135deg,var(--green),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero .tagline{font-size:1.2rem;color:var(--muted);max-width:600px;margin:0 auto 2rem}
+.badge-row{display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;margin-bottom:2.5rem}
+.badge{padding:.4rem 1rem;border-radius:999px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;border:1px solid var(--border);background:rgba(34,197,94,.08);color:var(--green)}
+.hero-cta{display:inline-flex;align-items:center;gap:.5rem;padding:.9rem 2.2rem;background:linear-gradient(135deg,var(--green),#16a34a);color:#000;font-weight:700;border-radius:12px;text-decoration:none;font-size:1rem;transition:transform .2s,box-shadow .2s}
+.hero-cta:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(34,197,94,.35)}
+
+/* SECTIONS */
+.section{padding:5rem 1.5rem;max-width:1200px;margin:0 auto}
+.section-title{font-size:2rem;font-weight:800;text-align:center;margin-bottom:.5rem}
+.section-title span{color:var(--green)}
+.section-sub{text-align:center;color:var(--muted);margin-bottom:3rem;max-width:650px;margin-left:auto;margin-right:auto}
+
+/* FEATURES GRID */
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
+.feature-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;transition:transform .3s,border-color .3s}
+.feature-card:hover{transform:translateY(-4px);border-color:var(--green)}
+.feature-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1rem;background:rgba(34,197,94,.1)}
+.feature-card h3{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+.feature-card p{font-size:.9rem;color:var(--muted);line-height:1.6}
+
+/* SCREENSHOTS */
+.screenshots{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:2rem;margin-top:2rem}
+.screenshot{border-radius:16px;overflow:hidden;border:1px solid var(--border);transition:transform .3s}
+.screenshot:hover{transform:scale(1.02)}
+.screenshot img{width:100%;display:block}
+.screenshot .caption{padding:1rem;background:var(--card);font-size:.85rem;color:var(--muted);text-align:center;font-weight:500}
+
+/* TECH STACK */
+.stack-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}
+.stack-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center;transition:border-color .3s}
+.stack-item:hover{border-color:var(--green)}
+.stack-item .emoji{font-size:1.8rem;margin-bottom:.5rem}
+.stack-item .name{font-weight:600;font-size:.9rem}
+.stack-item .desc{font-size:.7rem;color:var(--muted);margin-top:.25rem}
+
+/* ARCHITECTURE */
+.arch-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2.5rem;overflow-x:auto}
+.arch-box pre{font-family:'Courier New',monospace;font-size:.75rem;color:var(--green);line-height:1.5;white-space:pre}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1.5rem;margin-top:2rem}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;text-align:center}
+.stat .num{font-size:2.5rem;font-weight:900;background:linear-gradient(135deg,var(--green),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat .label{font-size:.85rem;color:var(--muted);margin-top:.25rem}
+
+/* DEPLOYMENT */
+.deploy-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+.deploy-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem}
+.deploy-card h3{font-size:1.1rem;font-weight:700;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.deploy-card ul{list-style:none;padding:0}
+.deploy-card li{padding:.35rem 0;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
+.deploy-card li::before{content:'✓';color:var(--green);font-weight:700}
+
+/* FOOTER */
+.footer{text-align:center;padding:3rem 1.5rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;position:relative;z-index:1}
+.footer .classified{display:inline-block;padding:.4rem 1.2rem;border:1px solid var(--gold);color:var(--gold);border-radius:6px;font-size:.7rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem}
+
+/* Divider */
+.divider{width:60px;height:3px;background:linear-gradient(90deg,var(--green),var(--gold));margin:0 auto 3rem;border-radius:2px}
+
+@media(max-width:768px){
+  .hero h1{font-size:2.2rem}
+  .screenshots{grid-template-columns:1fr}
+  .section{padding:3rem 1rem}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<!-- HERO -->
+<section class="hero">
+  <img src="logo.png" alt="PakStream Logo" class="hero-logo">
+  <h1><span>PakStream</span></h1>
+  <p class="tagline">Secure Media Streaming & Document Management Platform — Purpose-Built for Airgapped C4I Environments</p>
+  <div class="badge-row">
+    <span class="badge">🔒 Airgapped Ready</span>
+    <span class="badge">🎬 HLS Streaming</span>
+    <span class="badge">📄 Document Mgmt</span>
+    <span class="badge">⚡ Real-time</span>
+    <span class="badge">🛡️ SHA-256 Integrity</span>
+  </div>
+  <a href="#features" class="hero-cta">▼ Explore Capabilities</a>
+</section>
+
+<!-- STATS -->
+<section class="section">
+  <div class="stats">
+    <div class="stat"><div class="num">5+</div><div class="label">Media Types Supported</div></div>
+    <div class="stat"><div class="num">4</div><div class="label">Quality Levels (HLS)</div></div>
+    <div class="stat"><div class="num">100%</div><div class="label">Offline Capable</div></div>
+    <div class="stat"><div class="num">SHA-256</div><div class="label">File Integrity Verification</div></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <h2 class="section-title">Core <span>Capabilities</span></h2>
+  <p class="section-sub">A comprehensive platform designed for secure, high-performance media operations in restricted network environments.</p>
+  <div class="divider"></div>
+  <div class="features">
+    <div class="feature-card">
+      <div class="feature-icon">🎬</div>
+      <h3>Adaptive Video Streaming</h3>
+      <p>HLS-based streaming with automatic quality adaptation (360p–1080p). FFmpeg-powered transcoding pipeline with real-time progress tracking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📄</div>
+      <h3>Document Management</h3>
+      <p>Upload, process, and view PDFs with automatic page extraction, thumbnail generation, and full integrity verification.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>Presentation Viewer</h3>
+      <p>PPT/PPTX upload with automatic conversion to slide images via LibreOffice. Built-in slide viewer with navigation.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎥</div>
+      <h3>Live Premieres</h3>
+      <p>Schedule synchronized video premieres with real-time viewer synchronization via Socket.IO WebSocket connections.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <h3>Role-Based Access Control</h3>
+      <p>JWT authentication with Admin/User roles. Protected routes, admin-only uploads, and secure credential management.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🛡️</div>
+      <h3>File Integrity Verification</h3>
+      <p>SHA-256 hash verification for all uploaded content — videos, documents, and presentations. Ensures tamper-proof delivery.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌐</div>
+      <h3>Airgapped Deployment</h3>
+      <p>Full offline installation with pre-bundled node_modules, system packages, and ISO-ready deployment scripts. No internet required.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📡</div>
+      <h3>Push-Based CDN</h3>
+      <p>Optional MinIO S3-compatible object storage with configurable push-based CDN for multi-node content distribution.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <h3>Real-time Updates</h3>
+      <p>Socket.IO integration provides live processing progress, premiere sync, and instant UI updates across all connected clients.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section class="section">
+  <h2 class="section-title">Platform <span>Preview</span></h2>
+  <p class="section-sub">Netflix-inspired dark theme with responsive design optimized for desktop and field operations.</p>
+  <div class="divider"></div>
+  <div class="screenshots">
+    <div class="screenshot">
+      <img src="dashboard.png" alt="Video Streaming Dashboard">
+      <div class="caption">Video Streaming Dashboard — Netflix-style dark theme with categorized content</div>
+    </div>
+    <div class="screenshot">
+      <img src="documents.png" alt="Document Management">
+      <div class="caption">Document & Presentation Management — Upload, process, and view securely</div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section class="section">
+  <h2 class="section-title">Technology <span>Stack</span></h2>
+  <p class="section-sub">Built on proven, production-grade open-source technologies.</p>
+  <div class="divider"></div>
+  <div class="stack-grid">
+    <div class="stack-item"><div class="emoji">⚛️</div><div class="name">React 19</div><div class="desc">TypeScript</div></div>
+    <div class="stack-item"><div class="emoji">🟢</div><div class="name">Node.js</div><div class="desc">Express.js</div></div>
+    <div class="stack-item"><div class="emoji">🍃</div><div class="name">MongoDB</div><div class="desc">Mongoose ODM</div></div>
+    <div class="stack-item"><div class="emoji">🎞️</div><div class="name">FFmpeg</div><div class="desc">HLS Transcoding</div></div>
+    <div class="stack-item"><div class="emoji">🪣</div><div class="name">MinIO</div><div class="desc">S3 Storage</div></div>
+    <div class="stack-item"><div class="emoji">🔌</div><div class="name">Socket.IO</div><div class="desc">Real-time</div></div>
+    <div class="stack-item"><div class="emoji">🌐</div><div class="name">Nginx</div><div class="desc">Reverse Proxy</div></div>
+    <div class="stack-item"><div class="emoji">🔑</div><div class="name">JWT</div><div class="desc">Auth & RBAC</div></div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="section">
+  <h2 class="section-title">System <span>Architecture</span></h2>
+  <p class="section-sub">Layered MERN architecture with modular services and real-time communication.</p>
+  <div class="divider"></div>
+  <div class="arch-box">
+<pre>
+┌─────────────────────────────────────────────────────────────┐
+│                    CLIENT BROWSER                           │
+│    React App (TS)  ←→  Socket.IO Client  ←→  HLS.js Player │
+└────────────┬──────────────────┬──────────────────┬──────────┘
+             │ HTTP/REST        │ WebSocket        │ HLS
+┌────────────▼──────────────────▼──────────────────▼──────────┐
+│                   NGINX (Reverse Proxy)                      │
+│     Static Files  │  API Proxy  │  WebSocket  │  HLS Serve   │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────┐
+│                EXPRESS.JS BACKEND                            │
+│  Routes → Middleware(Auth) → Controllers → Services → Models │
+└──────┬──────────────────┬───────────────────────┬───────────┘
+       │                  │                       │
+  ┌────▼────┐      ┌──────▼──────┐         ┌──────▼──────┐
+  │ MongoDB │      │ File Storage │         │   FFmpeg    │
+  │   DB    │      │ (Local/MinIO)│         │ LibreOffice │
+  └─────────┘      └─────────────┘         └─────────────┘
+</pre>
+  </div>
+</section>
+
+<!-- DEPLOYMENT -->
+<section class="section">
+  <h2 class="section-title">Deployment <span>Options</span></h2>
+  <p class="section-sub">Flexible deployment for both connected and fully airgapped environments.</p>
+  <div class="divider"></div>
+  <div class="deploy-cards">
+    <div class="deploy-card">
+      <h3>🌐 Standard Deployment</h3>
+      <ul>
+        <li>npm install on connected machine</li>
+        <li>MongoDB + MinIO services via systemd</li>
+        <li>Nginx reverse proxy with SSL</li>
+        <li>PM2 or systemd process management</li>
+      </ul>
+    </div>
+    <div class="deploy-card">
+      <h3>🔒 Airgapped Deployment</h3>
+      <ul>
+        <li>Pre-bundled ISO with all dependencies</li>
+        <li>Offline node_modules (tar.gz archives)</li>
+        <li>System packages for Ubuntu/Debian</li>
+        <li>Complete installation scripts included</li>
+      </ul>
+    </div>
+    <div class="deploy-card">
+      <h3>📡 Push-Based CDN</h3>
+      <ul>
+        <li>Multi-node content distribution</li>
+        <li>MinIO S3-compatible object storage</li>
+        <li>Configurable replication policies</li>
+        <li>Works within airgapped networks</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- API -->
+<section class="section">
+  <h2 class="section-title">API <span>Endpoints</span></h2>
+  <p class="section-sub">RESTful API with rate limiting, helmet security, and comprehensive CORS support.</p>
+  <div class="divider"></div>
+  <div class="deploy-cards">
+    <div class="deploy-card">
+      <h3>🔐 Authentication</h3>
+      <ul>
+        <li>POST /api/auth/register</li>
+        <li>POST /api/auth/register-admin</li>
+        <li>POST /api/auth/login</li>
+        <li>GET /api/auth/profile</li>
+      </ul>
+    </div>
+    <div class="deploy-card">
+      <h3>🎬 Media</h3>
+      <ul>
+        <li>GET/POST /api/videos</li>
+        <li>GET/POST /api/documents</li>
+        <li>GET/POST /api/presentations</li>
+        <li>GET/POST /api/premieres</li>
+      </ul>
+    </div>
+    <div class="deploy-card">
+      <h3>🛡️ Integrity</h3>
+      <ul>
+        <li>GET /api/videos/:id/hash</li>
+        <li>POST /api/videos/:id/verify</li>
+        <li>GET /api/documents/:id/hash</li>
+        <li>POST /api/documents/:id/verify</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="classified">CONFIDENTIAL — FOR AUTHORIZED DEMONSTRATION ONLY</div>
+  <p style="margin-top:.75rem">PakStream — Secure Media Streaming & Document Management Platform</p>
+  <p style="margin-top:.25rem;font-size:.75rem">Built for C4I Environments • MERN Stack • Airgapped Ready</p>
+</footer>
+
+</body>
+</html>

@@ -244,6 +244,10 @@ class SocketService {
     }
   }
 
+  sendMessageWithAck(premiereId: string, message: string, username?: string, timeoutMs = 3000): Promise<SocketAck> {
+    return this.emitWithAck('send-message', [premiereId, message, username], timeoutMs);
+  }
+
   // Event listeners
   onPremiereJoined(callback: (data: any) => void) {
     const socket = this.getSocket();

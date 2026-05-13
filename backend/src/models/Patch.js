@@ -29,7 +29,7 @@ const patchSchema = new mongoose.Schema({
   },
   fileType: {
     type: String,
-    enum: ['exe', 'msi', 'msp', 'msu', 'cab', 'def'],
+    enum: ['exe', 'msi', 'msp', 'msu', 'cab', 'def', 'dmg'],
     required: true
   },
   patchType: {

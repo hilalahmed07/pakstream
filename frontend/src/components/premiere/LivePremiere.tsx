@@ -95,6 +95,11 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       console.log('Premiere ended:', data);
       if (onClose) onClose();
     };
+    const handleStatusUpdated = (data: any) => {
+      if (data?.premiereId === premiere._id && data?.action === 'ended') {
+        if (onClose) onClose();
+      }
+    };
 
     const handleVideoPlay = () => {
       if (!videoRef.current) return;
@@ -157,6 +162,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
     socketService.onViewerLeft(handleViewerLeft);
     socketService.onPremiereStarted(handlePremiereStarted);
     socketService.onPremiereEnded(handlePremiereEnded);
+    socketService.on('premiere-status-updated', handleStatusUpdated);
     socketService.onVideoPlay(handleVideoPlay);
     socketService.onVideoPause(handleVideoPause);
     socketService.onVideoSeek(handleVideoSeek);
@@ -186,6 +192,7 @@ const LivePremiere: React.FC<LivePremiereProps> = ({ premiere, onClose }) => {
       socketService.removeListener('viewer-left', handleViewerLeft);
       socketService.removeListener('premiere-started', handlePremiereStarted);
       socketService.removeListener('premiere-ended', handlePremiereEnded);
+      socketService.removeListener('premiere-status-updated', handleStatusUpdated);
       socketService.removeListener('video-play', handleVideoPlay);
       socketService.removeListener('video-pause', handleVideoPause);
       socketService.removeListener('video-seek', handleVideoSeek);

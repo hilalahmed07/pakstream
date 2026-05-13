@@ -183,14 +183,14 @@ const VideoVerificationModal: React.FC<VideoVerificationModalProps> = ({
                   >
                     {videoHash}
                   </code>
-                  <button
+                  {/* <button
                     onClick={() => copyHashToClipboard(videoHash)}
                     className="px-3 py-2 rounded-lg text-sm transition-all hover:opacity-90 shadow-md hover:shadow-lg active:shadow-sm"
                     style={{ backgroundColor: 'var(--color-button-bg)', color: 'var(--color-button-text)' }}
                     title="Copy hash"
                   >
                     Copy
-                  </button>
+                  </button> */}
                 </div>
                 <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Use this hash to manually verify videos using command-line tools (e.g., sha256sum)

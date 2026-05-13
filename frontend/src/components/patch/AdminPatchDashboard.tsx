@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Patch, PatchUploadData } from '../../types/patch';
 import patchService from '../../services/patchService';
 import PatchVerificationModal from './PatchVerificationModal';
@@ -459,7 +459,7 @@ const AdminPatchDashboard: React.FC = () => {
 
                 {/* Actions */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {patch.status === 'ready' && (
+                  {patch.status === 'ready' && patch.processingProgress === 100 && (
                     <div className="flex items-center gap-2 justify-start">
                       <button
                         onClick={() => {
@@ -600,32 +600,63 @@ const AdminPatchDashboard: React.FC = () => {
 const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, data: PatchUploadData) => void }> = ({ onClose, onUpload }) => {
   const [file, setFile] = useState<File | null>(null);
   const [formData, setFormData] = useState<PatchUploadData>({ title: '', description: '', version: '', category: 'other', tags: '', patchType: 'other', targetOs: ['windows 10', 'windows 11'], architecture: 'x64' });
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const targetOsInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError(null);
+    fileInputRef.current?.setCustomValidity('');
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    targetOsInputRef.current?.setCustomValidity('');
+
+    const normalizedFormData = {
+      ...formData,
+      title: formData.title.trim(),
+      description: formData.description.trim()
+    };
     
     // Validate all fields
     const validationResult = validatePatchUpload({
-      title: formData.title,
-      description: formData.description,
-      category: formData.category,
-      tags: formData.tags,
-      patchType: formData.patchType,
-      version: formData.version,
-      targetOs: formData.targetOs,
-      architecture: formData.architecture,
+      title: normalizedFormData.title,
+      description: normalizedFormData.description,
+      category: normalizedFormData.category,
+      tags: normalizedFormData.tags,
+      patchType: normalizedFormData.patchType,
+      version: normalizedFormData.version,
+      targetOs: normalizedFormData.targetOs,
+      architecture: normalizedFormData.architecture,
       file: file || undefined
     });
 
     if (validationResult) {
-      setValidationError(validationResult);
+      if (!normalizedFormData.title || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedFormData.title ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedFormData.description || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedFormData.description ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (!file || validationResult.toLowerCase().includes('patch file') || validationResult.toLowerCase().includes('file size')) {
+        fileInputRef.current?.setCustomValidity(!file ? 'Patch file is required.' : validationResult);
+        fileInputRef.current?.reportValidity();
+        return;
+      }
+      if (normalizedFormData.targetOs.length === 0) {
+        targetOsInputRef.current?.setCustomValidity('Target OS is required.');
+        targetOsInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
 
     if (file) {
-      onUpload(file, formData);
+      onUpload(file, normalizedFormData);
     }
   };
 
@@ -637,25 +668,19 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
           <button onClick={onClose} className="text-2xl opacity-50 hover:opacity-100">×</button>
         </div>
         
-        {validationError && (
-          <div className="bg-red-900 border border-red-700 text-red-200 px-4 py-3 rounded m-4">
-            {validationError}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Patch File<span className={requiredLabelClass}>*</span>
             </label>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full p-6 border-2 border-dashed rounded-lg text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }} required />
+            <input ref={fileInputRef} type="file" onChange={(e) => { setFile(e.target.files?.[0] || null); e.currentTarget.setCustomValidity(''); }} className="w-full p-6 border-2 border-dashed rounded-lg text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title<span className={requiredLabelClass}>*</span>
               </label>
-              <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
@@ -668,7 +693,7 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Description<span className={requiredLabelClass}>*</span>
             </label>
-            <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
@@ -720,6 +745,7 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
                 </label>
               ))}
             </div>
+            <input ref={targetOsInputRef} type="text" value={formData.targetOs.join(',')} onChange={() => {}} onInput={(e) => e.currentTarget.setCustomValidity('')} className="sr-only" tabIndex={-1} required />
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={onClose} className="px-6 py-2 rounded bg-gray-600 font-bold">Cancel</button>
@@ -735,20 +761,46 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
   const [formData, setFormData] = useState<PatchUploadData>({ title: patch.title, description: patch.description, category: patch.category, tags: patch.tags.join(', '), patchType: patch.patchType, version: patch.version || '', targetOs: patch.targetOs, architecture: patch.architecture });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const targetOsInputRef = useRef<HTMLInputElement>(null);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
-    const validationResult = validatePatchUpload(formData);
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    targetOsInputRef.current?.setCustomValidity('');
+
+    const normalizedFormData = {
+      ...formData,
+      title: formData.title.trim(),
+      description: formData.description.trim()
+    };
+
+    const validationResult = validatePatchUpload(normalizedFormData);
     console.log('[PatchEditModal] Validation result:', validationResult);
     if (validationResult) {
-      console.log('[PatchEditModal] Validation failed:', validationResult);
-      setValidationError(validationResult);
+      if (!normalizedFormData.title || validationResult.toLowerCase().includes('title')) {
+        titleInputRef.current?.setCustomValidity(!normalizedFormData.title ? 'Title is required.' : validationResult);
+        titleInputRef.current?.reportValidity();
+        return;
+      }
+      if (!normalizedFormData.description || validationResult.toLowerCase().includes('description')) {
+        descriptionInputRef.current?.setCustomValidity(!normalizedFormData.description ? 'Description is required.' : validationResult);
+        descriptionInputRef.current?.reportValidity();
+        return;
+      }
+      if (normalizedFormData.targetOs.length === 0) {
+        targetOsInputRef.current?.setCustomValidity('Target OS is required.');
+        targetOsInputRef.current?.reportValidity();
+        return;
+      }
       return;
     }
     try {
       setSaving(true);
-      console.log('[PatchEditModal] Submitting form data:', formData);
-      await onEdit(patch._id, formData);
+      console.log('[PatchEditModal] Submitting form data:', normalizedFormData);
+      await onEdit(patch._id, normalizedFormData);
       console.log('[PatchEditModal] Edit successful');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update patch';
@@ -776,7 +828,7 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title<span className={requiredLabelClass}>*</span>
               </label>
-              <input type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
@@ -789,7 +841,7 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Description<span className={requiredLabelClass}>*</span>
             </label>
-            <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
@@ -841,6 +893,7 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
                 </label>
               ))}
             </div>
+            <input ref={targetOsInputRef} type="text" value={formData.targetOs.join(',')} onChange={() => {}} onInput={(e) => e.currentTarget.setCustomValidity('')} className="sr-only" tabIndex={-1} required />
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={onClose} disabled={saving} className="px-6 py-2 rounded bg-gray-600 font-bold disabled:opacity-50">Cancel</button>

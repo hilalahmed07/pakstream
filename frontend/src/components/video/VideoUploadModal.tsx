@@ -42,6 +42,8 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const categories = [
@@ -126,11 +128,26 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const trimmedTitle = uploadData.title.trim();
+    const trimmedDescription = uploadData.description.trim();
+
+    if (!trimmedTitle) {
+      titleInputRef.current?.setCustomValidity('Title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!trimmedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Description is required.');
+      descriptionInputRef.current?.reportValidity();
+      return;
+    }
     
     // Validate all fields
     const validationResult = validateVideoUpload({
-      title: uploadData.title,
-      description: uploadData.description,
+      title: trimmedTitle,
+      description: trimmedDescription,
       category: uploadData.category,
       tags: uploadData.tags,
       file: selectedFile || undefined
@@ -153,7 +170,11 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       onUploadStart?.();
 
       // Use UploadManager for upload
-      await uploadManager.uploadVideo(selectedFile, uploadData);
+      await uploadManager.uploadVideo(selectedFile, {
+        ...uploadData,
+        title: trimmedTitle,
+        description: trimmedDescription
+      });
       
     } catch (error: any) {
       // Error handling is done by UploadManager through events
@@ -339,11 +360,21 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               Title *
             </label>
             <input
+              ref={titleInputRef}
               type="text"
               id="title"
               name="title"
               value={uploadData.title}
               onChange={handleInputChange}
+              onInput={() => titleInputRef.current?.setCustomValidity('')}
+              onInvalid={(event) => {
+                const target = event.currentTarget;
+                if (!target.value.trim()) {
+                  target.setCustomValidity('Title is required.');
+                } else {
+                  target.setCustomValidity('');
+                }
+              }}
               maxLength={MAX_ASSET_TITLE_LENGTH}
               required
               disabled={isUploading}
@@ -364,10 +395,20 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
               Description *
             </label>
             <textarea
+              ref={descriptionInputRef}
               id="description"
               name="description"
               value={uploadData.description}
               onChange={handleInputChange}
+              onInput={() => descriptionInputRef.current?.setCustomValidity('')}
+              onInvalid={(event) => {
+                const target = event.currentTarget;
+                if (!target.value.trim()) {
+                  target.setCustomValidity('Description is required.');
+                } else {
+                  target.setCustomValidity('');
+                }
+              }}
               maxLength={MAX_ASSET_DESCRIPTION_LENGTH}
               required
               disabled={isUploading}

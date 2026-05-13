@@ -58,7 +58,7 @@ class PresentationProcessor {
       
       // Step 1: Convert PPTX to PDF
       console.log('Step 1: Converting PPTX to PDF...');
-      const pdfCommand = `libreoffice --headless --convert-to pdf --outdir "${outputDir}" "${inputPath}"`;
+      const pdfCommand = `soffice --headless --convert-to pdf --outdir "${outputDir}" "${inputPath}"`;
       console.log(`Executing: ${pdfCommand}`);
       
       const { stdout: pdfStdout, stderr: pdfStderr } = await execAsync(pdfCommand, { 
@@ -152,7 +152,7 @@ class PresentationProcessor {
 
       // Final fallback: use LibreOffice PNG conversion
       console.log('Fallback: Using LibreOffice PNG conversion...');
-      const pngCommand = `libreoffice --headless --convert-to png --outdir "${outputDir}" "${pdfPath}"`;
+      const pngCommand = `soffice --headless --convert-to png --outdir "${outputDir}" "${pdfPath}"`;
       await execAsync(pngCommand, { timeout: 120000 });
       
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -180,19 +180,22 @@ class PresentationProcessor {
   async generateThumbnail(firstSlide, outputDir) {
     try {
       const thumbnailPath = path.join(outputDir, 'thumbnail.jpg');
+      const firstSlidePath = path.join(outputDir, firstSlide);
       
       // Use ImageMagick to convert first PNG to optimized thumbnail
-      if (fsSync.existsSync(path.join(outputDir, firstSlide))) {
+      if (fsSync.existsSync(firstSlidePath)) {
         try {
-          await execAsync(`convert "${path.join(outputDir, firstSlide)}" -resize 320x240 -quality 85 "${thumbnailPath}"`, {
+          await execAsync(`convert "${firstSlidePath}" -resize 320x240 -quality 85 "${thumbnailPath}"`, {
             timeout: 10000
           });
           console.log(`Thumbnail generated: ${thumbnailPath}`);
           return `presentations/processed/${path.basename(outputDir)}/thumbnail.jpg`;
         } catch (convertError) {
-          console.log('ImageMagick not available, using PNG as thumbnail');
-          // If ImageMagick is not available, use the PNG directly
-          return `presentations/processed/${path.basename(outputDir)}/${firstSlide}`;
+          console.log('ImageMagick not available, copying PNG as thumbnail.jpg');
+          // If ImageMagick is not available, copy the PNG to thumbnail.jpg
+          await fs.copyFile(firstSlidePath, thumbnailPath);
+          console.log(`Thumbnail copied: ${thumbnailPath}`);
+          return `presentations/processed/${path.basename(outputDir)}/thumbnail.jpg`;
         }
       }
       

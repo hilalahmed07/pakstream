@@ -10,6 +10,7 @@ const cors = require('cors');
 const path = require('path');
 const SocketHandler = require('./socket/socketHandler');
 const { appConfig } = require('./config/appConfig');
+const { startPremiereScheduler } = require('./services/premiereScheduler');
 
 const app = express();
 const server = http.createServer(app);
@@ -85,6 +86,8 @@ app.use('/api', apiLimiter);
 // Database connection
 mongoose.connect(appConfig.database.uri).then(() => {
   console.log('Connected to MongoDB');
+  // Keep premiere lifecycle automatic: scheduled -> live -> ended.
+  startPremiereScheduler(socketHandler.io);
 }).catch(err => {
   console.error('MongoDB connection error:', err);
   process.exit(1);

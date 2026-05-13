@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import { Premiere, CreatePremiereData } from '../../types/premiere';
@@ -70,6 +70,10 @@ const AdminPremiereDashboard: React.FC = () => {
   }, [currentPage]);
 
   const setupSocketListeners = useCallback(() => {
+    // Ensure socket handshake carries the current JWT/user role before
+    // admin control events (start/end) are emitted.
+    socketService.reconnectWithCurrentAuth();
+
     const handlePremiereStarted = (data: any) => {
       setActivePremiere(data.premiere);
       setPremieres(prev => prev.map(p => 
@@ -162,16 +166,6 @@ const AdminPremiereDashboard: React.FC = () => {
       // are already user-friendly.
       const message = error instanceof Error ? error.message : 'Unknown error';
       showError(message);
-    }
-  };
-
-  const handleStartPremiere = async (premiereId: string) => {
-    try {
-      socketService.startPremiere(premiereId);
-      showSuccess('Premiere started');
-    } catch (error) {
-      console.error('Failed to start premiere:', error);
-      showError('Failed to start premiere: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -359,12 +353,9 @@ const AdminPremiereDashboard: React.FC = () => {
                     </div>
                     <div className="flex space-x-2">
                       {premiere.status === 'scheduled' && (
-                        <button
-                          onClick={() => handleStartPremiere(premiere._id)}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                        >
-                          Start
-                        </button>
+                        <div className="flex-1 px-3 py-1 rounded text-xs font-medium text-center bg-blue-600/20 text-blue-200">
+                          Auto-starts at scheduled time
+                        </div>
                       )}
                       {premiere.status === 'live' && (
                         <>
@@ -438,13 +429,18 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
   onSubmit,
   onClose
 }) => {
-  const { showWarning, showError } = useNotification();
+  const { showError } = useNotification();
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
   const [formData, setFormData] = useState<{ title: string; description: string; startTime: Date | null }>({
     title: '',
     description: '',
     startTime: null,
   });
+  const videoSelectRef = useRef<HTMLSelectElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+  const getStartTimeInput = () =>
+    document.querySelector('.premiere-start-time-input') as HTMLInputElement | null;
   const now = new Date();
   const isStartTimeToday = formData.startTime
     ? formData.startTime.toDateString() === now.toDateString()
@@ -472,14 +468,35 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    videoSelectRef.current?.setCustomValidity('');
+    titleInputRef.current?.setCustomValidity('');
+    descriptionInputRef.current?.setCustomValidity('');
+    getStartTimeInput()?.setCustomValidity('');
+    const normalizedTitle = formData.title.trim();
+    const normalizedDescription = formData.description.trim();
 
     if (!selectedVideoId) {
-      showWarning('Please select a video');
+      videoSelectRef.current?.setCustomValidity('Please select a video.');
+      videoSelectRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedTitle) {
+      titleInputRef.current?.setCustomValidity('Premiere title is required.');
+      titleInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!normalizedDescription) {
+      descriptionInputRef.current?.setCustomValidity('Premiere description is required.');
+      descriptionInputRef.current?.reportValidity();
       return;
     }
 
     if (!formData.startTime) {
-      showWarning('Please select a start time');
+      const startTimeInput = getStartTimeInput();
+      startTimeInput?.setCustomValidity('Start time is required.');
+      startTimeInput?.reportValidity();
       return;
     }
 
@@ -487,7 +504,9 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
     // Backend enforces the same rule for defence in depth.
     const now = Date.now();
     if (formData.startTime.getTime() <= now - 60 * 1000) {
-      showWarning('Start time must be in the future');
+      const startTimeInput = getStartTimeInput();
+      startTimeInput?.setCustomValidity('Start time must be in the future.');
+      startTimeInput?.reportValidity();
       return;
     }
 
@@ -499,8 +518,8 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
 
     const premiereData: CreatePremiereData = {
       videoId: selectedVideoId,
-      title: formData.title || selectedVideo.title,
-      description: formData.description || selectedVideo.description,
+      title: normalizedTitle || selectedVideo.title,
+      description: normalizedDescription || selectedVideo.description,
       // Always send UTC ISO so timezone drift between admin machine and
       // the (possibly UTC) server doesn't shift the scheduled time.
       startTime: formData.startTime.toISOString(),
@@ -530,8 +549,10 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               Select Video for Premiere<span className={requiredLabelClass}>*</span>
             </label>
             <select
+              ref={videoSelectRef}
               value={selectedVideoId}
               onChange={handleVideoChange}
+              onInput={(e) => e.currentTarget.setCustomValidity('')}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
               style={{ 
                 backgroundColor: 'var(--color-hover)', 
@@ -565,9 +586,16 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               Premiere Title<span className={requiredLabelClass}>*</span>
             </label>
             <input
+              ref={titleInputRef}
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: sanitizeAssetText(e.target.value) })}
+              onInput={(e) => e.currentTarget.setCustomValidity('')}
+              onInvalid={(e) => {
+                if (!e.currentTarget.value.trim()) {
+                  e.currentTarget.setCustomValidity('Premiere title is required.');
+                }
+              }}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
               style={{ 
                 backgroundColor: 'var(--color-hover)', 
@@ -586,8 +614,15 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               Premiere Description<span className={requiredLabelClass}>*</span>
             </label>
             <textarea
+              ref={descriptionInputRef}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: sanitizeAssetText(e.target.value) })}
+              onInput={(e) => e.currentTarget.setCustomValidity('')}
+              onInvalid={(e) => {
+                if (!e.currentTarget.value.trim()) {
+                  e.currentTarget.setCustomValidity('Premiere description is required.');
+                }
+              }}
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 h-24 resize-none"
               style={{ 
                 backgroundColor: 'var(--color-hover)', 
@@ -610,7 +645,10 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
             </label>
             <DatePicker
               selected={formData.startTime}
-              onChange={(date: Date | null) => setFormData({ ...formData, startTime: date })}
+              onChange={(date: Date | null) => {
+                setFormData({ ...formData, startTime: date });
+                getStartTimeInput()?.setCustomValidity('');
+              }}
               showTimeSelect
               timeIntervals={15}
               dateFormat="yyyy-MM-dd HH:mm"
@@ -619,10 +657,9 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               minTime={minSelectableTime}
               maxTime={maxSelectableTime}
               placeholderText="YYYY-MM-DD HH:MM"
-              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 premiere-start-time-input"
               wrapperClassName="w-full"
               popperClassName="premiere-datepicker-popper"
-              required
             />
           </div>
 

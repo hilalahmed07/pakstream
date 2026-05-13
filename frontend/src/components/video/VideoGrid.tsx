@@ -224,7 +224,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({
             <h3 className="text-text-primary font-semibold mb-2 line-clamp-2">{video.title}</h3>
             <p className="text-text-secondary text-sm mb-3 line-clamp-2">{video.description}</p>
 
-            {video.status === 'ready' && ((showDeleteButton && onDeleteClick) || (showEditButton && onEditClick)) ? (
+            {video.status !== 'uploading' && video.status !== 'processing' && ((showDeleteButton && onDeleteClick) || (showEditButton && onEditClick)) ? (
               <div className="flex items-center gap-2 mb-3">
                 {showEditButton && onEditClick && (
                   <button

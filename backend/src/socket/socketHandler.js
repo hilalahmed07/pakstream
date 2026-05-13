@@ -173,15 +173,7 @@ class SocketHandler {
       // Admin controls
       socket.on('admin-start-premiere', async (premiereId) => {
         try {
-          const premiere = await Premiere.findByIdAndUpdate(
-            premiereId,
-            { 
-              status: 'live',
-              startTime: new Date(),
-              isActive: true
-            },
-            { new: true }
-          )
+          let premiere = await Premiere.findById(premiereId)
           .populate({
             path: 'video',
             select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
@@ -198,6 +190,12 @@ class SocketHandler {
             socket.emit('error', { message: 'Not authorized to start premiere' });
             return;
           }
+
+          const now = new Date();
+          if (premiere.status === 'scheduled' && premiere.startTime && premiere.startTime > now) {
+            socket.emit('error', { message: 'Cannot start premiere before its scheduled date and time' });
+            return;
+          }
           
           // Validate video data before starting
           if (!premiere.video || !premiere.video.processedFiles || !premiere.video.processedFiles.hls) {
@@ -205,6 +203,21 @@ class SocketHandler {
             socket.emit('error', { message: 'Cannot start premiere - video is not ready for playback' });
             return;
           }
+
+          premiere = await Premiere.findByIdAndUpdate(
+            premiereId,
+            {
+              status: 'live',
+              startTime: now,
+              isActive: true
+            },
+            { new: true }
+          )
+          .populate({
+            path: 'video',
+            select: '_id title description duration resolution status processedFiles originalFile uploadedBy'
+          })
+          .populate('createdBy', 'username');
 
           // Update room data with start time for TV broadcast behavior
           if (this.premiereRooms.has(premiereId)) {
@@ -279,6 +292,11 @@ class SocketHandler {
 
           // Notify all viewers
           this.io.to(`premiere-${premiereId}`).emit('premiere-ended', {
+            premiere
+          });
+          this.io.emit('premiere-status-updated', {
+            premiereId: premiere._id.toString(),
+            action: 'ended',
             premiere
           });
 
@@ -368,37 +386,51 @@ class SocketHandler {
       });
 
       // Chat functionality
-      socket.on('send-message', (premiereId, message, username) => {
-        if (this.premiereRooms.has(premiereId)) {
-          const roomData = this.premiereRooms.get(premiereId);
-          
-          // Use provided username, socket.userName, or fallback to Anonymous
-          const displayName = username || socket.userName || 'Anonymous';
-          
-          console.log('💬 Chat message:', { 
-            premiereId, 
-            username: displayName, 
-            socketUserName: socket.userName,
-            providedUsername: username,
-            message 
-          });
-          
-          const chatMessage = {
-            id: Date.now(),
-            user: displayName,
-            message,
-            timestamp: new Date()
-          };
-          
-          roomData.chat.push(chatMessage);
-          
-          // Keep only last 100 messages
-          if (roomData.chat.length > 100) {
-            roomData.chat = roomData.chat.slice(-100);
-          }
-          
-          this.io.to(`premiere-${premiereId}`).emit('new-message', chatMessage);
+      socket.on('send-message', (premiereId, message, username, ack) => {
+        if (!this.premiereRooms.has(premiereId)) {
+          const err = { code: 'NOT_FOUND', action: 'send-message', message: 'Premiere room not active' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
         }
+
+        const roomData = this.premiereRooms.get(premiereId);
+        const viewer = roomData.viewers.get(socket.id);
+        if (!viewer) {
+          const err = { code: 'FORBIDDEN', action: 'send-message', message: 'Join the premiere room before sending messages' };
+          socket.emit('error', err);
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
+        }
+
+        const text = String(message || '').trim();
+        if (!text) {
+          const err = { code: 'VALIDATION', action: 'send-message', message: 'Message cannot be empty' };
+          if (typeof ack === 'function') ack({ ok: false, error: err });
+          return;
+        }
+
+        // Use provided username, socket.userName, or fallback to Anonymous
+        const displayName = username || socket.userName || 'Anonymous';
+
+        const chatMessage = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          user: displayName,
+          message: text,
+          timestamp: new Date()
+        };
+
+        roomData.chat.push(chatMessage);
+
+        // Keep only last 100 messages
+        if (roomData.chat.length > 100) {
+          roomData.chat = roomData.chat.slice(-100);
+        }
+
+        // Always echo to sender + everyone else in room.
+        socket.emit('new-message', chatMessage);
+        socket.to(`premiere-${premiereId}`).emit('new-message', chatMessage);
+        if (typeof ack === 'function') ack({ ok: true });
       });
 
       // Handle disconnection

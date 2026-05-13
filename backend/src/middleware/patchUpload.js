@@ -36,7 +36,7 @@ const fileFilter = (req, file, cb) => {
     'application/octet-stream'        // Fallback for executables
   ];
 
-  const allowedExts = ['.exe', '.msi', '.msp', '.msu', '.cab', '.def'];
+  const allowedExts = ['.exe', '.msi', '.msp', '.msu', '.cab', '.def', '.dmg'];
   const ext = path.extname(file.originalname).toLowerCase();
 
   console.log('Patch upload - MIME type:', file.mimetype);
@@ -45,7 +45,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type (${ext}). Supported formats: .exe, .msi, .msp, .msu, .cab, .def`), false);
+    cb(new Error(`Invalid file type (${ext}). Supported formats: .exe, .msi, .msp, .msu, .cab, .def, .dmg`), false);
   }
 };
 
