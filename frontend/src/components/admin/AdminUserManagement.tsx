@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import userService from '../../services/userService';
+import { useNotification } from '../../contexts/NotificationContext';
 import { User, CreateUserData, UpdateUserData } from '../../types/user';
 import CreateUserModal from './CreateUserModal';
 import EditUserModal from './EditUserModal';
@@ -9,6 +10,7 @@ import UserTable from './UserTable';
 
 const AdminUserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const { showSuccess } = useNotification();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -128,6 +130,7 @@ const AdminUserManagement: React.FC = () => {
       await userService.deleteUser(userToDelete._id);
       setShowDeleteModal(false);
       setUserToDelete(null);
+      showSuccess('User deleted successfully.');
       fetchUsers();
     } catch (err: any) {
       setError(err.message || 'Failed to delete user');

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const PATCH_TITLE_MAX_LENGTH = 90;
+const PATCH_TITLE_MAX_LENGTH = 40;
 const PATCH_DESCRIPTION_MAX_LENGTH = 180;
 
 const patchSchema = new mongoose.Schema({

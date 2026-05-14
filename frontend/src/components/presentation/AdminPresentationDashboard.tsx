@@ -14,6 +14,10 @@ import {
   MAX_PRESENTATION_TITLE_LENGTH,
   MAX_PRESENTATION_DESCRIPTION_LENGTH,
   MAX_PRESENTATION_TAGS,
+  MIN_TAG_LENGTH,
+  MAX_TAG_LENGTH,
+  SINGLE_TAG_REGEX,
+  sanitizeAssetText,
   normalizeTitle,
   normalizeDescription,
 } from '../../utils/assetValidation';
@@ -809,6 +813,16 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
       return;
     }
 
+    if (
+      nextTag.length < MIN_TAG_LENGTH ||
+      nextTag.length > MAX_TAG_LENGTH ||
+      !SINGLE_TAG_REGEX.test(nextTag)
+    ) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
     if (!formData.tags.includes(nextTag)) {
       setFormData(prev => ({
         ...prev,
@@ -879,7 +893,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 ref={titleInputRef}
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -906,7 +920,7 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
               <textarea
                 ref={descriptionInputRef}
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -961,10 +975,11 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                   ref={tagInputRef}
                   type="text"
                   value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
+                  onChange={(e) => setTagInput(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, MAX_TAG_LENGTH))}
+                  maxLength={MAX_TAG_LENGTH}
                   onInput={(e) => e.currentTarget.setCustomValidity('')}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  placeholder="Add a tag"
+                  placeholder={`Add tag (${MIN_TAG_LENGTH}-${MAX_TAG_LENGTH} chars)`}
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                   style={{ 
                     backgroundColor: 'var(--color-hover)', 
@@ -972,7 +987,6 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                     color: 'var(--color-text)'
                   }}
                   disabled={uploading}
-                  maxLength={30}
                 />
                 <button
                   type="button"
@@ -1124,6 +1138,16 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
       return;
     }
 
+    if (
+      nextTag.length < MIN_TAG_LENGTH ||
+      nextTag.length > MAX_TAG_LENGTH ||
+      !SINGLE_TAG_REGEX.test(nextTag)
+    ) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
     if (!formData.tags.includes(nextTag)) {
       setFormData((prev) => ({
         ...prev,
@@ -1174,7 +1198,7 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
                 ref={titleInputRef}
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, title: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -1200,7 +1224,7 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
               <textarea
                 ref={descriptionInputRef}
                 value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -1253,10 +1277,11 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
                   ref={tagInputRef}
                   type="text"
                   value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, ''))}
+                  onChange={(e) => setTagInput(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, MAX_TAG_LENGTH))}
+                  maxLength={MAX_TAG_LENGTH}
                   onInput={(e) => e.currentTarget.setCustomValidity('')}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  placeholder="Add a tag"
+                  placeholder={`Add tag (${MIN_TAG_LENGTH}-${MAX_TAG_LENGTH} chars)`}
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                   style={{
                     backgroundColor: 'var(--color-hover)',
@@ -1264,7 +1289,6 @@ const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentat
                     color: 'var(--color-text)',
                   }}
                   disabled={saving}
-                  maxLength={30}
                 />
                 <button
                   type="button"

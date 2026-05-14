@@ -13,6 +13,8 @@ import {
   validateVideoUpload,
   MAX_ASSET_TITLE_LENGTH,
   MAX_ASSET_DESCRIPTION_LENGTH,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
   sanitizeAssetText,
   sanitizeAssetTags,
 } from '../../utils/assetValidation';
@@ -20,7 +22,7 @@ import {
 const requiredLabelClass = 'ml-1';
 
 const AdminVideoDashboard: React.FC = () => {
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const [activeTab, setActiveTab] = useState<'videos' | 'verification'>('videos');
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +188,7 @@ const AdminVideoDashboard: React.FC = () => {
       await videoService.deleteVideo(videoToDelete._id);
       setShowDeleteModal(false);
       setVideoToDelete(null);
+      showSuccess('Video deleted successfully.');
       console.log('Video deleted successfully by administrator');
       // Refetch videos to update pagination and fill the gap with next page videos
       fetchVideos();
@@ -956,7 +959,8 @@ const VideoEditModal: React.FC<VideoEditModalProps> = ({ video, onClose, onSave 
                 color: 'var(--color-text)',
                 '--tw-ring-color': 'var(--color-accent)',
               } as React.CSSProperties}
-              placeholder="action, thriller, drama"
+              placeholder={`tag1, tag2 (max ${MAX_TAGS}, ${MAX_TAG_LENGTH} chars each)`}
+              maxLength={MAX_TAGS * (MAX_TAG_LENGTH + 2)}
             />
           </div>
 

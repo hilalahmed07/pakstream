@@ -10,15 +10,26 @@ import ConfirmationDialog from '../common/ConfirmationDialog';
 import VerificationTabLayout from '../common/VerificationTabLayout';
 import {
   validatePatchUpload,
-  MAX_ASSET_TITLE_LENGTH,
+  sanitizeAssetText,
+  sanitizeAssetTags,
+  MAX_PATCH_TITLE_LENGTH,
   MAX_ASSET_DESCRIPTION_LENGTH,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
 } from '../../utils/assetValidation';
 
 const PATCH_CATEGORIES = ['security', 'system', 'application', 'driver', 'other'] as const;
 const PATCH_TYPES = ['security', 'feature', 'bugfix', 'driver', 'update', 'other'] as const;
 const PATCH_ARCHITECTURES = ['x86', 'x64', 'arm64', 'all'] as const;
 const PATCH_TARGET_OS_OPTIONS = ['windows 10', 'windows 11', 'windows server 2019', 'windows server 2022', 'all'] as const;
-const sanitizePatchText = (value: string) => value.replace(/[^a-zA-Z0-9\s.,_-]/g, '');
+const sanitizePatchTitle = (value: string) => value.replace(/[^a-zA-Z0-9\s_-]/g, '');
+const sanitizePatchVersion = (value: string) => {
+  const cleaned = value.replace(/[^0-9.]/g, '').replace(/\.{2,}/g, '.');
+  return cleaned.split('.').slice(0, 3).map(s => s.slice(0, 3)).join('.');
+};
+const PATCH_VERSION_PATTERN = /^(?:0|[1-9][0-9]?|100)\.(?:0|[1-9][0-9]?|100)\.(?:0|[1-9][0-9]?|100)$/;
+const PATCH_VERSION_MESSAGE = 'Version must be in the format N.N.N with exactly 2 dots and each N between 0 and 100 (e.g. 2.0.100).';
+const isValidPatchVersion = (value: string) => value === '' || PATCH_VERSION_PATTERN.test(value);
 const requiredLabelClass = 'ml-1';
 
 const toggleTargetOs = (current: string[], value: string): string[] => {
@@ -572,7 +583,7 @@ const AdminPatchDashboard: React.FC = () => {
                               }}
                               className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 hover:bg-blue-500/25 transition-all shadow-sm hover:shadow-md active:shadow-sm"
                             >
-                              Run Audit
+                              Verify
                             </button>
                           </td>
                         </tr>
@@ -604,6 +615,7 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const targetOsInputRef = useRef<HTMLInputElement>(null);
+  const versionInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -611,13 +623,21 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
     titleInputRef.current?.setCustomValidity('');
     descriptionInputRef.current?.setCustomValidity('');
     targetOsInputRef.current?.setCustomValidity('');
+    versionInputRef.current?.setCustomValidity('');
 
     const normalizedFormData = {
       ...formData,
       title: formData.title.trim(),
-      description: formData.description.trim()
+      description: formData.description.trim(),
+      version: (formData.version || '').trim()
     };
-    
+
+    if (!isValidPatchVersion(normalizedFormData.version)) {
+      versionInputRef.current?.setCustomValidity(PATCH_VERSION_MESSAGE);
+      versionInputRef.current?.reportValidity();
+      return;
+    }
+
     // Validate all fields
     const validationResult = validatePatchUpload({
       title: normalizedFormData.title,
@@ -680,26 +700,26 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title<span className={requiredLabelClass}>*</span>
               </label>
-              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchTitle(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_PATCH_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Version
               </label>
-              <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <input ref={versionInputRef} type="text" placeholder="e.g. 1.2.2" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchVersion(e.target.value).slice(0, 11)})} onInput={(e) => e.currentTarget.setCustomValidity('')} title="Format: N.N.N where each N is 1–100 (e.g. 1.2.2)" maxLength={11} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Description<span className={requiredLabelClass}>*</span>
             </label>
-            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizeAssetText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Tags
             </label>
-            <input type="text" placeholder="Tags (comma separated)" value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            <input type="text" placeholder={`Tags (comma separated, max ${MAX_TAGS}, ${MAX_TAG_LENGTH} chars each)`} value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizeAssetTags(e.target.value)})} maxLength={MAX_TAGS * (MAX_TAG_LENGTH + 2)} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -764,18 +784,27 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const targetOsInputRef = useRef<HTMLInputElement>(null);
+  const versionInputRef = useRef<HTMLInputElement>(null);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
     titleInputRef.current?.setCustomValidity('');
     descriptionInputRef.current?.setCustomValidity('');
     targetOsInputRef.current?.setCustomValidity('');
+    versionInputRef.current?.setCustomValidity('');
 
     const normalizedFormData = {
       ...formData,
       title: formData.title.trim(),
-      description: formData.description.trim()
+      description: formData.description.trim(),
+      version: (formData.version || '').trim()
     };
+
+    if (!isValidPatchVersion(normalizedFormData.version)) {
+      versionInputRef.current?.setCustomValidity(PATCH_VERSION_MESSAGE);
+      versionInputRef.current?.reportValidity();
+      return;
+    }
 
     const validationResult = validatePatchUpload(normalizedFormData);
     console.log('[PatchEditModal] Validation result:', validationResult);
@@ -828,26 +857,26 @@ const PatchEditModal: React.FC<{ patch: Patch; onClose: () => void; onEdit: (id:
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title<span className={requiredLabelClass}>*</span>
               </label>
-              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_ASSET_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+              <input ref={titleInputRef} type="text" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: sanitizePatchTitle(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Title is required.'); }} maxLength={MAX_PATCH_TITLE_LENGTH} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Version
               </label>
-              <input type="text" placeholder="Version" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <input ref={versionInputRef} type="text" placeholder="e.g. 1.2.2" value={formData.version} onChange={e => setFormData({...formData, version: sanitizePatchVersion(e.target.value).slice(0, 11)})} onInput={(e) => e.currentTarget.setCustomValidity('')} title="Format: N.N.N where each N is 1–100 (e.g. 1.2.2)" maxLength={11} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Description<span className={requiredLabelClass}>*</span>
             </label>
-            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizePatchText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
+            <textarea ref={descriptionInputRef} placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: sanitizeAssetText(e.target.value)})} onInput={(e) => e.currentTarget.setCustomValidity('')} onInvalid={(e) => { if (!e.currentTarget.value.trim()) e.currentTarget.setCustomValidity('Description is required.'); }} maxLength={MAX_ASSET_DESCRIPTION_LENGTH} className="w-full p-2.5 rounded border outline-none h-24" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} required />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Tags
             </label>
-            <input type="text" placeholder="Tags (comma separated)" value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizePatchText(e.target.value)})} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            <input type="text" placeholder={`Tags (comma separated, max ${MAX_TAGS}, ${MAX_TAG_LENGTH} chars each)`} value={formData.tags} onChange={e => setFormData({...formData, tags: sanitizeAssetTags(e.target.value)})} maxLength={MAX_TAGS * (MAX_TAG_LENGTH + 2)} className="w-full p-2.5 rounded border outline-none" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>

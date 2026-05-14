@@ -4,6 +4,10 @@
 export const TITLE_REGEX = /^(?=.*[A-Za-z])[A-Za-z0-9\s]+$/;
 export const DESCRIPTION_REGEX = /^(?=.*[A-Za-z])[A-Za-z0-9\s]+$/;
 export const TAGS_REGEX = /^[A-Za-z0-9\s,]+$/;
+export const SINGLE_TAG_REGEX = /^[A-Za-z0-9]+$/;
+export const MIN_TAG_LENGTH = 3;
+export const MAX_TAG_LENGTH = 5;
+export const MAX_TAGS = 3;
 
 // File type validations
 export const VIDEO_FILE_TYPES = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'];
@@ -20,21 +24,23 @@ export const MAX_ASSET_TITLE_LENGTH = 90;
 export const MAX_ASSET_DESCRIPTION_LENGTH = 180;
 export const MAX_PRESENTATION_TITLE_LENGTH = MAX_ASSET_TITLE_LENGTH;
 export const MAX_PRESENTATION_DESCRIPTION_LENGTH = MAX_ASSET_DESCRIPTION_LENGTH;
-export const MAX_PRESENTATION_TAGS = 3;
+export const MAX_PRESENTATION_TAGS = MAX_TAGS;
 export const MAX_DOCUMENT_TITLE_LENGTH = MAX_ASSET_TITLE_LENGTH;
 export const MAX_DOCUMENT_DESCRIPTION_LENGTH = MAX_ASSET_DESCRIPTION_LENGTH;
-export const MAX_DOCUMENT_TAGS = 3;
+export const MAX_DOCUMENT_TAGS = MAX_TAGS;
+export const MAX_PATCH_TITLE_LENGTH = 40;
 
 // Validation messages
 export const TITLE_MESSAGE = `Title must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_ASSET_TITLE_LENGTH} characters or fewer.`;
 export const DESCRIPTION_MESSAGE = `Description must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_ASSET_DESCRIPTION_LENGTH} characters or fewer.`;
-export const TAGS_MESSAGE = 'Tags can only contain letters, numbers, spaces, and commas.';
+export const TAGS_MESSAGE = `Tags must be letters/numbers only, ${MIN_TAG_LENGTH}–${MAX_TAG_LENGTH} characters each, and at most ${MAX_TAGS} tags (comma-separated).`;
 export const PRESENTATION_TITLE_MESSAGE = `Title must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_PRESENTATION_TITLE_LENGTH} characters or fewer.`;
 export const PRESENTATION_DESCRIPTION_MESSAGE = `Description must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_PRESENTATION_DESCRIPTION_LENGTH} characters or fewer.`;
-export const PRESENTATION_TAGS_MESSAGE = `Tags can only contain letters, numbers, spaces, and commas, with a maximum of ${MAX_PRESENTATION_TAGS} tags.`;
+export const PRESENTATION_TAGS_MESSAGE = `Tags must be letters/numbers only, ${MIN_TAG_LENGTH}–${MAX_TAG_LENGTH} characters each, max ${MAX_PRESENTATION_TAGS} tags.`;
 export const DOCUMENT_TITLE_MESSAGE = `Title must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_DOCUMENT_TITLE_LENGTH} characters or fewer.`;
 export const DOCUMENT_DESCRIPTION_MESSAGE = `Description must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_DOCUMENT_DESCRIPTION_LENGTH} characters or fewer.`;
-export const DOCUMENT_TAGS_MESSAGE = `Tags can only contain letters, numbers, spaces, and commas, with a maximum of ${MAX_DOCUMENT_TAGS} tags.`;
+export const DOCUMENT_TAGS_MESSAGE = `Tags must be letters/numbers only, ${MIN_TAG_LENGTH}–${MAX_TAG_LENGTH} characters each, max ${MAX_DOCUMENT_TAGS} tags.`;
+export const PATCH_TITLE_MESSAGE = `Title must contain at least one letter, use only letters, numbers, and spaces, and be ${MAX_PATCH_TITLE_LENGTH} characters or fewer.`;
 export const REQUIRED_FIELDS_MESSAGE = 'Please fill in all required fields.';
 
 export const VIDEO_SIZE_MESSAGE = 'Video file size must be less than 2GB.';
@@ -64,9 +70,15 @@ export const isValidDescription = (value: string): boolean => {
   return trimmed.length === 0 || (trimmed.length <= MAX_ASSET_DESCRIPTION_LENGTH && DESCRIPTION_REGEX.test(trimmed));
 };
 
-export const isValidTags = (value: string): boolean => {
-  const trimmed = normalizeTags(value);
-  return trimmed.length === 0 || TAGS_REGEX.test(trimmed);
+export const isValidTags = (value: string | string[]): boolean => {
+  const tagList = Array.isArray(value)
+    ? value.map((t) => t.trim()).filter(Boolean)
+    : normalizeTags(value).split(',').map((t) => t.trim()).filter(Boolean);
+  if (tagList.length === 0) return true;
+  if (tagList.length > MAX_TAGS) return false;
+  return tagList.every(
+    (t) => SINGLE_TAG_REGEX.test(t) && t.length >= MIN_TAG_LENGTH && t.length <= MAX_TAG_LENGTH
+  );
 };
 
 // Video validation
@@ -261,8 +273,8 @@ export const validatePatchUpload = (data: {
     return REQUIRED_FIELDS_MESSAGE;
   }
 
-  if (!isValidTitle(data.title)) {
-    return TITLE_MESSAGE;
+  if (!isValidTitle(data.title) || normalizeTitle(data.title).length > MAX_PATCH_TITLE_LENGTH) {
+    return PATCH_TITLE_MESSAGE;
   }
 
   if (!isValidDescription(data.description)) {

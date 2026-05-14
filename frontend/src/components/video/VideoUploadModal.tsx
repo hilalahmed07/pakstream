@@ -7,6 +7,8 @@ import {
   validateVideoUpload,
   MAX_ASSET_TITLE_LENGTH,
   MAX_ASSET_DESCRIPTION_LENGTH,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
   sanitizeAssetText,
   sanitizeAssetTags,
 } from '../../utils/assetValidation';
@@ -513,10 +515,11 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 color: 'var(--color-text)',
                 '--tw-ring-color': 'var(--color-accent)'
               } as React.CSSProperties}
-              placeholder="Enter tags separated by commas"
+              placeholder={`tag1, tag2 (max ${MAX_TAGS}, ${MAX_TAG_LENGTH} chars each)`}
+              maxLength={MAX_TAGS * (MAX_TAG_LENGTH + 2)}
             />
             <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Separate tags with commas (e.g., action, adventure, thriller)
+              Up to {MAX_TAGS} tags, each {MAX_TAG_LENGTH} chars or fewer (letters/numbers).
             </p>
           </div>
 

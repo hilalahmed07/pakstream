@@ -6,15 +6,21 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
 
-const PATCH_TITLE_MAX = 90;
+const PATCH_TITLE_MAX = 40;
 const PATCH_DESCRIPTION_MAX = 180;
 
 const validatePatchPayload = ({ title, description }) => {
   const trimmedTitle = String(title || '').trim();
   const trimmedDescription = String(description || '').trim();
+  // Allows only letters, numbers, spaces, underscores, and dashes
+  const titleRegex = /^(?=.*[A-Za-z])[A-Za-z0-9\s_-]+$/;
 
   if (!trimmedTitle || !trimmedDescription) {
     return { message: 'Title and description are required' };
+  }
+
+  if (!titleRegex.test(trimmedTitle)) {
+    return { message: 'Title must contain at least one letter and use only letters, numbers, spaces, underscores, or dashes (no dots or commas)' };
   }
 
   if (trimmedTitle.length > PATCH_TITLE_MAX) {
@@ -126,12 +132,17 @@ const uploadPatch = async (req, res) => {
   } catch (error) {
     console.error('Upload error:', error);
 
+
     // Check if it's a Mongoose validation error
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map((err) => err.message);
+      // Map field errors: { field: message }
+      const fieldErrors = {};
+      for (const [field, errObj] of Object.entries(error.errors)) {
+        fieldErrors[field] = errObj.message;
+      }
       return res.status(400).json({
         message: 'Validation failed',
-        errors: messages
+        errors: fieldErrors
       });
     }
 

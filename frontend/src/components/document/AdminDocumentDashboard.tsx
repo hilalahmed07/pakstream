@@ -10,9 +10,12 @@ import ConfirmationDialog from '../common/ConfirmationDialog';
 import VerificationTabLayout from '../common/VerificationTabLayout';
 import {
   validateDocumentUpload,
+  sanitizeAssetText,
+  sanitizeAssetTags,
   MAX_DOCUMENT_TITLE_LENGTH,
   MAX_DOCUMENT_DESCRIPTION_LENGTH,
   MAX_DOCUMENT_TAGS,
+  MAX_TAG_LENGTH,
 } from '../../utils/assetValidation';
 
 const requiredLabelClass = 'ml-1';
@@ -822,7 +825,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 ref={titleInputRef}
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -848,7 +851,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               <textarea
                 ref={descriptionInputRef}
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -899,7 +902,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                 type="text"
                 value={formData.tags}
                 onChange={(e) => {
-                  const sanitizedTags = e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '');
+                  const sanitizedTags = sanitizeAssetTags(e.target.value);
                   const normalizedTags = sanitizedTags
                     .split(',')
                     .map((tag) => tag.trim())
@@ -910,7 +913,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                   }
                 }}
                 disabled={uploading}
-                placeholder="e.g., research, report, analysis"
+                placeholder={`e.g. tag1, tag2 (max ${MAX_DOCUMENT_TAGS}, ${MAX_TAG_LENGTH} chars each)`}
+                maxLength={MAX_DOCUMENT_TAGS * (MAX_TAG_LENGTH + 2)}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
@@ -1047,7 +1051,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                 ref={titleInputRef}
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, title: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -1073,7 +1077,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
               <textarea
                 ref={descriptionInputRef}
                 value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '') }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: sanitizeAssetText(e.target.value) }))}
                 onInput={(e) => e.currentTarget.setCustomValidity('')}
                 onInvalid={(e) => {
                   if (!e.currentTarget.value.trim()) {
@@ -1125,7 +1129,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                 type="text"
                 value={formData.tags}
                 onChange={(e) => {
-                  const sanitizedTags = e.target.value.replace(/[^a-zA-Z0-9\s.,_-]/g, '');
+                  const sanitizedTags = sanitizeAssetTags(e.target.value);
                   const normalizedTags = sanitizedTags
                     .split(',')
                     .map((tag) => tag.trim())
@@ -1138,7 +1142,8 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                   }
                 }}
                 disabled={saving}
-                placeholder="e.g., research, report, analysis"
+                placeholder={`e.g. tag1, tag2 (max ${MAX_DOCUMENT_TAGS}, ${MAX_TAG_LENGTH} chars each)`}
+                maxLength={MAX_DOCUMENT_TAGS * (MAX_TAG_LENGTH + 2)}
                 className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
                 style={{
                   backgroundColor: 'var(--color-hover)',

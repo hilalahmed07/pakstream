@@ -116,7 +116,13 @@ class PatchService {
         } else {
           try {
             const errorData = JSON.parse(xhr.responseText);
-            reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
+            const fieldErrors = errorData.errors && typeof errorData.errors === 'object'
+              ? Object.entries(errorData.errors).map(([field, msg]) => `${field}: ${msg}`).join('; ')
+              : '';
+            const message = fieldErrors
+              ? `${errorData.message || 'Validation failed'} - ${fieldErrors}`
+              : (errorData.message || `Upload failed with status ${xhr.status}`);
+            reject(new Error(message));
           } catch (error) {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }

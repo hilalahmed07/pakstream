@@ -146,6 +146,13 @@ const createUser = async (req, res) => {
       });
     }
 
+    // Validate First and Last Name if provided
+    const nameRegex = /^[A-Za-z\s]+$/;
+    if ((profile?.firstName && !nameRegex.test(profile.firstName)) || 
+        (profile?.lastName && !nameRegex.test(profile.lastName))) {
+      return res.status(400).json({ success: false, message: 'Names can only contain alphabetical characters' });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({
       $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
@@ -251,6 +258,13 @@ const updateUser = async (req, res) => {
           message: EMAIL_MESSAGE
         });
       }
+    }
+
+    // Validate First and Last Name if provided
+    const nameRegex = /^[A-Za-z\s]+$/;
+    if ((profile?.firstName && !nameRegex.test(profile.firstName)) || 
+        (profile?.lastName && !nameRegex.test(profile.lastName))) {
+      return res.status(400).json({ success: false, message: 'Names can only contain alphabetical characters' });
     }
 
     if (normalizedUsername !== undefined) {
@@ -442,4 +456,3 @@ module.exports = {
   toggleUserStatus,
   deleteUser
 };
-
