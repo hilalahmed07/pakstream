@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Presentation } from '../../types/presentation';
 import presentationService from '../../services/presentationService';
+import { useAuth } from '../../hooks';
+import { useNotification } from '../../contexts/NotificationContext';
 
 interface PresentationGridProps {
   presentations: Presentation[];
@@ -8,6 +10,8 @@ interface PresentationGridProps {
 }
 
 const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
+  const { user } = useAuth();
+  const { showError } = useNotification();
   const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
 
   // Initialize local state from presentations when they change
@@ -42,10 +46,15 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
 
   const handleLikeClick = async (e: React.MouseEvent, presentation: Presentation) => {
     e.stopPropagation(); // Prevent triggering the card click
-    
+
+    if (!user) {
+      showError('Please login to like presentations');
+      return;
+    }
+
     const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
     const action = local.isLiked ? 'unlike' : 'like';
-    
+
     try {
       const result = await presentationService.toggleLike(presentation._id, action);
       setLocalPresentations(prev => {
@@ -59,6 +68,7 @@ const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPr
       });
     } catch (error) {
       console.error('Failed to toggle like:', error);
+      showError(error instanceof Error ? error.message : 'Failed to toggle like');
     }
   };
 

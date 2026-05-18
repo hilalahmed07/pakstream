@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Document } from '../../types/document';
 import documentService from '../../services/documentService';
+import { useAuth } from '../../hooks';
+import { useNotification } from '../../contexts/NotificationContext';
 
 interface DocumentGridProps {
   documents: Document[];
@@ -8,6 +10,8 @@ interface DocumentGridProps {
 }
 
 const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick }) => {
+  const { user } = useAuth();
+  const { showError } = useNotification();
   const [localDocuments, setLocalDocuments] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
 
   // Initialize local state from documents when they change
@@ -42,10 +46,15 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
 
   const handleLikeClick = async (e: React.MouseEvent, document: Document) => {
     e.stopPropagation(); // Prevent triggering the card click
-    
+
+    if (!user) {
+      showError('Please login to like documents');
+      return;
+    }
+
     const local = getLocalData(document._id, document.views, document.likes, document.isLiked ?? false);
     const action = local.isLiked ? 'unlike' : 'like';
-    
+
     try {
       const result = await documentService.toggleLike(document._id, action);
       setLocalDocuments(prev => {
@@ -59,6 +68,7 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
       });
     } catch (error) {
       console.error('Failed to toggle like:', error);
+      showError(error instanceof Error ? error.message : 'Failed to toggle like');
     }
   };
 

@@ -20,7 +20,26 @@ import {
   sanitizeAssetText,
   normalizeTitle,
   normalizeDescription,
+  PRESENTATION_FILE_TYPES,
+  MAX_PRESENTATION_SIZE,
 } from '../../utils/assetValidation';
+
+const PRESENTATION_PICKER_TYPES = ['ppt', 'pptx', 'odp'];
+const validatePickedPresentation = (file: File): string | null => {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const allowed = Array.from(new Set([...PRESENTATION_FILE_TYPES, ...PRESENTATION_PICKER_TYPES]));
+  const isPresentationExt = ext ? allowed.includes(ext) : false;
+  if (!isPresentationExt) {
+    const shownExt = ext ? `.${ext}` : 'this file';
+    const allowedLabel = PRESENTATION_PICKER_TYPES.map((t) => `.${t}`).join(', ');
+    return `Only presentation files are allowed. You selected ${shownExt} — please choose a ${allowedLabel} file.`;
+  }
+  if (file.size > MAX_PRESENTATION_SIZE) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    return `File is too large (${sizeMb} MB). Maximum size is 100 MB.`;
+  }
+  return null;
+};
 
 const requiredLabelClass = 'ml-1';
 
@@ -179,7 +198,15 @@ const AdminPresentationDashboard: React.FC = () => {
     try {
       await presentationService.deletePresentation(deleteConfirm.presentationId);
       showSuccess('Presentation has been deleted');
-      fetchPresentations();
+      // If we just removed the only row on a non-first page, step back one
+      // page — otherwise the user is stranded on an empty page. Changing
+      // currentPage triggers the fetch effect; only re-fetch directly when
+      // we're staying on the same page.
+      if (presentations.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchPresentations();
+      }
       setDeleteConfirm({ isOpen: false, presentationId: null });
     } catch (error) {
       console.error('Delete failed:', error);
@@ -522,6 +549,17 @@ const AdminPresentationDashboard: React.FC = () => {
                                 Delete
                               </button>
                             </div>
+                          ) : presentation.status === 'error' ? (
+                            // Failed uploads have nothing useful to edit, but admins
+                            // need to be able to clear them out of the dashboard.
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleDelete(presentation._id)}
+                                className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           ) : (
                             <div />
                           )}
@@ -729,11 +767,31 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
     tags: []
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.currentTarget.setCustomValidity('');
+    const file = e.target.files?.[0];
+    if (!file) {
+      setSelectedFile(null);
+      setFileError(null);
+      return;
+    }
+    const err = validatePickedPresentation(file);
+    if (err) {
+      setFileError(err);
+      setSelectedFile(null);
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    setSelectedFile(file);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -866,22 +924,34 @@ const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClo
                 ref={fileInputRef}
                 type="file"
                 accept=".ppt,.pptx,.odp"
-                onChange={(e) => {
-                  setSelectedFile(e.target.files?.[0] || null);
-                  e.currentTarget.setCustomValidity('');
-                }}
+                onChange={handleFileSelect}
                 className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                style={{ 
-                  backgroundColor: 'var(--color-hover)', 
-                  border: '1px solid var(--color-border)',
+                style={{
+                  backgroundColor: 'var(--color-hover)',
+                  border: fileError ? '1px solid rgb(248, 113, 113)' : '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 required
                 disabled={uploading}
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-                Supported formats: .ppt, .pptx, .odp (Max 100MB)
-              </p>
+              {fileError ? (
+                <p
+                  className="text-xs mt-2 px-3 py-2 rounded-md flex items-start gap-2"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: 'rgb(248, 113, 113)'
+                  }}
+                  role="alert"
+                >
+                  <span aria-hidden>⚠️</span>
+                  <span>{fileError}</span>
+                </p>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                  Supported formats: .ppt, .pptx, .odp (Max 100MB)
+                </p>
+              )}
             </div>
 
             {/* Title */}

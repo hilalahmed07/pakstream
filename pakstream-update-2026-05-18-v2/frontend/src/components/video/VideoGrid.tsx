@@ -15,17 +15,20 @@ interface VideoGridProps {
   showDeleteButton?: boolean;
   showEditButton?: boolean;
   onLikesCountClick?: (video: Video) => void;
+  /** Hide the hover play button (used by admin views that don't need preview-from-grid) */
+  hidePlayButton?: boolean;
 }
 
-const VideoGrid: React.FC<VideoGridProps> = ({ 
-  videos, 
-  loading, 
-  onVideoClick, 
+const VideoGrid: React.FC<VideoGridProps> = ({
+  videos,
+  loading,
+  onVideoClick,
   onDeleteClick,
   onEditClick,
   showDeleteButton = false,
   showEditButton = false,
-  onLikesCountClick
+  onLikesCountClick,
+  hidePlayButton = false
 }) => {
   const { user } = useAuth();
   const { showError } = useNotification();
@@ -186,16 +189,18 @@ const VideoGrid: React.FC<VideoGridProps> = ({
 
             {/* Play Button Overlay */}
             <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-30">
-              <button
-                onClick={() => onVideoClick(video)}
-                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-text-primary p-3 rounded-full transition-colors"
-                title="Play video"
-              >
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </button>
-              
+              {!hidePlayButton && (
+                <button
+                  onClick={() => onVideoClick(video)}
+                  className="bg-white bg-opacity-20 hover:bg-opacity-30 text-text-primary p-3 rounded-full transition-colors"
+                  title="Play video"
+                >
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </button>
+              )}
+
               {/* Download Button - only show if user is logged in and video is ready */}
               {user && video.status === 'ready' && (
                 <button

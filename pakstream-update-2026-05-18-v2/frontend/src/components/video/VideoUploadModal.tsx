@@ -13,7 +13,24 @@ import {
   SINGLE_TAG_REGEX,
   TAGS_MESSAGE,
   sanitizeAssetText,
+  VIDEO_FILE_TYPES,
+  MAX_VIDEO_SIZE,
 } from '../../utils/assetValidation';
+
+const validatePickedVideo = (file: File): string | null => {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const isVideoExt = ext ? VIDEO_FILE_TYPES.includes(ext) : false;
+  if (!isVideoExt) {
+    const shownExt = ext ? `.${ext}` : 'this file';
+    const allowed = VIDEO_FILE_TYPES.map((t) => `.${t}`).join(', ');
+    return `Only video files are allowed. You selected ${shownExt} — please choose a ${allowed} file.`;
+  }
+  if (file.size > MAX_VIDEO_SIZE) {
+    const sizeGb = (file.size / (1024 * 1024 * 1024)).toFixed(2);
+    return `File is too large (${sizeGb} GB). Maximum size is 2 GB.`;
+  }
+  return null;
+};
 
 interface VideoUploadModalProps {
   isOpen: boolean;
@@ -44,6 +61,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,10 +113,22 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setError(null);
+    if (!file) {
+      setSelectedFile(null);
+      setFileError(null);
+      return;
     }
+    const err = validatePickedVideo(file);
+    if (err) {
+      setFileError(err);
+      setSelectedFile(null);
+      // Reset the input so the user can re-pick the same filename after correcting.
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    setSelectedFile(file);
+    setError(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -127,6 +157,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       });
       setSelectedFile(null);
       setError(null);
+      setFileError(null);
       setIsUploading(false);
       setTagInput('');
       if (fileInputRef.current) {
@@ -330,7 +361,13 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Video File *
             </label>
-            <div className="border-2 border-dashed rounded-lg p-6 text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-hover)' }}>
+            <div
+              className="border-2 border-dashed rounded-lg p-6 text-center"
+              style={{
+                borderColor: fileError ? 'rgb(248, 113, 113)' : 'var(--color-border)',
+                backgroundColor: 'var(--color-hover)'
+              }}
+            >
               <input
                 ref={fileInputRef}
                 type="file"
@@ -349,6 +386,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                     type="button"
                     onClick={() => {
                       setSelectedFile(null);
+                      setFileError(null);
                       if (fileInputRef.current) {
                         fileInputRef.current.value = '';
                       }
@@ -372,11 +410,25 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                     Select Video File
                   </button>
                   <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-                    Max size: 2GB. Supported formats: MP4, AVI, MOV, WMV, FLV, WebM, MKV, 3GP
+                    Max size: 2GB. Supported formats: MP4, AVI, MOV, WMV, FLV, WebM, MKV
                   </p>
                 </div>
               )}
             </div>
+            {fileError && (
+              <p
+                className="text-xs mt-2 px-3 py-2 rounded-md flex items-start gap-2"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: 'rgb(248, 113, 113)'
+                }}
+                role="alert"
+              >
+                <span aria-hidden>⚠️</span>
+                <span>{fileError}</span>
+              </p>
+            )}
           </div>
 
           {/* Progress for an in-flight upload is shown by the dashboard's

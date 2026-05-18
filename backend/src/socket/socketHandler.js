@@ -11,6 +11,9 @@ class SocketHandler {
     });
 
     this.premiereRooms = new Map(); // Store premiere room data
+    // Track the active socket per admin userId so a second login can
+    // gracefully evict the previous session from any other browser/tab.
+    this.adminSessions = new Map(); // userId -> socketId
     this.setupSocketHandlers();
   }
 
@@ -44,6 +47,33 @@ class SocketHandler {
 
     this.io.on('connection', (socket) => {
       console.log('User connected:', socket.id, socket.userName || 'Anonymous');
+
+      // Enforce single-session per admin: if this admin already has another
+      // socket open (different browser/tab), notify that older session and
+      // force it to disconnect so only the latest login stays active.
+      if (socket.userId && socket.userRole === 'admin') {
+        const existingSocketId = this.adminSessions.get(socket.userId);
+        if (existingSocketId && existingSocketId !== socket.id) {
+          const existingSocket = this.io.sockets.sockets.get(existingSocketId);
+          if (existingSocket) {
+            existingSocket.emit('force-logout', {
+              reason: 'concurrent-login',
+              message:
+                'Your account has been signed in on another device or browser. For your security, this session has been ended.'
+            });
+            // Give the client a brief moment to render the notification
+            // before we tear the socket down.
+            setTimeout(() => {
+              try {
+                existingSocket.disconnect(true);
+              } catch (e) {
+                console.error('Error disconnecting previous admin session:', e);
+              }
+            }, 500);
+          }
+        }
+        this.adminSessions.set(socket.userId, socket.id);
+      }
 
       // Join premiere room
       socket.on('join-premiere', async (premiereId) => {
@@ -442,7 +472,14 @@ class SocketHandler {
       // Handle disconnection
       socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        
+
+        // Release the admin session slot only if this socket still owns it.
+        // (A newer login may have already overwritten the entry — don't
+        // accidentally delete the active session in that case.)
+        if (socket.userId && this.adminSessions.get(socket.userId) === socket.id) {
+          this.adminSessions.delete(socket.userId);
+        }
+
         // Remove from all premiere rooms
         for (const [premiereId, roomData] of this.premiereRooms.entries()) {
           if (roomData.viewers.has(socket.id)) {

@@ -197,7 +197,15 @@ const AdminDocumentDashboard: React.FC = () => {
     try {
       await documentService.deleteDocument(deleteConfirm.documentId);
       showSuccess('Document has been deleted');
-      fetchDocuments();
+      // If we just removed the only row on a non-first page, step back one
+      // page — otherwise the user is stranded on an empty page. Changing
+      // currentPage triggers the fetch effect; only re-fetch directly when
+      // we're staying on the same page.
+      if (documents.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchDocuments();
+      }
       setDeleteConfirm({ isOpen: false, documentId: null });
     } catch (error) {
       console.error('Delete failed:', error);

@@ -1,30 +1,34 @@
 import React, { useState } from 'react';
-import { Document } from '../../types/document';
-import documentService from '../../services/documentService';
+import { Presentation } from '../../types/presentation';
+import presentationService from '../../services/presentationService';
+import { useAuth } from '../../hooks';
+import { useNotification } from '../../contexts/NotificationContext';
 
-interface DocumentGridProps {
-  documents: Document[];
-  onDocumentClick: (document: Document) => void;
+interface PresentationGridProps {
+  presentations: Presentation[];
+  onPresentationClick: (presentation: Presentation) => void;
 }
 
-const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick }) => {
-  const [localDocuments, setLocalDocuments] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
+const PresentationGrid: React.FC<PresentationGridProps> = ({ presentations, onPresentationClick }) => {
+  const { user } = useAuth();
+  const { showError } = useNotification();
+  const [localPresentations, setLocalPresentations] = useState<Map<string, { views: number; likes: number; isLiked: boolean }>>(new Map());
 
-  // Initialize local state from documents when they change
+  // Initialize local state from presentations when they change
   React.useEffect(() => {
     const newMap = new Map<string, { views: number; likes: number; isLiked: boolean }>();
-    documents.forEach(document => {
-      newMap.set(document._id, {
-        views: document.views,
-        likes: document.likes,
-        isLiked: document.isLiked ?? false
+    presentations.forEach(presentation => {
+      newMap.set(presentation._id, {
+        views: presentation.views,
+        likes: presentation.likes,
+        isLiked: presentation.isLiked ?? false
       });
     });
-    setLocalDocuments(newMap);
-  }, [documents]);
+    setLocalPresentations(newMap);
+  }, [presentations]);
 
   const getLocalData = (id: string, defaultViews: number, defaultLikes: number, defaultIsLiked: boolean) => {
-    const local = localDocuments.get(id);
+    const local = localPresentations.get(id);
     return {
       views: local?.views ?? defaultViews,
       likes: local?.likes ?? defaultLikes,
@@ -32,25 +36,30 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
     };
   };
 
-  const handleClick = async (document: Document) => {
+  const handleClick = async (presentation: Presentation) => {
     // Don't track view here - it will be tracked in the viewer component
     // This prevents duplicate view tracking
     
     // Call the original click handler
-    onDocumentClick(document);
+    onPresentationClick(presentation);
   };
 
-  const handleLikeClick = async (e: React.MouseEvent, document: Document) => {
+  const handleLikeClick = async (e: React.MouseEvent, presentation: Presentation) => {
     e.stopPropagation(); // Prevent triggering the card click
-    
-    const local = getLocalData(document._id, document.views, document.likes, document.isLiked ?? false);
+
+    if (!user) {
+      showError('Please login to like presentations');
+      return;
+    }
+
+    const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
     const action = local.isLiked ? 'unlike' : 'like';
-    
+
     try {
-      const result = await documentService.toggleLike(document._id, action);
-      setLocalDocuments(prev => {
+      const result = await presentationService.toggleLike(presentation._id, action);
+      setLocalPresentations(prev => {
         const newMap = new Map(prev);
-        newMap.set(document._id, {
+        newMap.set(presentation._id, {
           ...local,
           likes: result.likes,
           isLiked: result.isLiked
@@ -59,34 +68,28 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
       });
     } catch (error) {
       console.error('Failed to toggle like:', error);
+      showError(error instanceof Error ? error.message : 'Failed to toggle like');
     }
   };
 
   const getCategoryColor = (category: string) => {
     const colors = {
-      academic: 'bg-blue-600',
-      business: 'bg-green-600',
-      legal: 'bg-purple-600',
-      technical: 'bg-gray-600',
+      business: 'bg-blue-600',
+      education: 'bg-green-600',
+      marketing: 'bg-purple-600',
+      technology: 'bg-gray-600',
+      design: 'bg-pink-600',
       other: 'bg-gray-500'
     };
     return colors[category as keyof typeof colors] || colors.other;
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  if (documents.length === 0) {
+  if (presentations.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-6xl mb-4">📄</div>
-        <h3 className="text-xl font-semibold text-text-primary mb-2">No Documents Found</h3>
-        <p className="text-text-secondary">No documents are available at the moment.</p>
+        <div className="text-6xl mb-4">📊</div>
+        <h3 className="text-xl font-semibold text-text-primary mb-2">No Presentations Found</h3>
+        <p className="text-text-secondary">No presentations are available at the moment.</p>
       </div>
     );
   }
@@ -94,21 +97,21 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
   return (
     <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {documents.map((document) => {
-        const local = getLocalData(document._id, document.views, document.likes, document.isLiked ?? false);
+      {presentations.map((presentation) => {
+        const local = getLocalData(presentation._id, presentation.views, presentation.likes, presentation.isLiked ?? false);
         return (
         <div
-          key={document._id}
-          onClick={() => handleClick(document)}
+          key={presentation._id}
+          onClick={() => handleClick(presentation)}
           className="group cursor-pointer transform transition-all duration-300 hover:scale-105 hover:z-10"
         >
           <div className="relative bg-card rounded-lg overflow-hidden shadow-lg hover:bg-card-hover transition-colors">
             {/* Thumbnail */}
             <div className="aspect-video bg-secondary relative overflow-hidden">
-              {document.thumbnail ? (
+              {presentation.thumbnail ? (
                 <img
-                  src={documentService.getThumbnailUrl(document._id)}
-                  alt={document.title}
+                  src={presentationService.getThumbnailUrl(presentation._id)}
+                  alt={presentation.title}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -117,46 +120,44 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-6xl text-text-secondary">📄</div>
+                  <div className="text-6xl text-text-secondary">📊</div>
                 </div>
               )}
               
               {/* Status Badge */}
               <div className="absolute top-2 left-2">
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  document.status === 'ready' 
+                  presentation.status === 'ready' 
                     ? 'bg-green-600 text-white' 
-                    : document.status === 'processing'
+                    : presentation.status === 'processing'
                     ? 'bg-yellow-600 text-white'
                     : 'bg-red-600 text-white'
                 }`}>
-                  {document.status === 'ready' ? 'Ready' : 
-                   document.status === 'processing' ? 'Processing' : 'Error'}
+                  {presentation.status === 'ready' ? 'Ready' : 
+                   presentation.status === 'processing' ? 'Processing' : 'Error'}
                 </span>
               </div>
 
               {/* Category Badge */}
               <div className="absolute top-2 right-2">
-                <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getCategoryColor(document.category)}`}>
-                  {document.category}
+                <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getCategoryColor(presentation.category)}`}>
+                  {presentation.category}
                 </span>
               </div>
 
-              {/* Page Count */}
-              {document.pageCount > 0 && (
-                <div className="absolute bottom-2 right-2">
-                  <span className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
-                    {document.pageCount} pages
-                  </span>
-                </div>
-              )}
+              {/* Slide Count */}
+              <div className="absolute bottom-2 right-2">
+                <span className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                  {presentation.totalSlides} slides
+                </span>
+              </div>
 
-              {/* View Overlay */}
+              {/* Play Overlay */}
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-text-primary" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                    <svg className="w-8 h-8 text-text-primary ml-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
                     </svg>
                   </div>
                 </div>
@@ -165,12 +166,12 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
 
             {/* Content */}
             <div className="p-4">
-              <h3 className="text-text-primary font-semibold text-lg mb-2 line-clamp-1 group-hover:text-accent transition-colors" title={document.title}>
-                {document.title}
+              <h3 className="text-text-primary font-semibold text-lg mb-2 line-clamp-1 group-hover:text-accent transition-colors" title={presentation.title}>
+                {presentation.title}
               </h3>
 
-              <p className="text-text-secondary text-sm mb-3 line-clamp-2" title={document.description}>
-                {document.description}
+              <p className="text-text-secondary text-sm mb-3 line-clamp-2" title={presentation.description}>
+                {presentation.description}
               </p>
 
               {/* Stats */}
@@ -184,7 +185,7 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                   </span>
                   
                   <button
-                    onClick={(e) => handleLikeClick(e, document)}
+                    onClick={(e) => handleLikeClick(e, presentation)}
                     className={`flex items-center transition-colors ${
                       local.isLiked ? 'text-red-500' : 'text-text-secondary hover:text-red-500'
                     }`}
@@ -205,21 +206,14 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                 </div>
                 
                 <span className="text-xs">
-                  {new Date(document.createdAt).toLocaleDateString()}
+                  {new Date(presentation.createdAt).toLocaleDateString()}
                 </span>
               </div>
 
-              {/* File Size */}
-              {document.originalFile?.size && (
-                <div className="mt-2 text-xs text-text-secondary opacity-70">
-                  Size: {formatFileSize(document.originalFile.size)}
-                </div>
-              )}
-
               {/* Tags */}
-              {document.tags && document.tags.length > 0 && (
+              {presentation.tags && presentation.tags.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {document.tags.slice(0, 3).map((tag, index) => (
+                  {presentation.tags.slice(0, 3).map((tag, index) => (
                     <span
                       key={index}
                       className="px-2 py-1 bg-secondary text-text-secondary text-xs rounded"
@@ -227,9 +221,9 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
                       {tag}
                     </span>
                   ))}
-                  {document.tags.length > 3 && (
+                  {presentation.tags.length > 3 && (
                     <span className="px-2 py-1 bg-secondary text-text-secondary text-xs rounded">
-                      +{document.tags.length - 3}
+                      +{presentation.tags.length - 3}
                     </span>
                   )}
                 </div>
@@ -244,5 +238,4 @@ const DocumentGrid: React.FC<DocumentGridProps> = ({ documents, onDocumentClick 
   );
 };
 
-export default DocumentGrid;
-
+export default PresentationGrid;

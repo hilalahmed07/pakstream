@@ -18,7 +18,24 @@ import {
   MAX_TAG_LENGTH,
   MIN_TAG_LENGTH,
   SINGLE_TAG_REGEX,
+  PATCH_FILE_TYPES,
+  MAX_PATCH_SIZE,
 } from '../../utils/assetValidation';
+
+const validatePickedPatch = (file: File): string | null => {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const isPatchExt = ext ? PATCH_FILE_TYPES.includes(ext) : false;
+  if (!isPatchExt) {
+    const shownExt = ext ? `.${ext}` : 'this file';
+    const allowed = PATCH_FILE_TYPES.map((t) => `.${t}`).join(', ');
+    return `Only patch files are allowed. You selected ${shownExt} — please choose a ${allowed} file.`;
+  }
+  if (file.size > MAX_PATCH_SIZE) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    return `File is too large (${sizeMb} MB). Maximum size is 500 MB.`;
+  }
+  return null;
+};
 
 const PATCH_CATEGORIES = ['security', 'system', 'application', 'driver', 'other'] as const;
 const PATCH_TYPES = ['security', 'feature', 'bugfix', 'driver', 'update', 'other'] as const;
@@ -140,7 +157,15 @@ const AdminPatchDashboard: React.FC = () => {
     try {
       await patchService.deletePatch(deleteConfirm.patchId);
       showSuccess('Patch deleted successfully');
-      await fetchPatches();
+      // If we just removed the only row on a non-first page, step back one
+      // page — otherwise the user is stranded on an empty page. Changing
+      // currentPage triggers the fetch effect; only re-fetch directly when
+      // we're staying on the same page.
+      if (patches.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        await fetchPatches();
+      }
     } catch (error) {
       console.error('Delete failed:', error);
       showError('Failed to delete patch');
@@ -621,9 +646,29 @@ const AdminPatchDashboard: React.FC = () => {
 // Sub-components (Simplified for brevity but styled consistently)
 const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, data: PatchUploadData) => void }> = ({ onClose, onUpload }) => {
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [formData, setFormData] = useState<PatchUploadData>({ title: '', description: '', version: '', category: 'other', tags: '', patchType: 'other', targetOs: ['windows 10', 'windows 11'], architecture: 'x64' });
   const [tagInput, setTagInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.currentTarget.setCustomValidity('');
+    const picked = e.target.files?.[0];
+    if (!picked) {
+      setFile(null);
+      setFileError(null);
+      return;
+    }
+    const err = validatePickedPatch(picked);
+    if (err) {
+      setFileError(err);
+      setFile(null);
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    setFile(picked);
+  };
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const targetOsInputRef = useRef<HTMLInputElement>(null);
@@ -739,7 +784,36 @@ const PatchUploadModal: React.FC<{ onClose: () => void; onUpload: (file: File, d
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Patch File<span className={requiredLabelClass}>*</span>
             </label>
-            <input ref={fileInputRef} type="file" onChange={(e) => { setFile(e.target.files?.[0] || null); e.currentTarget.setCustomValidity(''); }} className="w-full p-6 border-2 border-dashed rounded-lg text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-primary)' }} required />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={PATCH_FILE_TYPES.map((t) => `.${t}`).join(',')}
+              onChange={handleFileSelect}
+              className="w-full p-6 border-2 border-dashed rounded-lg text-center"
+              style={{
+                borderColor: fileError ? 'rgb(248, 113, 113)' : 'var(--color-border)',
+                backgroundColor: 'var(--color-primary)'
+              }}
+              required
+            />
+            {fileError ? (
+              <p
+                className="text-xs mt-2 px-3 py-2 rounded-md flex items-start gap-2"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: 'rgb(248, 113, 113)'
+                }}
+                role="alert"
+              >
+                <span aria-hidden>⚠️</span>
+                <span>{fileError}</span>
+              </p>
+            ) : (
+              <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Supported formats: {PATCH_FILE_TYPES.map((t) => `.${t}`).join(', ')} (Max 500MB)
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

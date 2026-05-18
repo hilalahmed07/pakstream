@@ -1,0 +1,18 @@
+# PakStream update manifest
+# Built: 2026-05-18T16:14:12+05:00
+# Source branch: main
+# Source commit: b4183b6
+
+## ADD_OR_REPLACE
+backend/src/socket/socketHandler.js
+frontend/src/App.tsx
+frontend/src/components/document/AdminDocumentDashboard.tsx
+frontend/src/components/document/DocumentGrid.tsx
+frontend/src/components/patch/AdminPatchDashboard.tsx
+frontend/src/components/patch/PatchVerificationModal.tsx
+frontend/src/components/premiere/AdminPremiereDashboard.tsx
+frontend/src/components/presentation/AdminPresentationDashboard.tsx
+frontend/src/components/presentation/PresentationGrid.tsx
+frontend/src/components/video/AdminVideoDashboard.tsx
+frontend/src/components/video/VideoGrid.tsx
+frontend/src/components/video/VideoUploadModal.tsx

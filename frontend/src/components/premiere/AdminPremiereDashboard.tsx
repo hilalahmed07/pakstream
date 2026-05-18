@@ -189,6 +189,9 @@ const AdminPremiereDashboard: React.FC = () => {
     const premiereId = deleteConfirm.premiereId;
     const premiereToDelete = premieres.find(p => p._id === premiereId);
     const wasLive = premiereToDelete?.status === 'live';
+    // Capture before the optimistic filter empties the page — used after
+    // a successful delete to step back if we just emptied a non-first page.
+    const wasOnlyRowOnPage = premieres.length === 1 && currentPage > 1;
 
     // Snapshot for rollback, then optimistically remove the row so the UI
     // updates instantly. The backend DELETE + socket broadcast will confirm.
@@ -208,6 +211,12 @@ const AdminPremiereDashboard: React.FC = () => {
         showSuccess('Premiere has been ended and deleted');
       } else {
         showSuccess('Premiere has been deleted');
+      }
+
+      // Step back a page if we just deleted the only row on a non-first
+      // page; the fetch effect re-runs and pulls the previous page's rows.
+      if (wasOnlyRowOnPage) {
+        setCurrentPage(currentPage - 1);
       }
     } catch (error) {
       // Roll back so the user doesn't think the delete succeeded.

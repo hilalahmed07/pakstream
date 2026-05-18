@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Document, DocumentUploadData } from '../../types/document';
-import documentService from '../../services/documentService';
-import DocumentVerificationModal from './DocumentVerificationModal';
+import { Presentation, CreatePresentationData } from '../../types/presentation';
+import presentationService from '../../services/presentationService';
+import PresentationVerificationModal from './PresentationVerificationModal';
 import Pagination from '../common/Pagination';
 import LikesModal from '../common/LikesModal';
 import ProtectedRoute from '../ProtectedRoute';
@@ -9,56 +9,62 @@ import { useNotification } from '../../contexts/NotificationContext';
 import ConfirmationDialog from '../common/ConfirmationDialog';
 import VerificationTabLayout from '../common/VerificationTabLayout';
 import {
-  validateDocumentUpload,
-  sanitizeAssetText,
-  DOCUMENT_TAGS_MESSAGE,
-  MAX_DOCUMENT_TITLE_LENGTH,
-  MAX_DOCUMENT_DESCRIPTION_LENGTH,
-  MAX_DOCUMENT_TAGS,
-  MAX_DOCUMENT_SIZE,
-  MAX_TAG_LENGTH,
+  validatePresentationUpload,
+  PRESENTATION_TAGS_MESSAGE,
+  MAX_PRESENTATION_TITLE_LENGTH,
+  MAX_PRESENTATION_DESCRIPTION_LENGTH,
+  MAX_PRESENTATION_TAGS,
   MIN_TAG_LENGTH,
+  MAX_TAG_LENGTH,
   SINGLE_TAG_REGEX,
+  sanitizeAssetText,
+  normalizeTitle,
+  normalizeDescription,
+  PRESENTATION_FILE_TYPES,
+  MAX_PRESENTATION_SIZE,
 } from '../../utils/assetValidation';
 
-const validatePickedPdf = (file: File): string | null => {
+const PRESENTATION_PICKER_TYPES = ['ppt', 'pptx', 'odp'];
+const validatePickedPresentation = (file: File): string | null => {
   const ext = file.name.split('.').pop()?.toLowerCase();
-  const isPdf = ext === 'pdf' || file.type === 'application/pdf';
-  if (!isPdf) {
+  const allowed = Array.from(new Set([...PRESENTATION_FILE_TYPES, ...PRESENTATION_PICKER_TYPES]));
+  const isPresentationExt = ext ? allowed.includes(ext) : false;
+  if (!isPresentationExt) {
     const shownExt = ext ? `.${ext}` : 'this file';
-    return `Only PDF files are allowed. You selected ${shownExt} — please choose a .pdf file.`;
+    const allowedLabel = PRESENTATION_PICKER_TYPES.map((t) => `.${t}`).join(', ');
+    return `Only presentation files are allowed. You selected ${shownExt} — please choose a ${allowedLabel} file.`;
   }
-  if (file.size > MAX_DOCUMENT_SIZE) {
+  if (file.size > MAX_PRESENTATION_SIZE) {
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    return `File is too large (${sizeMb} MB). Maximum size is 50 MB.`;
+    return `File is too large (${sizeMb} MB). Maximum size is 100 MB.`;
   }
   return null;
 };
 
 const requiredLabelClass = 'ml-1';
 
-const AdminDocumentDashboard: React.FC = () => {
-  const { showError, showSuccess } = useNotification();
-  const [activeTab, setActiveTab] = useState<'documents' | 'verification'>('documents');
-  const [documents, setDocuments] = useState<Document[]>([]);
+const AdminPresentationDashboard: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
+  const [activeTab, setActiveTab] = useState<'presentations' | 'verification'>('presentations');
+  const [presentations, setPresentations] = useState<Presentation[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [documentToVerify, setDocumentToVerify] = useState<Document | null>(null);
+  const [presentationToVerify, setPresentationToVerify] = useState<Presentation | null>(null);
   const [verificationSearch, setVerificationSearch] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; documentId: string | null }>({
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; presentationId: string | null }>({
     isOpen: false,
-    documentId: null,
+    presentationId: null,
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesModalData, setLikesModalData] = useState<{ title: string; totalLikes: number; likedBy: Array<{ _id: string; username: string; email: string; profile?: { firstName?: string; lastName?: string; avatar?: string } }> }>({ title: '', totalLikes: 0, likedBy: [] });
   const [loadingLikes, setLoadingLikes] = useState(false);
-  const [editingDocument, setEditingDocument] = useState<Document | null>(null);
+  const [editingPresentation, setEditingPresentation] = useState<Presentation | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -66,21 +72,21 @@ const AdminDocumentDashboard: React.FC = () => {
     status: '',
   });
 
-  const fetchDocuments = async () => {
+  const fetchPresentations = async () => {
     try {
       setLoading(true);
-      // const response = await documentService.getAdminDocuments({ page: currentPage, limit: 10 }); for testing
-      const response = await documentService.getAdminDocuments({
+      // const response = await presentationService.getAdminPresentations({ page: currentPage, limit: 10 }); for testing
+      const response = await presentationService.getAdminPresentations({
         page: currentPage,
         limit: 4,
-        search: filters.search || undefined,
+        search: filters.search.trim() || undefined,
         category: filters.category || undefined,
         status: filters.status || undefined,
       });
-      setDocuments(response.documents);
+      setPresentations(response.presentations);
       setPagination(response.pagination || { current: 1, pages: 1, total: 0 });
     } catch (error) {
-      console.error('Failed to fetch documents:', error);
+      console.error('Failed to fetch presentations:', error);
     } finally {
       setLoading(false);
       setHasFetchedOnce(true);
@@ -88,7 +94,7 @@ const AdminDocumentDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchDocuments();
+    fetchPresentations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, filters]);
 
@@ -96,54 +102,41 @@ const AdminDocumentDashboard: React.FC = () => {
     setCurrentPage(1);
   }, [filters.search, filters.category, filters.status]);
 
-  const handleUpload = async (file: File, uploadData: DocumentUploadData) => {
+  const handleUpload = async (formData: FormData) => {
     try {
       setUploading(true);
       setUploadProgress(0);
       setShowUploadModal(false);
       
-      const response = await documentService.uploadDocument(
-        file,
-        uploadData,
+      const response = await presentationService.uploadPresentation(
+        formData,
         (progress) => {
           setUploadProgress((progress * 0.9));
         }
       );
       
-      const documentId = response.document.id;
+      const presentationId = response.presentation.id;
       let pollCount = 0;
       const maxPolls = 60;
       
       const pollInterval = setInterval(async () => {
         try {
           pollCount++;
-          // const updatedDocuments = await documentService.getAdminDocuments({ page: currentPage, limit: 10 }); for testing
-          const updatedDocuments = await documentService.getAdminDocuments({ page: currentPage, limit: 3 });
-          const uploadedDocument = updatedDocuments.documents.find(
-            d => d._id === documentId
-          );
+          const presentationResponse = await presentationService.getPresentationById(presentationId);
+          const uploadedPresentation = presentationResponse.presentation;
           
-          if (uploadedDocument) {
-            setDocuments(updatedDocuments.documents);
-            
-            if (uploadedDocument.status === 'ready' || uploadedDocument.status === 'error') {
+          if (uploadedPresentation) {
+            if (uploadedPresentation.status === 'ready' || uploadedPresentation.status === 'error') {
               clearInterval(pollInterval);
               setUploadProgress(100);
               setUploading(false);
               setUploadProgress(0);
-              setShowUploadModal(false);
-
-              if (uploadedDocument.status === 'ready') {
-                showSuccess('Document uploaded successfully');
-              } else {
-                showError('Document processing failed');
-              }
-
+              fetchPresentations();
               return;
             }
             
-            if (uploadedDocument.processingProgress !== undefined) {
-              const processingProgressScaled = 90 + (uploadedDocument.processingProgress * 0.1);
+            if (uploadedPresentation.processingProgress !== undefined) {
+              const processingProgressScaled = 90 + (uploadedPresentation.processingProgress * 0.1);
               setUploadProgress(processingProgressScaled);
             } else {
               setUploadProgress(90);
@@ -154,15 +147,23 @@ const AdminDocumentDashboard: React.FC = () => {
             clearInterval(pollInterval);
             setUploading(false);
             setUploadProgress(0);
-            setShowUploadModal(false);
-            fetchDocuments();
+            fetchPresentations();
           }
         } catch (error) {
-          console.error('Error polling document status:', error);
+          const message = error instanceof Error ? error.message : '';
+          if (message.toLowerCase().includes('not found')) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            setUploadProgress(0);
+            fetchPresentations();
+            showError('Upload tracking stopped because the presentation was removed.');
+            return;
+          }
+          console.error('Error polling presentation status:', error);
         }
       }, 5000);
       
-      fetchDocuments();
+      fetchPresentations();
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -173,55 +174,63 @@ const AdminDocumentDashboard: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    setDeleteConfirm({ isOpen: true, documentId: id });
+    setDeleteConfirm({ isOpen: true, presentationId: id });
   };
 
-  const handleEdit = async (documentId: string, updateData: Partial<DocumentUploadData>) => {
+  const handleEdit = async (presentationId: string, updateData: Partial<CreatePresentationData>) => {
     try {
-      await documentService.updateDocument(documentId, updateData);
-      showSuccess('Document updated successfully');
-      await fetchDocuments();
+      await presentationService.updatePresentation(presentationId, updateData);
+      showSuccess('Presentation updated successfully');
+      await fetchPresentations();
       setShowEditModal(false);
-      setEditingDocument(null);
+      setEditingPresentation(null);
     } catch (error) {
       console.error('Update failed:', error);
-      const message = error instanceof Error ? error.message : 'Failed to update document';
+      const message = error instanceof Error ? error.message : 'Failed to update presentation';
       showError(message);
       throw new Error(message);
     }
   };
 
   const confirmDelete = async () => {
-    if (!deleteConfirm.documentId) return;
+    if (!deleteConfirm.presentationId) return;
 
     try {
-      await documentService.deleteDocument(deleteConfirm.documentId);
-      showSuccess('Document has been deleted');
-      fetchDocuments();
-      setDeleteConfirm({ isOpen: false, documentId: null });
+      await presentationService.deletePresentation(deleteConfirm.presentationId);
+      showSuccess('Presentation has been deleted');
+      // If we just removed the only row on a non-first page, step back one
+      // page — otherwise the user is stranded on an empty page. Changing
+      // currentPage triggers the fetch effect; only re-fetch directly when
+      // we're staying on the same page.
+      if (presentations.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchPresentations();
+      }
+      setDeleteConfirm({ isOpen: false, presentationId: null });
     } catch (error) {
       console.error('Delete failed:', error);
-      showError('Failed to delete document: ' + (error instanceof Error ? error.message : 'Unknown error'));
-      setDeleteConfirm({ isOpen: false, documentId: null });
+      showError('Failed to delete presentation: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setDeleteConfirm({ isOpen: false, presentationId: null });
     }
   };
 
-  const handleVerifyClick = (document: Document) => {
-    setDocumentToVerify(document);
+  const handleVerifyClick = (presentation: Presentation) => {
+    setPresentationToVerify(presentation);
     setShowVerificationModal(true);
   };
 
   const handleCloseVerification = () => {
     setShowVerificationModal(false);
-    setDocumentToVerify(null);
+    setPresentationToVerify(null);
   };
 
-  const handleLikesClick = async (document: Document) => {
+  const handleLikesClick = async (presentation: Presentation) => {
     setLoadingLikes(true);
     try {
-      const result = await documentService.getLikedByUsers(document._id);
+      const result = await presentationService.getLikedByUsers(presentation._id);
       setLikesModalData({
-        title: document.title,
+        title: presentation.title,
         totalLikes: result.totalLikes,
         likedBy: result.likedBy
       });
@@ -235,21 +244,25 @@ const AdminDocumentDashboard: React.FC = () => {
     }
   };
 
-  const filteredDocumentsForVerification = documents.filter(document => {
+  const filteredPresentationsForVerification = presentations.filter(presentation => {
     const searchLower = verificationSearch.toLowerCase();
     return (
-      document.title.toLowerCase().includes(searchLower) ||
-      document.description.toLowerCase().includes(searchLower) ||
-      document._id.toLowerCase().includes(searchLower)
+      presentation.title.toLowerCase().includes(searchLower) ||
+      presentation.description.toLowerCase().includes(searchLower) ||
+      presentation._id.toLowerCase().includes(searchLower)
     );
   });
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const getCategoryColor = (category: string) => {
+    const colors = {
+      business: 'bg-blue-600',
+      education: 'bg-green-600',
+      marketing: 'bg-purple-600',
+      technology: 'bg-gray-600',
+      design: 'bg-pink-600',
+      other: 'bg-gray-500'
+    };
+    return colors[category as keyof typeof colors] || colors.other;
   };
 
   if (loading && !hasFetchedOnce) {
@@ -259,7 +272,7 @@ const AdminDocumentDashboard: React.FC = () => {
           className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
           style={{ borderColor: 'var(--color-accent)' }}
         ></div>
-        <p style={{ color: 'var(--color-text)' }}>Loading documents...</p>
+        <p style={{ color: 'var(--color-text)' }}>Loading presentations...</p>
       </div>
     );
   }
@@ -268,17 +281,15 @@ const AdminDocumentDashboard: React.FC = () => {
     <ProtectedRoute requireAdmin>
       <div className="min-h-screen pt-16" style={{ backgroundColor: 'var(--color-primary)' }}>
         <div className="container mx-auto px-4 py-8">
-          {activeTab === 'documents' && (
+          {activeTab === 'presentations' && (
             <div className="flex justify-end mb-6">
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 hover:opacity-90"
+                className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
                 style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                disabled={uploading}
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
-                <span>Upload Document</span>
+                {uploading ? 'Uploading...' : 'Upload Presentation'}
               </button>
             </div>
           )}
@@ -287,14 +298,14 @@ const AdminDocumentDashboard: React.FC = () => {
           <div className="mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <div className="flex space-x-1">
               <button
-                onClick={() => setActiveTab('documents')}
+                onClick={() => setActiveTab('presentations')}
                 className="px-6 py-3 font-medium text-sm transition-colors"
                 style={{
-                  color: activeTab === 'documents' ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                  borderBottom: activeTab === 'documents' ? '2px solid var(--color-accent)' : '2px solid transparent'
+                  color: activeTab === 'presentations' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                  borderBottom: activeTab === 'presentations' ? '2px solid var(--color-accent)' : '2px solid transparent'
                 }}
               >
-                📄 Documents
+                📊 Presentations
               </button>
               <button
                 onClick={() => setActiveTab('verification')}
@@ -309,40 +320,9 @@ const AdminDocumentDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Documents Tab Content */}
-          {activeTab === 'documents' && (
+          {/* Presentations Tab Content */}
+          {activeTab === 'presentations' && (
             <div className="space-y-6">
-              {uploading && (
-                <div className="fixed top-4 right-4 z-50 rounded-lg p-4 shadow-lg" style={{ backgroundColor: 'var(--color-secondary)', minWidth: '320px' }}>
-                  <div className="flex items-center mb-3">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-3" style={{ borderColor: 'var(--color-accent)' }}></div>
-                    <span style={{ color: 'var(--color-text)' }}>
-                      {uploadProgress >= 90 ? 'Processing document...' : 'Uploading document...'}
-                    </span>
-                    <span className="ml-2 font-semibold" style={{ color: 'var(--color-accent)' }}>{Math.round(uploadProgress)}%</span>
-                  </div>
-                  <div className="w-full rounded-full h-2 overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-hover)' }}>
-                    <div
-                      className="h-2 rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
-                    ></div>
-                  </div>
-                  <div className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
-                    <div>
-                      <span className="font-medium">Stage:</span>
-                      <span className="ml-1" style={{ color: 'var(--color-accent)' }}>
-                        {uploadProgress >= 90 ? 'Finalizing document' : 'Uploading'}
-                      </span>
-                    </div>
-                    <div className="mt-1 opacity-75">
-                      {uploadProgress >= 90
-                        ? 'Please wait while pages and preview are prepared.'
-                        : 'Your document is uploading in the background.'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="p-4 rounded-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -377,10 +357,11 @@ const AdminDocumentDashboard: React.FC = () => {
                       }}
                     >
                       <option value="">All Categories</option>
-                      <option value="academic">Academic</option>
                       <option value="business">Business</option>
-                      <option value="legal">Legal</option>
-                      <option value="technical">Technical</option>
+                      <option value="education">Education</option>
+                      <option value="marketing">Marketing</option>
+                      <option value="technology">Technology</option>
+                      <option value="design">Design</option>
                       <option value="other">Other</option>
                     </select>
                   </div>
@@ -407,93 +388,191 @@ const AdminDocumentDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Documents Table */}
-              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                <table className="w-full">
-                  <thead style={{ backgroundColor: 'var(--color-hover)' }}>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Title</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Category</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Size</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Views</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Likes</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Uploaded By</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                    {documents.map((document) => (
-                      <tr key={document._id} className="transition-colors align-top" style={{ backgroundColor: 'var(--color-secondary)' }}>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-medium line-clamp-1 max-w-xs" style={{ color: 'var(--color-text)' }} title={document.title}>{document.title}</div>
-                          <div className="text-sm line-clamp-2 max-w-xs" style={{ color: 'var(--color-text-secondary)' }} title={document.description}>{document.description}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white">
-                            {document.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${
-                            document.status === 'ready' 
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="fixed top-4 right-4 z-50 rounded-lg p-4 shadow-lg" style={{ backgroundColor: 'var(--color-secondary)', minWidth: '320px' }}>
+                  <div className="flex items-center mb-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 mr-3" style={{ borderColor: 'var(--color-accent)' }}></div>
+                    <span style={{ color: 'var(--color-text)' }}>
+                      {uploadProgress >= 90 ? 'Processing presentation...' : 'Uploading presentation...'}
+                    </span>
+                    <span className="ml-2 font-semibold" style={{ color: 'var(--color-accent)' }}>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <div className="w-full rounded-full h-2 overflow-hidden mb-3" style={{ backgroundColor: 'var(--color-hover)' }}>
+                    <div
+                      className="h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%`, backgroundColor: 'var(--color-accent)' }}
+                    ></div>
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                    {uploadProgress >= 90
+                      ? 'Finalizing the presentation. This can take a moment.'
+                      : 'Your presentation is uploading in the background.'}
+                  </div>
+                </div>
+              )}
+
+              {/* Presentations Grid */}
+              {presentations.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📊</div>
+                  <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--color-text)' }}>No Presentations</h3>
+                  <p className="mb-4" style={{ color: 'var(--color-text-secondary)' }}>Upload your first presentation to get started.</p>
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-4 py-2 rounded-lg transition-colors hover:opacity-90"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    Upload Presentation
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {presentations.map((presentation) => (
+                    <div key={presentation._id} className="rounded-lg overflow-hidden shadow-lg" style={{ backgroundColor: 'var(--color-secondary)' }}>
+                      {/* Thumbnail */}
+                      <div className="aspect-video relative" style={{ backgroundColor: 'var(--color-hover)' }}>
+                        {presentation.thumbnail ? (
+                          <img
+                            src={presentationService.getThumbnailUrl(presentation._id)}
+                            alt={presentation.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiM2QjcyODAiLz4KPC9zdmc+';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-6xl" style={{ color: 'var(--color-text-secondary)' }}>📊</div>
+                          </div>
+                        )}
+                        
+                        {/* Status Badge */}
+                        <div className="absolute top-2 left-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            presentation.status === 'ready' 
                               ? 'bg-green-600 text-white' 
-                              : document.status === 'processing'
+                              : presentation.status === 'processing'
                               ? 'bg-yellow-600 text-white'
                               : 'bg-red-600 text-white'
                           }`}>
-                            {document.status}
+                            {presentation.status === 'ready' ? 'Ready' : 
+                             presentation.status === 'processing' ? 'Processing' : 'Error'}
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {document.originalFile?.size ? formatFileSize(document.originalFile.size) : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {document.views}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span style={{ color: 'var(--color-text-secondary)' }}>{document.likes}</span>
-                          {document.likes > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleLikesClick(document)}
-                              disabled={loadingLikes}
-                              className="ml-2 text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
-                              title="View who liked this"
-                            >
-                              View
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          {typeof document.uploadedBy === 'object' ? document.uploadedBy.username : 'Unknown'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          {document.status === 'ready' && (
-                            <div className="flex items-center gap-2">
+                        </div>
+
+                        {/* Category Badge */}
+                        <div className="absolute top-2 right-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium text-white ${getCategoryColor(presentation.category)}`}>
+                            {presentation.category}
+                          </span>
+                        </div>
+
+                        {/* Slide Count */}
+                        <div className="absolute bottom-2 right-2">
+                          <span className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                            {presentation.totalSlides} slides
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4">
+                        <h3 className="font-semibold text-lg mb-2 line-clamp-1" style={{ color: 'var(--color-text)' }} title={presentation.title}>
+                          {presentation.title}
+                        </h3>
+
+                        <p className="text-sm mb-3 line-clamp-2" style={{ color: 'var(--color-text-secondary)' }} title={presentation.description}>
+                          {presentation.description}
+                        </p>
+
+                        {/* Stats */}
+                        <div className="flex items-center justify-between text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+                          <div className="flex items-center space-x-4">
+                            <span className="flex items-center">
+                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                              </svg>
+                              {presentation.views}
+                            </span>
+                            
+                            {presentation.likes > 0 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLikesClick(presentation);
+                                }}
+                                disabled={loadingLikes}
+                                className="flex items-center transition-colors hover:underline cursor-pointer disabled:opacity-50"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                                title="View who liked this"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                </svg>
+                                {presentation.likes}
+                              </button>
+                            ) : (
+                              <span className="flex items-center">
+                                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                </svg>
+                                {presentation.likes}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <span className="text-xs">
+                            {new Date(presentation.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between">
+                          {presentation.status === 'ready' && presentation.processingProgress === 100 ? (
+                            <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => {
-                                  setEditingDocument(document);
+                                  setEditingPresentation(presentation);
                                   setShowEditModal(true);
                                 }}
-                                className="px-3 py-1 rounded border text-blue-400 border-blue-400 hover:bg-blue-400/10 transition-colors"
+                                className="text-blue-400 hover:text-blue-300 text-sm px-3 py-1 border border-blue-400 rounded hover:bg-blue-400 hover:text-white transition-colors"
                               >
                                 Edit
                               </button>
                               <button
-                                onClick={() => handleDelete(document._id)}
-                                className="px-3 py-1 rounded border text-red-400 border-red-400 hover:bg-red-400/10 transition-colors"
+                                onClick={() => handleDelete(presentation._id)}
+                                className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
                               >
                                 Delete
                               </button>
                             </div>
+                          ) : presentation.status === 'error' ? (
+                            // Failed uploads have nothing useful to edit, but admins
+                            // need to be able to clear them out of the dashboard.
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleDelete(presentation._id)}
+                                className="text-red-400 hover:text-red-300 text-sm px-3 py-1 border border-red-400 rounded hover:bg-red-400 hover:text-white transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <div />
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          
+                          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                            by {presentation.uploadedBy.username}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <Pagination
                 currentPage={pagination.current}
                 totalPages={pagination.pages}
@@ -505,11 +584,10 @@ const AdminDocumentDashboard: React.FC = () => {
 
               {/* Upload Modal */}
               {showUploadModal && (
-                <DocumentUploadModal
+                <PresentationUploadModal
                   onClose={() => !uploading && setShowUploadModal(false)}
                   onUpload={handleUpload}
                   uploading={uploading}
-                  uploadProgress={uploadProgress}
                 />
               )}
             </div>
@@ -520,12 +598,12 @@ const AdminDocumentDashboard: React.FC = () => {
             <VerificationTabLayout
               header={{
                 icon: '🔒',
-                title: 'Document Integrity Verification',
-                description: 'Verify that downloaded document files match the original by comparing SHA-256 hashes.',
+                title: 'Presentation Integrity Verification',
+                description: 'Verify that downloaded presentation files match the original by comparing SHA-256 hashes.',
               }}
               search={{
-                label: 'Search Documents for Verification',
-                placeholder: 'Search by title, description, or document ID...',
+                label: 'Search Presentations for Verification',
+                placeholder: 'Search by title, description, or presentation ID...',
                 value: verificationSearch,
                 onChange: setVerificationSearch,
               }}
@@ -533,7 +611,7 @@ const AdminDocumentDashboard: React.FC = () => {
                 <table className="w-full">
                   <thead style={{ backgroundColor: 'var(--color-hover)' }}>
                     <tr>
-                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Document</th>
+                      <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Presentation</th>
                       <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Status</th>
                       <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Hash</th>
                       <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--color-text-secondary)' }}>Actions</th>
@@ -543,51 +621,51 @@ const AdminDocumentDashboard: React.FC = () => {
                     {loading ? (
                       <tr>
                         <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
-                          Loading documents...
+                          Loading presentations...
                         </td>
                       </tr>
-                    ) : filteredDocumentsForVerification.length === 0 ? (
+                    ) : filteredPresentationsForVerification.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-6 py-10 text-center opacity-60" style={{ color: 'var(--color-text-secondary)' }}>
-                          No documents found
+                          No presentations found
                         </td>
                       </tr>
                     ) : (
-                      filteredDocumentsForVerification.map((document) => (
-                        <tr key={document._id} className="hover:bg-black/5 transition-colors align-top">
+                      filteredPresentationsForVerification.map((presentation) => (
+                        <tr key={presentation._id} className="hover:bg-black/5 transition-colors align-top">
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold line-clamp-1 max-w-md" style={{ color: 'var(--color-text)' }} title={document.title}>{document.title}</div>
-                            <div className="text-xs line-clamp-2 max-w-md" style={{ color: 'var(--color-text-secondary)' }} title={document.description}>{document.description}</div>
+                            <div className="text-sm font-bold line-clamp-1 max-w-md" style={{ color: 'var(--color-text)' }} title={presentation.title}>{presentation.title}</div>
+                            <div className="text-xs line-clamp-2 max-w-md" style={{ color: 'var(--color-text-secondary)' }} title={presentation.description}>{presentation.description}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2.5 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ring-1 ${
-                              document.status === 'ready' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' :
-                              document.status === 'processing' ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40' :
+                              presentation.status === 'ready' ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' :
+                              presentation.status === 'processing' ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40' :
                               'bg-rose-500/15 text-rose-300 ring-rose-500/40'
                             }`}>
-                              {document.status}
+                              {presentation.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {document.sha256Hash ? (
-                              <div className="text-sm font-mono max-w-xs truncate" style={{ color: 'var(--color-text)' }} title={document.sha256Hash}>
-                                {document.sha256Hash.substring(0, 16)}...
+                            {presentation.sha256Hash ? (
+                              <div className="text-sm font-mono max-w-xs truncate" style={{ color: 'var(--color-text)' }} title={presentation.sha256Hash}>
+                                {presentation.sha256Hash.substring(0, 16)}...
                               </div>
                             ) : (
                               <span className="text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>Not available</span>
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            {document.status === 'ready' && document.sha256Hash ? (
+                            {presentation.status === 'ready' && presentation.sha256Hash ? (
                               <button
-                                onClick={() => handleVerifyClick(document)}
+                                onClick={() => handleVerifyClick(presentation)}
                                 className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/40 hover:bg-blue-500/25 transition-all shadow-sm hover:shadow-md active:shadow-sm"
                               >
                                 Verify
                               </button>
                             ) : (
                               <span className="text-sm opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
-                                {document.status !== 'ready' ? 'Not ready' : 'No hash'}
+                                {presentation.status !== 'ready' ? 'Not ready' : 'No hash'}
                               </span>
                             )}
                           </td>
@@ -600,18 +678,18 @@ const AdminDocumentDashboard: React.FC = () => {
               stats={
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
-                    <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredDocumentsForVerification.length}</div>
-                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Documents</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>{filteredPresentationsForVerification.length}</div>
+                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Total Presentations</div>
                   </div>
                   <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
                     <div className="text-2xl font-bold text-green-400">
-                      {filteredDocumentsForVerification.filter(d => d.sha256Hash).length}
+                      {filteredPresentationsForVerification.filter(p => p.sha256Hash).length}
                     </div>
                     <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>With Hash</div>
                   </div>
                   <div className="p-4 rounded-lg border" style={{ backgroundColor: 'var(--color-secondary)', borderColor: 'var(--color-border)' }}>
                     <div className="text-2xl font-bold text-blue-400">
-                      {filteredDocumentsForVerification.filter(d => d.status === 'ready' && d.sha256Hash).length}
+                      {filteredPresentationsForVerification.filter(p => p.status === 'ready' && p.sha256Hash).length}
                     </div>
                     <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Ready to Verify</div>
                   </div>
@@ -621,11 +699,11 @@ const AdminDocumentDashboard: React.FC = () => {
           )}
 
           {/* Verification Modal */}
-          {documentToVerify && (
-            <DocumentVerificationModal
+          {presentationToVerify && (
+            <PresentationVerificationModal
               isOpen={showVerificationModal}
               onClose={handleCloseVerification}
-              document={documentToVerify}
+              presentation={presentationToVerify}
             />
           )}
 
@@ -635,17 +713,17 @@ const AdminDocumentDashboard: React.FC = () => {
             title={likesModalData.title}
             totalLikes={likesModalData.totalLikes}
             likedBy={likesModalData.likedBy}
-            contentType="document"
+            contentType="presentation"
             onClose={() => setLikesModalOpen(false)}
           />
 
           {/* Edit Modal */}
-          {showEditModal && editingDocument && (
-            <DocumentEditModal
-              document={editingDocument}
+          {showEditModal && editingPresentation && (
+            <PresentationEditModal
+              presentation={editingPresentation}
               onClose={() => {
                 setShowEditModal(false);
-                setEditingDocument(null);
+                setEditingPresentation(null);
               }}
               onEdit={handleEdit}
             />
@@ -654,13 +732,13 @@ const AdminDocumentDashboard: React.FC = () => {
           {/* Confirmation Dialog */}
           <ConfirmationDialog
             isOpen={deleteConfirm.isOpen}
-            title="Delete Document"
-            message="Are you sure you want to delete this document? This action cannot be undone."
+            title="Delete Presentation"
+            message="Are you sure you want to delete this presentation? This action cannot be undone."
             confirmText="Delete"
             cancelText="Cancel"
             type="danger"
             onConfirm={confirmDelete}
-            onCancel={() => setDeleteConfirm({ isOpen: false, documentId: null })}
+            onCancel={() => setDeleteConfirm({ isOpen: false, presentationId: null })}
           />
         </div>
       </div>
@@ -669,25 +747,24 @@ const AdminDocumentDashboard: React.FC = () => {
 };
 
 // Upload Modal Component
-interface DocumentUploadModalProps {
+interface PresentationUploadModalProps {
   onClose: () => void;
-  onUpload: (file: File, uploadData: DocumentUploadData) => void;
-  uploading: boolean;
-  uploadProgress: number;
+  onUpload: (formData: FormData) => void;
+  uploading?: boolean;
 }
 
-interface DocumentEditModalProps {
-  document: Document;
+interface PresentationEditModalProps {
+  presentation: Presentation;
   onClose: () => void;
-  onEdit: (id: string, data: Partial<DocumentUploadData>) => Promise<void>;
+  onEdit: (id: string, data: Partial<CreatePresentationData>) => Promise<void>;
 }
 
-const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUpload, uploading, uploadProgress }) => {
-  const [formData, setFormData] = useState<DocumentUploadData>({
+const PresentationUploadModal: React.FC<PresentationUploadModalProps> = ({ onClose, onUpload, uploading = false }) => {
+  const [formData, setFormData] = useState<CreatePresentationData>({
     title: '',
     description: '',
     category: 'other',
-    tags: ''
+    tags: []
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -697,51 +774,18 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  const tagsArr = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
-
-  const addTag = () => {
-    const nextTag = tagInput.trim();
-    if (!nextTag) return;
-    if (tagsArr.length >= MAX_DOCUMENT_TAGS) {
-      tagInputRef.current?.setCustomValidity(DOCUMENT_TAGS_MESSAGE);
-      tagInputRef.current?.reportValidity();
-      return;
-    }
-    if (
-      nextTag.length < MIN_TAG_LENGTH ||
-      nextTag.length > MAX_TAG_LENGTH ||
-      !SINGLE_TAG_REGEX.test(nextTag)
-    ) {
-      tagInputRef.current?.setCustomValidity(DOCUMENT_TAGS_MESSAGE);
-      tagInputRef.current?.reportValidity();
-      return;
-    }
-    if (!tagsArr.includes(nextTag)) {
-      setFormData(prev => ({ ...prev, tags: [...tagsArr, nextTag].join(',') }));
-      tagInputRef.current?.setCustomValidity('');
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: tagsArr.filter(t => t !== tagToRemove).join(','),
-    }));
-  };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.currentTarget.setCustomValidity('');
     const file = e.target.files?.[0];
     if (!file) {
       setSelectedFile(null);
       setFileError(null);
       return;
     }
-    const err = validatePickedPdf(file);
+    const err = validatePickedPresentation(file);
     if (err) {
       setFileError(err);
       setSelectedFile(null);
-      // Reset the input so the user can re-pick the same filename after correcting.
       e.target.value = '';
       return;
     }
@@ -754,8 +798,9 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
     fileInputRef.current?.setCustomValidity('');
     titleInputRef.current?.setCustomValidity('');
     descriptionInputRef.current?.setCustomValidity('');
-    const normalizedTitle = formData.title.trim();
-    const normalizedDescription = formData.description.trim();
+    const normalizedTitle = normalizeTitle(formData.title);
+    const normalizedDescription = normalizeDescription(formData.description);
+    const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
 
     if (!normalizedTitle) {
       titleInputRef.current?.setCustomValidity('Title is required.');
@@ -770,11 +815,11 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
     }
     
     // Validate all fields
-    const validationResult = validateDocumentUpload({
+    const validationResult = validatePresentationUpload({
       title: normalizedTitle,
       description: normalizedDescription,
       category: formData.category,
-      tags: formData.tags,
+      tags: normalizedTags,
       file: selectedFile || undefined
     });
 
@@ -789,8 +834,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
         descriptionInputRef.current?.reportValidity();
         return;
       }
-      if (!selectedFile || validationResult.toLowerCase().includes('document file') || validationResult.toLowerCase().includes('file size')) {
-        fileInputRef.current?.setCustomValidity(!selectedFile ? 'Document file is required.' : validationResult);
+      if (!selectedFile || validationResult.toLowerCase().includes('presentation file') || validationResult.toLowerCase().includes('file size')) {
+        fileInputRef.current?.setCustomValidity(!selectedFile ? 'Presentation file is required.' : validationResult);
         fileInputRef.current?.reportValidity();
         return;
       }
@@ -798,18 +843,59 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
     }
 
     if (!selectedFile) {
-      fileInputRef.current?.setCustomValidity('Document file is required.');
+      fileInputRef.current?.setCustomValidity('Presentation file is required.');
       fileInputRef.current?.reportValidity();
       return;
     }
 
-    const pickedFileError = validatePickedPdf(selectedFile);
-    if (pickedFileError) {
-      setFileError(pickedFileError);
+    const uploadData = new FormData();
+    uploadData.append('presentation', selectedFile);
+    uploadData.append('title', normalizedTitle);
+    uploadData.append('description', normalizedDescription);
+    uploadData.append('category', formData.category);
+    uploadData.append('tags', normalizedTags.join(','));
+
+    onUpload(uploadData);
+  };
+
+  const addTag = () => {
+    const nextTag = tagInput.trim();
+
+    if (!nextTag) {
       return;
     }
 
-    onUpload(selectedFile, { ...formData, title: normalizedTitle, description: normalizedDescription });
+    if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (
+      nextTag.length < MIN_TAG_LENGTH ||
+      nextTag.length > MAX_TAG_LENGTH ||
+      !SINGLE_TAG_REGEX.test(nextTag)
+    ) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!formData.tags.includes(nextTag)) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, nextTag]
+      }));
+      tagInputRef.current?.setCustomValidity('');
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
   };
 
   return (
@@ -817,84 +903,58 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
       <div className="rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Upload Document</h2>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Upload Presentation</h2>
             <button
               onClick={onClose}
-              disabled={uploading}
-              className="text-2xl disabled:opacity-50 transition-colors"
+              className="text-2xl transition-colors"
               style={{ color: 'var(--color-text-secondary)' }}
+              disabled={uploading}
             >
               ×
             </button>
           </div>
 
-          {uploading && (
-            <div
-              className="mb-4 p-4 rounded-lg border"
-              style={{
-                backgroundColor: 'var(--color-primary)',
-                borderColor: 'var(--color-border)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                  {uploadProgress >= 90 ? 'Processing document...' : 'Uploading document...'}
-                </span>
-                <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{Math.round(uploadProgress)}%</span>
-              </div>
-              <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--color-hover)' }}>
-                <div
-                  className="h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%`, backgroundColor: 'var(--color-accent)' }}
-                />
-              </div>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-                {uploadProgress >= 90
-                  ? 'Please wait while the document is being processed.'
-                  : 'Your file is being uploaded. Please keep this dialog open.'}
-              </p>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* File Upload */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                PDF Document<span className={requiredLabelClass}>*</span>
-              </label>
+              {/* <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Presentation File<span className={requiredLabelClass}>*</span>
+              </label> */}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
-                onChange={(e) => {
-                  e.currentTarget.setCustomValidity('');
-                  handleFileSelect(e);
-                }}
-                disabled={uploading}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50"
+                accept=".ppt,.pptx,.odp"
+                onChange={handleFileSelect}
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{
                   backgroundColor: 'var(--color-hover)',
                   border: fileError ? '1px solid rgb(248, 113, 113)' : '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 required
+                disabled={uploading}
               />
               {fileError ? (
-                <p className="text-xs mt-2 px-3 py-2 rounded-md flex items-start gap-2" style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', color: 'rgb(248, 113, 113)' }} role="alert">
+                <p
+                  className="text-xs mt-2 px-3 py-2 rounded-md flex items-start gap-2"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: 'rgb(248, 113, 113)'
+                  }}
+                  role="alert"
+                >
                   <span aria-hidden>⚠️</span>
                   <span>{fileError}</span>
                 </p>
               ) : (
                 <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-                  Supported format: PDF (Max 50MB)
-                </p>
-              )}
-              {selectedFile && !fileError && (
-                <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-                  Selected: {selectedFile.name}
+                  Supported formats: .ppt, .pptx, .odp (Max 100MB)
                 </p>
               )}
             </div>
 
+            {/* Title */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Title<span className={requiredLabelClass}>*</span>
@@ -910,18 +970,19 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                     e.currentTarget.setCustomValidity('Title is required.');
                   }
                 }}
-                disabled={uploading}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 required
-                maxLength={MAX_DOCUMENT_TITLE_LENGTH}
+                disabled={uploading}
+                maxLength={MAX_PRESENTATION_TITLE_LENGTH}
               />
             </div>
 
+            {/* Description */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Description<span className={requiredLabelClass}>*</span>
@@ -937,18 +998,19 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                   }
                 }}
                 rows={3}
-                disabled={uploading}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
                 required
-                maxLength={MAX_DOCUMENT_DESCRIPTION_LENGTH}
+                disabled={uploading}
+                maxLength={MAX_PRESENTATION_DESCRIPTION_LENGTH}
               />
             </div>
 
+            {/* Category */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Category<span className={requiredLabelClass}>*</span>
@@ -956,22 +1018,24 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               <select
                 value={formData.category}
                 onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                disabled={uploading}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   backgroundColor: 'var(--color-hover)', 
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)'
                 }}
+                disabled={uploading}
               >
-                <option value="academic">Academic</option>
                 <option value="business">Business</option>
-                <option value="legal">Legal</option>
-                <option value="technical">Technical</option>
+                <option value="education">Education</option>
+                <option value="marketing">Marketing</option>
+                <option value="technology">Technology</option>
+                <option value="design">Design</option>
                 <option value="other">Other</option>
               </select>
             </div>
 
+            {/* Tags */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 Tags
@@ -987,8 +1051,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   placeholder={`Add tag (${MIN_TAG_LENGTH}-${MAX_TAG_LENGTH} chars)`}
                   className="flex-1 px-3 py-2 rounded-lg focus:outline-none focus:ring-2"
-                  style={{
-                    backgroundColor: 'var(--color-hover)',
+                  style={{ 
+                    backgroundColor: 'var(--color-hover)', 
                     border: '1px solid var(--color-border)',
                     color: 'var(--color-text)'
                   }}
@@ -999,16 +1063,16 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
                   onClick={addTag}
                   className="px-4 py-2 rounded-lg transition-colors"
                   style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
-                  disabled={uploading || tagsArr.length >= MAX_DOCUMENT_TAGS}
+                  disabled={uploading || formData.tags.length >= MAX_PRESENTATION_TAGS}
                 >
                   Add
                 </button>
               </div>
               <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                {tagsArr.length}/{MAX_DOCUMENT_TAGS} tags
+                {formData.tags.length}/{MAX_PRESENTATION_TAGS} tags
               </p>
               <div className="flex flex-wrap gap-2">
-                {tagsArr.map((tag, index) => (
+                {formData.tags.map((tag, index) => (
                   <span
                     key={index}
                     className="px-2 py-1 text-sm rounded flex items-center space-x-1"
@@ -1027,23 +1091,24 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
               </div>
             </div>
 
+            {/* Submit Button */}
             <div className="flex space-x-4 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                disabled={uploading}
-                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors"
                 style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                disabled={uploading}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={uploading || !selectedFile}
-                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-90"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90"
                 style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                disabled={uploading}
               >
-                {uploading ? 'Uploading...' : 'Upload'}
+                Upload
               </button>
             </div>
           </form>
@@ -1053,62 +1118,29 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({ onClose, onUp
   );
 };
 
-const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose, onEdit }) => {
-  const [formData, setFormData] = useState<DocumentUploadData>({
-    title: document.title,
-    description: document.description,
-    category: document.category,
-    tags: document.tags.join(', '),
+const PresentationEditModal: React.FC<PresentationEditModalProps> = ({ presentation, onClose, onEdit }) => {
+  const [formData, setFormData] = useState<CreatePresentationData>({
+    title: presentation.title,
+    description: presentation.description,
+    category: presentation.category,
+    tags: presentation.tags,
   });
+  const [tagInput, setTagInput] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tagInput, setTagInput] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
-  const tagsInputRef = useRef<HTMLInputElement>(null);
-
-  const tagsArr = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
-
-  const addTag = () => {
-    const nextTag = tagInput.trim();
-    if (!nextTag) return;
-    if (tagsArr.length >= MAX_DOCUMENT_TAGS) {
-      tagsInputRef.current?.setCustomValidity(DOCUMENT_TAGS_MESSAGE);
-      tagsInputRef.current?.reportValidity();
-      return;
-    }
-    if (
-      nextTag.length < MIN_TAG_LENGTH ||
-      nextTag.length > MAX_TAG_LENGTH ||
-      !SINGLE_TAG_REGEX.test(nextTag)
-    ) {
-      tagsInputRef.current?.setCustomValidity(DOCUMENT_TAGS_MESSAGE);
-      tagsInputRef.current?.reportValidity();
-      return;
-    }
-    if (!tagsArr.includes(nextTag)) {
-      setFormData(prev => ({ ...prev, tags: [...tagsArr, nextTag].join(',') }));
-      tagsInputRef.current?.setCustomValidity('');
-      setTagInput('');
-      setValidationError(null);
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: tagsArr.filter(t => t !== tagToRemove).join(','),
-    }));
-  };
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
     titleInputRef.current?.setCustomValidity('');
     descriptionInputRef.current?.setCustomValidity('');
-    tagsInputRef.current?.setCustomValidity('');
-    const normalizedTitle = formData.title.trim();
-    const normalizedDescription = formData.description.trim();
+    tagInputRef.current?.setCustomValidity('');
+    const normalizedTitle = normalizeTitle(formData.title);
+    const normalizedDescription = normalizeDescription(formData.description);
+    const normalizedTags = formData.tags.map((tag) => tag.trim()).filter(Boolean);
 
     if (!normalizedTitle) {
       titleInputRef.current?.setCustomValidity('Title is required.');
@@ -1122,11 +1154,11 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
       return;
     }
 
-    const validationResult = validateDocumentUpload({
+    const validationResult = validatePresentationUpload({
       title: normalizedTitle,
       description: normalizedDescription,
       category: formData.category,
-      tags: formData.tags,
+      tags: normalizedTags,
     });
 
     if (validationResult) {
@@ -1141,8 +1173,8 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
         return;
       }
       if (validationResult.toLowerCase().includes('tag')) {
-        tagsInputRef.current?.setCustomValidity(validationResult);
-        tagsInputRef.current?.reportValidity();
+        tagInputRef.current?.setCustomValidity(validationResult);
+        tagInputRef.current?.reportValidity();
         return;
       }
       return;
@@ -1150,12 +1182,59 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
 
     try {
       setSaving(true);
-      await onEdit(document._id, { ...formData, title: normalizedTitle, description: normalizedDescription });
+      await onEdit(presentation._id, {
+        ...formData,
+        title: normalizedTitle,
+        description: normalizedDescription,
+        tags: normalizedTags,
+      });
     } catch (error) {
-      setValidationError(error instanceof Error ? error.message : 'Failed to update document');
+      setValidationError(error instanceof Error ? error.message : 'Failed to update presentation');
     } finally {
       setSaving(false);
     }
+  };
+
+  const addTag = () => {
+    const nextTag = tagInput.trim();
+
+    if (!nextTag) {
+      return;
+    }
+
+    if (formData.tags.length >= MAX_PRESENTATION_TAGS) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (
+      nextTag.length < MIN_TAG_LENGTH ||
+      nextTag.length > MAX_TAG_LENGTH ||
+      !SINGLE_TAG_REGEX.test(nextTag)
+    ) {
+      tagInputRef.current?.setCustomValidity(PRESENTATION_TAGS_MESSAGE);
+      tagInputRef.current?.reportValidity();
+      return;
+    }
+
+    if (!formData.tags.includes(nextTag)) {
+      setFormData((prev) => ({
+        ...prev,
+        tags: [...prev.tags, nextTag],
+      }));
+      setValidationError(null);
+      tagInputRef.current?.setCustomValidity('');
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags.filter((tag) => tag !== tagToRemove),
+    }));
+    setValidationError(null);
   };
 
   return (
@@ -1163,12 +1242,12 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
       <div className="rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--color-secondary)' }}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Document</h2>
+            <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Presentation</h2>
             <button
               onClick={onClose}
-              disabled={saving}
-              className="text-2xl disabled:opacity-50 transition-colors"
+              className="text-2xl transition-colors disabled:opacity-50"
               style={{ color: 'var(--color-text-secondary)' }}
+              disabled={saving}
             >
               ×
             </button>
@@ -1196,15 +1275,15 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                     e.currentTarget.setCustomValidity('Title is required.');
                   }
                 }}
-                disabled={saving}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                 style={{
                   backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)',
                 }}
                 required
-                maxLength={MAX_DOCUMENT_TITLE_LENGTH}
+                disabled={saving}
+                maxLength={MAX_PRESENTATION_TITLE_LENGTH}
               />
             </div>
 
@@ -1223,15 +1302,15 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                   }
                 }}
                 rows={3}
-                disabled={saving}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                 style={{
                   backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)',
                 }}
                 required
-                maxLength={MAX_DOCUMENT_DESCRIPTION_LENGTH}
+                disabled={saving}
+                maxLength={MAX_PRESENTATION_DESCRIPTION_LENGTH}
               />
             </div>
 
@@ -1242,18 +1321,19 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
               <select
                 value={formData.category}
                 onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                disabled={saving}
-                className="w-full px-3 py-2 rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2"
+                className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
                 style={{
                   backgroundColor: 'var(--color-hover)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text)',
                 }}
+                disabled={saving}
               >
-                <option value="academic">Academic</option>
                 <option value="business">Business</option>
-                <option value="legal">Legal</option>
-                <option value="technical">Technical</option>
+                <option value="education">Education</option>
+                <option value="marketing">Marketing</option>
+                <option value="technology">Technology</option>
+                <option value="design">Design</option>
                 <option value="other">Other</option>
               </select>
             </div>
@@ -1264,7 +1344,7 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
               </label>
               <div className="flex space-x-2 mb-2">
                 <input
-                  ref={tagsInputRef}
+                  ref={tagInputRef}
                   type="text"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, MAX_TAG_LENGTH))}
@@ -1285,16 +1365,16 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
                   onClick={addTag}
                   className="px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                   style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
-                  disabled={saving || tagsArr.length >= MAX_DOCUMENT_TAGS}
+                  disabled={saving || formData.tags.length >= MAX_PRESENTATION_TAGS}
                 >
                   Add
                 </button>
               </div>
               <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                {tagsArr.length}/{MAX_DOCUMENT_TAGS} tags
+                {formData.tags.length}/{MAX_PRESENTATION_TAGS} tags
               </p>
               <div className="flex flex-wrap gap-2">
-                {tagsArr.map((tag, index) => (
+                {formData.tags.map((tag, index) => (
                   <span
                     key={index}
                     className="px-2 py-1 text-sm rounded flex items-center space-x-1"
@@ -1318,17 +1398,17 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
               <button
                 type="button"
                 onClick={onClose}
-                disabled={saving}
                 className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-hover)', color: 'var(--color-text)' }}
+                disabled={saving}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={saving}
-                className="flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-90"
+                className="flex-1 px-4 py-2 rounded-lg transition-colors hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                disabled={saving}
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
@@ -1340,4 +1420,4 @@ const DocumentEditModal: React.FC<DocumentEditModalProps> = ({ document, onClose
   );
 };
 
-export default AdminDocumentDashboard;
+export default AdminPresentationDashboard;

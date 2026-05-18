@@ -194,8 +194,15 @@ const AdminVideoDashboard: React.FC = () => {
       setVideoToDelete(null);
       showSuccess('Video deleted successfully.');
       console.log('Video deleted successfully by administrator');
-      // Refetch videos to update pagination and fill the gap with next page videos
-      fetchVideos();
+      // If we just removed the only row on a non-first page, step back one
+      // page — otherwise the user is stranded on an empty page. Changing
+      // currentPage triggers the fetch effect; only re-fetch directly when
+      // we're staying on the same page.
+      if (videos.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchVideos();
+      }
     } catch (error) {
       console.error('Failed to delete video:', error);
     } finally {
@@ -468,6 +475,7 @@ const AdminVideoDashboard: React.FC = () => {
                 showDeleteButton={true}
                 showEditButton={true}
                 onLikesCountClick={handleLikesCountClick}
+                hidePlayButton={true}
               />
               <Pagination
                 currentPage={pagination.current}
