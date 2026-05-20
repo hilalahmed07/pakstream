@@ -1,0 +1,66 @@
+PakStream Update — 2026-05-19 v2
+=================================
+
+Follow-up patch to the 2026-05-19 drop. Targets the airgapped-Ubuntu
+issues the QC team surfaced: backend "stops abruptly" mid-session,
+scheduled premiere gets stuck on "Loading video player please wait",
+and the "Too many attempts" rate-limit tripping on successful logins.
+
+Drop these files over the matching paths in the target repo (preserve
+directory layout; filenames are case-sensitive).
+
+After installing:
+  1. `sudo systemctl restart pakstream-backend`
+     (process-handler / mongoose-listener / new /auth/logout route only
+      kick in on a fresh node process).
+  2. Drop any baked-in API URL and rebuild the frontend:
+       cd /opt/PakStream/frontend
+       : > .env                # empty; now uses same-origin via Nginx
+       npm run build
+  3. Run the new "Step 1b: Time Sync" section in installation_depl.md
+     ONCE so the VM clock is accurate. Without this, scheduled premieres
+     will still get stuck waiting for the server to go live.
+
+
+Summary of changes
+------------------
+- Backend stability (P0): process-level handlers in server.js so an
+  unhandled promise rejection no longer terminates Node 20. Mongoose
+  reconnection events handled. SIGTERM closes the HTTP server cleanly.
+- Rate limiter: skipSuccessfulRequests=true on the login limiter — only
+  failed attempts count toward the 10-per-15-min bucket, so signing in
+  correctly several times in a row no longer trips "too many attempts".
+- Server-side logout: POST /api/auth/logout (auth-required) nulls the
+  user's sessionToken, evicts all their sockets. Frontend useAuth and
+  authService now call it before tearing down local state. Stolen JWTs
+  become useless the moment the owner logs out.
+- ScheduledPremiere wait state: when the countdown hits zero but the
+  server is still 'scheduled' (clock skew), the popup now shows the
+  scheduled start time and a hint pointing the user at clock drift.
+- api.ts same-origin default: when REACT_APP_API_URL is unset and we're
+  not on the CRA dev server (:3000), the bundle uses relative `/api` and
+  empty SOCKET_URL — Nginx's reverse proxy handles routing. Bundle works
+  under any LAN hostname/IP without rebuild.
+- socketHandler.js: the 1-second deferred video-play emit in
+  admin-start-premiere now bails if the room is gone (QC start→end<1s).
+- installation_depl.md:
+    * NEW Step 1b "Time Sync (CRITICAL on airgapped Ubuntu)" with
+      manual timedatectl recipe + chrony-with-LAN-peer recipe.
+    * Frontend config rewritten — recommends empty .env / same-origin
+      via Nginx; legacy SERVER_IP flow kept as a footnote.
+    * NEW troubleshooting section "Backend stops abruptly mid-session"
+      pointing at OOM (journalctl -k | grep oom), Mongo disconnect, and
+      real exceptions. Recommends 8 GB RAM minimum on the VM.
+
+
+Files (9)
+---------
+backend/src/controllers/authController.js
+backend/src/routes/auth.js
+backend/src/server.js
+backend/src/socket/socketHandler.js
+frontend/src/components/premiere/ScheduledPremiere.tsx
+frontend/src/config/api.ts
+frontend/src/hooks/useAuth.tsx
+frontend/src/services/authService.ts
+installation_depl.md
