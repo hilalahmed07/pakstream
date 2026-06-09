@@ -73,6 +73,13 @@ class AuthService {
     return this.request<{ data: { user: User } }>('/auth/profile');
   }
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>('/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   // Server-side logout. Rotates the user's sessionToken so the current JWT
   // can never authenticate again — even if it was copied somewhere. Safe to
   // ignore failures (e.g. offline, token already invalid): we still remove

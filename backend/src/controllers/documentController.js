@@ -7,6 +7,7 @@ const fsSync = require('fs');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+const { isPdf } = require('../utils/magicBytes');
 
 const documentProcessor = new DocumentProcessor();
 const DOCUMENT_TITLE_MAX = 90;
@@ -53,6 +54,13 @@ const uploadDocument = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Verify actual file content regardless of extension or browser-reported MIME type
+    const fileIsRealPdf = await isPdf(req.file.path);
+    if (!fileIsRealPdf) {
+      await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ message: 'Invalid file. Only real PDF documents are accepted.' });
     }
 
     const { title, description, category = 'other', tags = [] } = req.body;
@@ -144,7 +152,7 @@ const uploadDocument = async (req, res) => {
 
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ message: 'Upload failed', error: error.message });
+    res.status(500).json({ message: 'Upload failed. Please ensure the file is a valid PDF document.' });
   }
 };
 

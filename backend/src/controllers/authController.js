@@ -441,6 +441,7 @@ const changePassword = async (req, res) => {
     }
 
     user.password = normalizedNewPassword;
+    user.mustChangePassword = false;
     await user.save();
 
     res.json({

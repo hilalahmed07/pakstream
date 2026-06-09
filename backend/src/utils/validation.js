@@ -1,13 +1,13 @@
 const USERNAME_REGEX = /^[A-Za-z0-9._]{3,30}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_MAX_LENGTH = 254;
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/;
 
 const USERNAME_MESSAGE =
   'Username must be 3-30 characters and contain only letters, numbers, underscores, or dots';
 const EMAIL_MESSAGE = `Please provide a valid email address with no more than ${EMAIL_MAX_LENGTH} characters`;
 const PASSWORD_MESSAGE =
-  'Password must be at least 8 characters and include uppercase, lowercase, number, and special character';
+  'Password must be at least 12 characters and include uppercase, lowercase, number, and special character';
 
 const normalizeUsername = (value) => (value == null ? '' : String(value).trim());
 const normalizeEmail = (value) => (value == null ? '' : String(value).trim().toLowerCase());

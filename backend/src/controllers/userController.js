@@ -183,8 +183,8 @@ const createUser = async (req, res) => {
     if (contactNumber) userData.contactNumber = contactNumber;
     if (address) userData.address = address;
     
-    const user = new User(userData);
-    
+    const user = new User({ ...userData, mustChangePassword: true });
+
     await user.save();
     
     res.status(201).json({
@@ -355,10 +355,11 @@ const resetUserPassword = async (req, res) => {
       });
     }
     
-    // Set new password (will be hashed by pre-save hook)
+    // Set new password and require user to change it on next login
     user.password = normalizedNewPassword;
+    user.mustChangePassword = true;
     await user.save();
-    
+
     res.json({
       success: true,
       message: 'Password reset successfully'

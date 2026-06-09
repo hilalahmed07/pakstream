@@ -96,6 +96,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  mustChangePassword: {
+    type: Boolean,
+    default: false
+  },
   // Server-side session token. A fresh value is generated on every successful
   // login and embedded in the issued JWT. Auth middleware rejects any token
   // whose sessionToken claim doesn't match this value, so logging in from a

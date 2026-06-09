@@ -18,12 +18,13 @@ import DownloadManagementPage from './pages/admin/DownloadManagementPage';
 import AnalyticsManagementPage from './pages/admin/AnalyticsManagementPage';
 import PatchManagementPage from './pages/admin/PatchManagementPage';
 import ConfirmationDialog from './components/common/ConfirmationDialog';
+import ForceChangePasswordModal from './components/auth/ForceChangePasswordModal';
 import socketService from './services/socketService';
 import { attachGlobalFormValidation } from './utils/globalFormValidation';
 import './index.css';
 
 const AppContent: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, clearMustChangePassword } = useAuth();
   const location = useLocation();
   const { showError, showWarning } = useNotification();
   const [isSessionExpiredDialogOpen, setIsSessionExpiredDialogOpen] = React.useState(false);
@@ -116,6 +117,10 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-primary flex flex-col">
+      {/* Force password change on first login or after admin reset — blocks all app content */}
+      {user?.mustChangePassword && (
+        <ForceChangePasswordModal onSuccess={clearMustChangePassword} />
+      )}
       {/* Show regular navbar for non-admin users or admin users on non-admin routes */}
       {showNavbar && <Navbar />}
       

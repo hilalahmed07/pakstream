@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker run --rm --platform linux/amd64 -v __TRACKED_VAR__/debs:/debs ubuntu:22.04 bash -c ' *)",
+      "Bash(docker run --rm --platform linux/amd64 -v __TRACKED_VAR__/source/PakStream:/app -v __TRACKED_VAR__/npm:/out node:20-bullseye bash -c ' *)"
+    ]
+  }
+}

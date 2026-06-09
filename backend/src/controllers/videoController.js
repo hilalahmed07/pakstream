@@ -7,6 +7,7 @@ const { calculateFileHash, calculateBufferHash } = require('../services/hashServ
 const path = require('path');
 const fs = require('fs').promises;
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+const { isVideo } = require('../utils/magicBytes');
 
 const VIDEO_TITLE_MAX = 90;
 const VIDEO_DESCRIPTION_MAX = 180;
@@ -96,6 +97,16 @@ const uploadVideo = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'No video file provided'
+      });
+    }
+
+    // Verify actual file content regardless of extension or browser-reported MIME type
+    const fileIsRealVideo = await isVideo(req.file.path);
+    if (!fileIsRealVideo) {
+      await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file. Only real video files (MP4, AVI, MOV, WMV, WebM, MKV) are accepted.'
       });
     }
 

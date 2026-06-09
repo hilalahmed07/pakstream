@@ -165,7 +165,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await authService.updateProfile(profileData);
       setUser(response.data.user);
     } catch (error: any) {
@@ -174,6 +174,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearMustChangePassword = () => {
+    setUser((prev) => prev ? { ...prev, mustChangePassword: false } : prev);
   };
 
   const value: AuthContextType = {
@@ -185,7 +189,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     registerAdmin,
     logout,
-    updateProfile
+    updateProfile,
+    clearMustChangePassword,
   };
 
   return React.createElement(AuthContext.Provider, { value }, children);

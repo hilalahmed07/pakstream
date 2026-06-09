@@ -13,6 +13,9 @@ const { appConfig } = require('./config/appConfig');
 const { startPremiereScheduler } = require('./services/premiereScheduler');
 
 const app = express();
+// Trust one hop of reverse proxy (Nginx) so express-rate-limit sees the real
+// client IP from X-Forwarded-For instead of throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const socketHandler = new SocketHandler(server);
 

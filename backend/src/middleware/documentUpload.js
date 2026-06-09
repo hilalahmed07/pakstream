@@ -38,7 +38,8 @@ const fileFilter = (req, file, cb) => {
   console.log('Document upload - MIME type:', file.mimetype);
   console.log('Document upload - File extension:', ext);
   
-  if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+  // Both MIME type AND extension must match to prevent renamed files (e.g. PPT renamed to .pdf)
+  if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
     cb(null, true);
   } else {
     cb(new Error('Invalid file type. Only PDF files (.pdf) are allowed.'), false);

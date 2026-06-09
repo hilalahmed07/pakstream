@@ -88,8 +88,8 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
                 color: 'var(--color-text)'
               }}
               required
-              minLength={8}
-              placeholder="Min 8 chars with upper/lower/number/special"
+              minLength={12}
+              placeholder="Min 12 chars with upper/lower/number/special"
             />
           </div>
 
@@ -108,7 +108,7 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ isOpen, onClose
                 color: 'var(--color-text)'
               }}
               required
-              minLength={8}
+              minLength={12}
               placeholder="Re-enter password"
             />
           </div>

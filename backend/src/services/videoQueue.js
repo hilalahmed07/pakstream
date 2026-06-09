@@ -122,14 +122,14 @@ class VideoQueue {
       const video = await Video.findById(videoId);
       if (video) {
         video.status = 'error';
-        video.processingError = error.message;
+        video.processingError = 'The uploaded file could not be processed. Please ensure it is a valid video file.';
         await video.save();
 
         // Emit error event
         if (this.io) {
           this.io.emit('videoProcessingError', {
             videoId,
-            error: error.message,
+            error: 'The uploaded file could not be processed. Please ensure it is a valid video file.',
             timestamp: new Date().toISOString()
           });
         }

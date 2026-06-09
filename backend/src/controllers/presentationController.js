@@ -8,6 +8,7 @@ const Download = require('../models/Download');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
+const { isPowerPoint } = require('../utils/magicBytes');
 
 const presentationProcessor = new PresentationProcessor();
 const PRESENTATION_TITLE_MAX = 90;
@@ -54,6 +55,13 @@ const uploadPresentation = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Verify actual file content regardless of extension or browser-reported MIME type
+    const fileIsRealPpt = await isPowerPoint(req.file.path);
+    if (!fileIsRealPpt) {
+      await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ message: 'Invalid file. Only real PowerPoint files (.ppt, .pptx) are accepted.' });
     }
 
     const { title, description, category = 'other', tags = [] } = req.body;
@@ -158,7 +166,7 @@ const uploadPresentation = async (req, res) => {
 
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ message: 'Upload failed', error: error.message });
+    res.status(500).json({ message: 'Upload failed. Please ensure the file is a valid PowerPoint presentation (.ppt, .pptx).' });
   }
 };
 

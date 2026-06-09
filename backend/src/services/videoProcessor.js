@@ -90,7 +90,7 @@ class VideoProcessor {
       };
     } catch (error) {
       console.error('Video processing error:', error);
-      this.emitProgress(io, videoId, -1, `Processing failed: ${error.message}`);
+      this.emitProgress(io, videoId, -1, 'The uploaded file is not a valid video. Please upload a proper video file (MP4, AVI, MOV, etc.).');
       throw error;
     }
   }

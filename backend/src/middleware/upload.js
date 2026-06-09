@@ -51,21 +51,22 @@ const fileFilter = (req, file, cb) => {
 
   const allowedMimes = [
     'video/mp4',
-    'video/avi',
-    'video/mov',
-    'video/wmv',
-    'video/flv',
     'video/webm',
-    'video/mkv',
-    'video/3gp',
-    'application/octet-stream'
+    'video/quicktime',        // .mov
+    'video/x-msvideo',        // .avi
+    'video/avi',
+    'video/x-ms-wmv',         // .wmv
+    'video/x-flv',            // .flv
+    'video/x-matroska',       // .mkv
+    'video/3gpp',             // .3gp
+    'video/3gp'
   ];
 
-  const allowedExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.3gp'];
+  const allowedExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.3gp']; // allow extension for vidoes
   const fileExtension = path.extname(file.originalname).toLowerCase();
 
-  // Check by MIME type or file extension
-  if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
+  // Both MIME type AND extension must match to prevent renamed files (e.g. PDF renamed to .mp4)
+  if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(fileExtension)) {
     console.log('File accepted:', file.originalname, 'MIME type:', file.mimetype, 'Extension:', fileExtension);
     cb(null, true);
   } else {

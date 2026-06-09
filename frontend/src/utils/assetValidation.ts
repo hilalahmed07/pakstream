@@ -11,7 +11,7 @@ export const MAX_TAGS = 3;
 
 // File type validations
 export const VIDEO_FILE_TYPES = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'];
-export const PRESENTATION_FILE_TYPES = ['ppt', 'pptx', 'pdf'];
+export const PRESENTATION_FILE_TYPES = ['ppt', 'pptx'];
 export const DOCUMENT_FILE_TYPES = ['pdf', 'doc', 'docx', 'txt', 'rtf'];
 export const PATCH_FILE_TYPES = ['exe', 'msi', 'msu', 'cab', 'def', 'zip', 'rar', '7z'];
 
@@ -49,7 +49,7 @@ export const DOCUMENT_SIZE_MESSAGE = 'Document file size must be less than 50MB.
 export const PATCH_SIZE_MESSAGE = 'Patch file size must be less than 500MB.';
 
 export const VIDEO_TYPE_MESSAGE = 'Video file must be one of: mp4, avi, mov, wmv, flv, webm, mkv';
-export const PRESENTATION_TYPE_MESSAGE = 'Presentation file must be one of: ppt, pptx, pdf';
+export const PRESENTATION_TYPE_MESSAGE = 'Presentation file must be one of: ppt, pptx';
 export const DOCUMENT_TYPE_MESSAGE = 'Document file must be one of: pdf, doc, docx, txt, rtf';
 export const PATCH_TYPE_MESSAGE = 'Patch file must be one of: exe, msi, msu, cab, def, zip, rar, 7z';
 

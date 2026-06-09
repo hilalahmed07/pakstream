@@ -459,6 +459,19 @@ interface CreatePremiereModalProps {
   onClose: () => void;
 }
 
+// Read-only input for DatePicker — blocks keyboard typing but click always
+// reopens the calendar/clock so the user can change the selection freely.
+const ReadOnlyDateInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  (props, ref) => (
+    <input
+      {...props}
+      ref={ref}
+      readOnly
+      style={{ cursor: 'pointer' }}
+    />
+  )
+);
+
 const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
   videos,
   onSubmit,
@@ -695,6 +708,7 @@ const CreatePremiereModal: React.FC<CreatePremiereModalProps> = ({
               className="w-full px-3 py-2 rounded-lg focus:outline-none focus:ring-2 premiere-start-time-input"
               wrapperClassName="w-full"
               popperClassName="premiere-datepicker-popper"
+              customInput={<ReadOnlyDateInput />}
             />
           </div>
 

@@ -40,10 +40,11 @@ const fileFilter = (req, file, cb) => {
   console.log('Presentation upload - MIME type:', file.mimetype);
   console.log('Presentation upload - File extension:', ext);
   
-  if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+  // Both MIME type AND extension must match to prevent renamed files (e.g. PDF renamed to .ppt)
+  if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PowerPoint presentations (.ppt, .pptx, .odp) and disk images (.dmg) are allowed.'), false);
+    cb(new Error('Invalid file type. Only PowerPoint presentations (.ppt, .pptx) are allowed.'), false);
   }
 };
 

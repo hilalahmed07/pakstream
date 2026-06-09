@@ -7,6 +7,8 @@ import { installSessionInterceptor } from './utils/sessionInterceptor';
 
 installSessionInterceptor();
 
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
