@@ -224,7 +224,7 @@ const LivePremiereControlPage: React.FC = () => {
     uploadedBy: {
       _id: premiere.createdBy._id,
       username: premiere.createdBy.username,
-      email: premiere.video.uploadedBy?.email || 'premiere@pakstream.com',
+      email: premiere.video.uploadedBy?.email || '',
     },
     originalFile: {
       filename: premiere.video.originalFile?.filename || '',

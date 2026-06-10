@@ -4,11 +4,22 @@ const { calculateFileHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const mongoose = require('mongoose');
 const Download = require('../models/Download');
 const storageService = require('../services/storageService');
 const { isMinIOEnabled } = require('../config/storage');
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
 const { isPowerPoint } = require('../utils/magicBytes');
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// Remove server-side file path from originalFile before sending to clients
+const sanitisePresentation = (obj) => {
+  if (obj && obj.originalFile) {
+    delete obj.originalFile.path;
+  }
+  return obj;
+};
 
 const presentationProcessor = new PresentationProcessor();
 const PRESENTATION_TITLE_MAX = 90;
@@ -202,7 +213,7 @@ const getPresentations = async (req, res) => {
     // Add isLiked status for each presentation if user is authenticated
     const userId = req.user?._id || req.user?.id;
     const presentationsWithLikeStatus = presentations.map(presentation => {
-      const presentationObj = presentation.toObject();
+      const presentationObj = sanitisePresentation(presentation.toObject());
       if (userId && presentation.likedBy && Array.isArray(presentation.likedBy)) {
         presentationObj.isLiked = presentation.likedBy.some(
           likeId => likeId && likeId.toString() === userId.toString()
@@ -233,6 +244,9 @@ const getPresentations = async (req, res) => {
 
 // Get presentation by ID
 const getPresentationById = async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(404).json({ message: 'Presentation not found' });
+  }
   try {
     const { id } = req.params;
 
@@ -245,7 +259,7 @@ const getPresentationById = async (req, res) => {
 
     // Add isLiked status if user is authenticated
     const userId = req.user?._id || req.user?.id;
-    const presentationObj = presentation.toObject();
+    const presentationObj = sanitisePresentation(presentation.toObject());
     if (userId && presentation.likedBy && Array.isArray(presentation.likedBy)) {
       presentationObj.isLiked = presentation.likedBy.some(
         likeId => likeId && likeId.toString() === userId.toString()
@@ -258,7 +272,7 @@ const getPresentationById = async (req, res) => {
 
   } catch (error) {
     console.error('Get presentation error:', error);
-    res.status(500).json({ message: 'Failed to fetch presentation', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch presentation' });
   }
 };
 
@@ -535,7 +549,7 @@ const getAdminPresentations = async (req, res) => {
     const total = await Presentation.countDocuments(query);
 
     res.json({
-      presentations,
+      presentations: presentations.map(p => sanitisePresentation(p.toObject())),
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / parseInt(limit)),
@@ -545,7 +559,7 @@ const getAdminPresentations = async (req, res) => {
 
   } catch (error) {
     console.error('Get admin presentations error:', error);
-    res.status(500).json({ message: 'Failed to fetch presentations', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch presentations' });
   }
 };
 

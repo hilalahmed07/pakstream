@@ -6,8 +6,11 @@ const { addCdnUrlsToVideos, addCdnUrlsToVideo } = require('../utils/cdnUtils');
 const { calculateFileHash, calculateBufferHash } = require('../services/hashService');
 const path = require('path');
 const fs = require('fs').promises;
+const mongoose = require('mongoose');
 const { ensureUniqueTitle } = require('../utils/uniqueTitle');
 const { isVideo } = require('../utils/magicBytes');
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const VIDEO_TITLE_MAX = 90;
 const VIDEO_DESCRIPTION_MAX = 180;
@@ -382,6 +385,9 @@ const getFeaturedVideos = async (req, res) => {
 };
 
 const getVideoById = async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, message: 'Video not found' });
+  }
   try {
     const video = await Video.findById(req.params.id)
       .populate('uploadedBy', 'username email');
@@ -426,10 +432,10 @@ const getVideoById = async (req, res) => {
       data: { video: videoObj }
     });
   } catch (error) {
+    console.error('getVideoById error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch video',
-      error: error.message
+      message: 'Failed to fetch video'
     });
   }
 };

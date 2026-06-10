@@ -29,7 +29,7 @@ const AdminSidebar: React.FC = () => {
   ];
 
   return (
-    <div 
+    <div
       className="fixed left-0 top-0 h-screen w-64 border-r flex flex-col z-30"
       style={{
         backgroundColor: 'var(--color-secondary)',
@@ -37,7 +37,7 @@ const AdminSidebar: React.FC = () => {
       }}
     >
       {/* Logo/Header with Theme Switcher */}
-      <div 
+      <div
         className="p-4 border-b"
         style={{ borderColor: 'var(--color-border)' }}
       >
@@ -84,12 +84,12 @@ const AdminSidebar: React.FC = () => {
       </nav>
 
       {/* User Info & Logout */}
-      <div 
+      <div
         className="p-4 border-t"
         style={{ borderColor: 'var(--color-border)' }}
       >
         <div className="flex items-center space-x-3 mb-4">
-          <div 
+          <div
             className="w-10 h-10 rounded-full flex items-center justify-center font-bold"
             style={{
               backgroundColor: 'var(--color-accent)',

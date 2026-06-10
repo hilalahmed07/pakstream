@@ -28,14 +28,11 @@ function getCorsOrigins() {
 
   // Environment-specific defaults
   if (process.env.NODE_ENV === 'production') {
-    // Production: Default to restrictive, but allow override via CORS_ORIGIN env var
-    // For Docker deployments, set CORS_ORIGIN=* or specific origins
-    //return ['https://yourdomain.com'];
-    return ['*']
+    // Production: restrict to the server's own origin — set ALLOWED_ORIGIN to override
+    return [process.env.ALLOWED_ORIGIN || 'http://10.33.100.70'];
   }
 
-  // Development/Docker: Allow all origins by default for easier network access
-  // This allows access from any IP address and port, perfect for Docker/VM deployments
+  // Development: allow all origins for local network access
   return '*';
 }
 

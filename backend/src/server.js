@@ -33,30 +33,24 @@ videoQueue.setSocketIO(socketHandler.io);
 // Middleware - CORS configuration from appConfig
 app.use(cors(appConfig.cors));
 
-// Build frame-ancestors for CSP so frontend (e.g. localhost:3000) can embed backend URLs in iframes (e.g. document viewer)
-const corsOrigin = appConfig.cors.origin;
-const frameAncestors =
-  corsOrigin === '*'
-    ? ["*"]
-    : Array.isArray(corsOrigin)
-      ? ["'self'", ...corsOrigin.filter((o) => typeof o === 'string')]
-      : ["'self'", "http://localhost:3000", "http://127.0.0.1:3000"];
-
 app.use(
   helmet({
-    // Disable CSP for most directives to avoid breaking frontend scripts
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        frameAncestors,
+        frameAncestors: ["'self'"],
       },
     },
-    // Do not set X-Frame-Options; use CSP frame-ancestors above so frontend (e.g. :3000) can embed doc viewer (e.g. :5000)
-    frameguard: false,
-    // Allow static assets (images, HLS, slides) to be embedded from other origins
+    frameguard: { action: 'sameorigin' },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+
+// Enforce XSS protection (helmet disables it by default; security policy requires block mode)
+app.use((req, res, next) => {
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -263,12 +257,7 @@ app.use('/api/downloads', require('./routes/download'));
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    message: 'Route not found',
-    path: req.path,
-    method: req.method
-  });
+  res.status(404).json({ success: false, message: 'Not found' });
 });
 
 // Error handling middleware
