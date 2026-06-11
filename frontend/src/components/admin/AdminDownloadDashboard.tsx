@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import downloadService from '../../services/downloadService';
 import { Download, DownloadStats, DownloadAssetType } from '../../types/download';
+import { isPatchVisible } from '../../config/features';
 
 const AdminDownloadDashboard: React.FC = () => {
   const [downloads, setDownloads] = useState<Download[]>([]);
@@ -96,23 +97,25 @@ const AdminDownloadDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
-            <div className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Top Patch</div>
-            {(() => {
-              const patchRows = stats.downloadsPerAsset.filter((a) => a.assetType === 'patch');
-              const topPatch = patchRows.sort((a, b) => b.downloadCount - a.downloadCount)[0];
-              return (
-                <>
-                  <div className="text-lg font-semibold truncate" style={{ color: 'var(--color-text)' }}>
-                    {topPatch?.assetTitle || 'N/A'}
-                  </div>
-                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                    {topPatch?.downloadCount ?? 0} downloads
-                  </div>
-                </>
-              );
-            })()}
-          </div>
+          {isPatchVisible && (
+            <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
+              <div className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Top Patch</div>
+              {(() => {
+                const patchRows = stats.downloadsPerAsset.filter((a) => a.assetType === 'patch');
+                const topPatch = patchRows.sort((a, b) => b.downloadCount - a.downloadCount)[0];
+                return (
+                  <>
+                    <div className="text-lg font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                      {topPatch?.assetTitle || 'N/A'}
+                    </div>
+                    <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                      {topPatch?.downloadCount ?? 0} downloads
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
           
           <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-secondary)' }}>
             <div className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>Top User</div>
@@ -155,7 +158,7 @@ const AdminDownloadDashboard: React.FC = () => {
               <option value="video">Video</option>
               <option value="document">Document</option>
               <option value="presentation">Presentation</option>
-              <option value="patch">Patch</option>
+              {isPatchVisible && <option value="patch">Patch</option>}
             </select>
           </div>
 

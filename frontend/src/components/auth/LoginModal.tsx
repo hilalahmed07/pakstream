@@ -13,7 +13,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { showError } = useNotification();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: ''
   });
   const [loading, setLoading] = useState(false);
@@ -27,12 +27,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     try {
       const response = await login(formData);
       onClose();
-      // Redirect admins to admin dashboard
       if (response.data.user.role === 'admin') {
         navigate('/admin');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Invalid email or password';
+      const message = err instanceof Error ? err.message : 'Invalid username or password';
       setError(message);
       showError(message);
     } finally {
@@ -64,16 +63,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
           <div>
             <label className="block text-text-primary text-sm font-medium mb-2">
-              Email
+              Username
             </label>
             <input
-              type="email"
-              value={formData.email}
+              type="text"
+              value={formData.username}
               onChange={(e) => {
-                const sanitizedEmail = e.target.value.replace(/[^a-zA-Z0-9@._-]/g, '');
-                setFormData({ ...formData, email: sanitizedEmail });
+                const sanitized = e.target.value.replace(/[^a-zA-Z0-9._-]/g, '');
+                setFormData({ ...formData, username: sanitized });
               }}
               className="w-full px-3 py-2 bg-secondary text-text-primary rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+              placeholder="e.g. pa12343khan"
               required
             />
           </div>

@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const ldapConfig = require('../config/ldapConfig');
+const { authenticateWithLdap } = require('../services/ldapService');
 const {
   USERNAME_MESSAGE,
   EMAIL_MESSAGE,
@@ -223,17 +225,17 @@ const registerAdmin = async (req, res) => {
 // Login user
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const normalizedEmail = normalizeEmail(email);
+    const { username, password } = req.body;
+    const normalizedUsername = normalizeUsername(username);
 
-    if (!normalizedEmail || !password) {
+    if (!normalizedUsername || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: 'Username and password are required'
       });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ username: normalizedUsername });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -265,7 +267,25 @@ const login = async (req, res) => {
       await user.save({ validateBeforeSave: false });
     }
 
-    const isPasswordValid = await user.comparePassword(password);
+    let isPasswordValid = false;
+
+    if (ldapConfig.enabled) {
+      // LDAP authentication path
+      const ldapResult = await authenticateWithLdap(user.username, password);
+
+      if (ldapResult.serverUnreachable && ldapConfig.fallbackToLocal) {
+        // LDAP server is down — fall back to local bcrypt so the system
+        // remains accessible during an LDAP outage
+        console.warn('LDAP unavailable, falling back to local authentication for:', user.username);
+        isPasswordValid = await user.comparePassword(password);
+      } else {
+        isPasswordValid = ldapResult.success;
+      }
+    } else {
+      // Local authentication path (default)
+      isPasswordValid = await user.comparePassword(password);
+    }
+
     if (!isPasswordValid) {
       user.loginAttempts = (user.loginAttempts || 0) + 1;
       if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
@@ -441,7 +461,6 @@ const changePassword = async (req, res) => {
     }
 
     user.password = normalizedNewPassword;
-    user.mustChangePassword = false;
     await user.save();
 
     res.json({

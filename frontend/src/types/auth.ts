@@ -4,7 +4,6 @@ export interface User {
   email: string;
   role: 'user' | 'admin';
   isActive: boolean;
-  mustChangePassword?: boolean;
   profile: {
     firstName?: string;
     lastName?: string;
@@ -29,7 +28,7 @@ export interface AuthResponse {
 }
 
 export interface LoginCredentials {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -60,5 +59,4 @@ export interface AuthContextType {
   registerAdmin: (credentials: AdminRegisterCredentials) => Promise<AuthResponse>;
   logout: () => void;
   updateProfile: (profileData: Partial<User>) => Promise<void>;
-  clearMustChangePassword: () => void;
 }

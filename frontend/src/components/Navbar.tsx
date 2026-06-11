@@ -4,6 +4,7 @@ import { useAuth } from '../hooks';
 import LoginModal from './auth/LoginModal';
 import UserProfile from './auth/UserProfile';
 import ThemeSwitcher from './ThemeSwitcher';
+import { isPatchVisible } from '../config/features';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -66,12 +67,14 @@ const Navbar: React.FC = () => {
                 >
                   Documents
                 </button>
-                <button
-                  onClick={() => scrollToSection('patches')}
-                  className="text-text-primary hover:text-text-secondary transition-colors"
-                >
-                  Patches
-                </button>
+                {isPatchVisible && (
+                  <button
+                    onClick={() => scrollToSection('patches')}
+                    className="text-text-primary hover:text-text-secondary transition-colors"
+                  >
+                    Patches
+                  </button>
+                )}
                 <button
                   onClick={() => scrollToSection('premieres')}
                   className="text-text-primary hover:text-text-secondary transition-colors"

@@ -176,10 +176,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const clearMustChangePassword = () => {
-    setUser((prev) => prev ? { ...prev, mustChangePassword: false } : prev);
-  };
-
   const value: AuthContextType = {
     user,
     token,
@@ -190,7 +186,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     registerAdmin,
     logout,
     updateProfile,
-    clearMustChangePassword,
   };
 
   return React.createElement(AuthContext.Provider, { value }, children);

@@ -27,6 +27,7 @@
     "form-data": "^4.0.4",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "ldapjs-client": "^0.1.7",
     "minio": "^8.0.6",
     "mongoose": "^8.0.3",
     "multer": "^2.0.2",

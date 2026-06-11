@@ -4,6 +4,7 @@ import VideoGrid from '../../components/video/VideoGrid';
 import PresentationGrid from '../../components/presentation/PresentationGrid';
 import DocumentGrid from '../../components/document/DocumentGrid';
 import PatchGrid from '../../components/patch/PatchGrid';
+import { isPatchVisible } from '../../config/features';
 import VideoPlayer from '../../components/video/VideoPlayer'; 
 import PresentationViewer from '../../components/presentation/PresentationViewer';
 import DocumentViewer from '../../components/document/DocumentViewer';
@@ -46,7 +47,7 @@ const UserHomePage: React.FC = () => {
   const [hasFetchedVideos, setHasFetchedVideos] = useState(false);
   const [hasFetchedDocuments, setHasFetchedDocuments] = useState(false);
   const [hasFetchedPresentations, setHasFetchedPresentations] = useState(false);
-  const [hasFetchedPatches, setHasFetchedPatches] = useState(false);
+  const [hasFetchedPatches, setHasFetchedPatches] = useState(!isPatchVisible);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
@@ -218,7 +219,7 @@ const UserHomePage: React.FC = () => {
   }, [documentPage]);
 
   useEffect(() => {
-    fetchPatches();
+    if (isPatchVisible) fetchPatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patchPage]);
 
@@ -524,27 +525,29 @@ const UserHomePage: React.FC = () => {
       </section>
 
       {/* Patches Section */}
-      <section id="patches" className="py-10">
-        <div className="container mx-auto px-6">
-          <div className="mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 tracking-tight">
-              Windows Patches
-            </h2>
-            <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
+      {isPatchVisible && (
+        <section id="patches" className="py-10">
+          <div className="container mx-auto px-6">
+            <div className="mb-8">
+              <h2 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 tracking-tight">
+                Windows Patches
+              </h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
+            </div>
+            <PatchGrid
+              patches={patches}
+              onPatchClick={handlePatchClick}
+            />
+            <Pagination
+              currentPage={patchPagination.current}
+              totalPages={patchPagination.pages}
+              total={patchPagination.total}
+              limit={4}
+              onPageChange={setPatchPage}
+            />
           </div>
-          <PatchGrid 
-            patches={patches} 
-            onPatchClick={handlePatchClick}
-          />
-          <Pagination
-            currentPage={patchPagination.current}
-            totalPages={patchPagination.pages}
-            total={patchPagination.total}
-            limit={4}
-            onPageChange={setPatchPage}
-          />
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Premieres Section - Only show for logged-in users (non-admin) */}
       {user && user.role !== 'admin' && (

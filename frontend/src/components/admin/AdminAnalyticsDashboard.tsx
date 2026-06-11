@@ -17,6 +17,7 @@ import analyticsService, {
   TopUserItem,
 } from '../../services/analyticsService';
 import UserDetailDialog from './UserDetailDialog';
+import { isPatchVisible } from '../../config/features';
 
 const AdminAnalyticsDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -192,13 +193,12 @@ const AdminAnalyticsDashboard: React.FC = () => {
           <StatCard label="Total Views" value={platform.totalViews} accentColor="#60a5fa" />
         </div>
         {/* Second row: Total contents, Videos, Documents, Presentations, Patches */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isPatchVisible ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
           <StatCard label="Videos" value={platform.totalVideos} />
-           <StatCard label="Presentations" value={platform.totalPresentations} />
+          <StatCard label="Presentations" value={platform.totalPresentations} />
           <StatCard label="Documents" value={platform.totalDocuments} />
-          <StatCard label="Patches" value={platform.totalPatches ?? 0} />
-              <StatCard label="Total Contents" value={platform.totalContent} />
+          {isPatchVisible && <StatCard label="Patches" value={platform.totalPatches ?? 0} />}
+          <StatCard label="Total Contents" value={platform.totalContent} />
         </div>
 
         {/* Content breakdown chart */}
@@ -207,7 +207,7 @@ const AdminAnalyticsDashboard: React.FC = () => {
             { name: 'Videos', value: platform.totalVideos, color: '#60a5fa' },
             { name: 'Documents', value: platform.totalDocuments, color: '#4ade80' },
             { name: 'Presentations', value: platform.totalPresentations, color: '#a78bfa' },
-            { name: 'Patches', value: platform.totalPatches ?? 0, color: '#f59e0b' },
+            ...(isPatchVisible ? [{ name: 'Patches', value: platform.totalPatches ?? 0, color: '#f59e0b' }] : []),
           ].filter((d) => d.value > 0);
           if (contentData.length === 0) return null;
           return (
